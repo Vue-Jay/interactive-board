@@ -72,7 +72,6 @@ button {
   color: #4b5563;
   cursor: pointer;
   font-size: 21px;
-  transition: background 120ms ease, color 120ms ease;
 }
 
 .back-button:hover,
@@ -89,8 +88,8 @@ button {
   border-radius: 11px;
   background: #5b5bd6;
   color: white;
-  font-weight: 800;
   font-size: 18px;
+  font-weight: 800;
   box-shadow: 0 4px 12px rgba(91, 91, 214, 0.24);
 }
 
@@ -131,11 +130,6 @@ button {
   height: 7px;
   border-radius: 50%;
   background: #35a56f;
-}
-
-.avatars {
-  display: flex;
-  align-items: center;
 }
 
 .avatar {
@@ -216,7 +210,10 @@ button {
   background: transparent;
   color: #50555e;
   cursor: pointer;
-  transition: background 100ms ease, color 100ms ease, transform 100ms ease;
+  transition:
+    background 100ms ease,
+    color 100ms ease,
+    transform 100ms ease;
 }
 
 .tool-button:hover {
@@ -244,6 +241,9 @@ button {
   left: calc(100% + 12px);
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 7px 9px;
   border-radius: 7px;
   background: #25272b;
@@ -255,6 +255,17 @@ button {
   visibility: hidden;
   pointer-events: none;
   transition: 100ms ease;
+}
+
+.tool-tooltip kbd {
+  min-width: 20px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #3c3f45;
+  color: #cfd2d8;
+  font-family: inherit;
+  font-size: 10px;
+  text-align: center;
 }
 
 .tool-button:hover .tool-tooltip {
@@ -274,18 +285,24 @@ button {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
   background-color: #f7f7f8;
-  background-image: radial-gradient(#cfd2d8 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-image: radial-gradient(
+    circle,
+    #cfd2d8 1px,
+    transparent 1.1px
+  );
   cursor: default;
 }
 
-.board-tool-hand {
+.board-tool-hand,
+.board-hand-active {
   cursor: grab;
 }
 
-.board-tool-hand:active {
-  cursor: grabbing;
+.board-panning {
+  cursor: grabbing !important;
 }
 
 .board-tool-pen,
@@ -300,19 +317,66 @@ button {
   cursor: text;
 }
 
-.board-origin {
+.world {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.world-origin-marker {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #5b5bd6;
+  border-radius: 50%;
+  background: white;
+}
+
+.world-origin-marker::before,
+.world-origin-marker::after {
+  content: "";
+  position: absolute;
+  background: rgba(91, 91, 214, 0.35);
+}
+
+.world-origin-marker::before {
+  left: 3px;
+  top: -60px;
+  width: 1px;
+  height: 120px;
+}
+
+.world-origin-marker::after {
+  left: -60px;
+  top: 3px;
+  width: 120px;
+  height: 1px;
+}
+
+.world-origin-marker span {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  color: #7777d7;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .welcome-card {
-  width: min(520px, calc(100vw - 180px));
+  position: absolute;
+  left: 160px;
+  top: 120px;
+  width: 520px;
   padding: 34px;
   border: 1px solid #e3e4e8;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 14px 45px rgba(31, 35, 48, 0.1);
 }
 
@@ -342,15 +406,32 @@ button {
 }
 
 .welcome-hint {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px 20px;
   margin-top: 24px;
   padding-top: 18px;
   border-top: 1px solid #eceef0;
   color: #8a8f97;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .welcome-hint strong {
   color: #4f4fc3;
+}
+
+.coordinates {
+  position: absolute;
+  left: 82px;
+  bottom: 66px;
+  z-index: 10;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #91969e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  pointer-events: none;
 }
 
 .board-controls {
@@ -394,19 +475,19 @@ button {
 
 .minimap {
   position: absolute;
+  z-index: 10;
   right: 18px;
   bottom: 18px;
-  width: 170px;
-  height: 112px;
+  width: 180px;
   padding: 10px;
   border: 1px solid #e1e3e6;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 5px 18px rgba(31, 35, 48, 0.08);
+  pointer-events: none;
 }
 
 .minimap-label {
-  margin-bottom: 6px;
   color: #91969e;
   font-size: 10px;
   font-weight: 650;
@@ -414,33 +495,48 @@ button {
   letter-spacing: 0.6px;
 }
 
+.minimap-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  margin: 6px 0 8px;
+  color: #8c9199;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+}
+
 .minimap-world {
   position: relative;
-  height: 72px;
+  height: 54px;
   overflow: hidden;
   border-radius: 6px;
   background-color: #f3f4f6;
-  background-image: radial-gradient(#d4d6db 0.6px, transparent 0.6px);
+  background-image: radial-gradient(
+    #d4d6db 0.6px,
+    transparent 0.6px
+  );
   background-size: 8px 8px;
 }
 
-.minimap-object {
+.minimap-origin {
   position: absolute;
-  left: 52px;
-  top: 23px;
-  width: 48px;
-  height: 28px;
-  border-radius: 3px;
-  background: #d9d9f8;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #5b5bd6;
 }
 
 .minimap-viewport {
   position: absolute;
-  left: 38px;
-  top: 13px;
-  width: 76px;
-  height: 48px;
-  border: 1.5px solid #6969d4;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid #7777d7;
   border-radius: 3px;
 }
 
