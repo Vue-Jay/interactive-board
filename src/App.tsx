@@ -44,6 +44,7 @@ import {
   type DocumentData,
 } from "./boardModel";
 import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
+import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 
 type Tool =
   | "select"
@@ -1023,6 +1024,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 }) {
   const canEdit = boardSummary.role !== "viewer";
   const [sharing, setSharing] = useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
+  const [historyRows,setHistoryRows]=useState<BoardHistoryEntry[]>([]);
+  const [historyBusy,setHistoryBusy]=useState(false);
+  const [historyError,setHistoryError]=useState("");
   const [liveLesson,setLiveLesson]=useState<LiveLesson|null>(null);
   const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
   const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
@@ -1297,6 +1302,26 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       else editor.current?.setSelectionRange(editor.current.value.length, editor.current.value.length);
     }
   }, [editing]);
+
+  const openHistory=async()=>{
+    if(!isRemoteBackendEnabled()){setNotice("История версий доступна при серверной синхронизации");return}
+    setHistoryOpen(true);setHistoryBusy(true);setHistoryError("");
+    try{setHistoryRows(await listBoardHistory(boardSummary.id,40))}
+    catch(error){setHistoryError(error instanceof Error?error.message:"Не удалось загрузить историю")}
+    finally{setHistoryBusy(false)}
+  };
+  const restoreHistoryVersion=async(entry:BoardHistoryEntry)=>{
+    if(!canEdit){setNotice("У вас доступ только для просмотра");return}
+    if(!window.confirm(`Восстановить версию №${entry.version}? Текущее состояние останется в истории после следующего сохранения.`))return;
+    setHistoryBusy(true);setHistoryError("");
+    try{
+      const data=parseDocument(JSON.stringify(await getBoardHistoryVersion(boardSummary.id,entry.version)));
+      applyDocument(data);
+      setHistoryOpen(false);
+      setNotice(`Версия №${entry.version} восстановлена. Изменение будет сохранено как новая версия.`);
+    }catch(error){setHistoryError(error instanceof Error?error.message:"Не удалось восстановить версию")}
+    finally{setHistoryBusy(false)}
+  };
 
   const exportBoard = async () => {
     const data: DocumentData = {
@@ -3899,6 +3924,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button onClick={exportConflictBackup}>Скачать JSON</button>
         <button className="secondary" onClick={discardConflictBackup}>Удалить копию</button>
       </div>}
+      {historyOpen&&<div className="access-backdrop history-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!historyBusy)setHistoryOpen(false)}}><section className="access-modal history-modal" role="dialog" aria-modal="true" aria-label="История версий"><div className="access-head"><div><h2>История версий</h2><p>Последние сохранённые состояния доски</p></div><button disabled={historyBusy} onClick={()=>setHistoryOpen(false)} aria-label="Закрыть">×</button></div>{historyBusy&&<div className="history-empty">Загружаем…</div>}{historyError&&<div className="access-notice">{historyError}</div>}{!historyBusy&&!historyError&&historyRows.length===0&&<div className="history-empty">История пока пуста. Новые сохранения начнут появляться после установки v68.</div>}<div className="history-list">{historyRows.map((entry,index)=><div className="history-row" key={entry.id}><div><strong>{index===0?"Текущая сохранённая":`Версия №${entry.version}`}</strong><span>{new Date(entry.saved_at).toLocaleString("ru-RU")} · объектов: {entry.item_count}</span></div>{canEdit&&<button disabled={historyBusy||index===0} onClick={()=>void restoreHistoryVersion(entry)}>{index===0?"Текущая":"Восстановить"}</button>}</div>)}</div><p className="share-note">Хранятся последние 100 серверных снимков. Восстановление создаёт новое состояние, старые версии не удаляются.</p></section></div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
         <div className="topbar-left">
@@ -4038,6 +4064,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
+          <button className="lesson-button history-button" onClick={()=>void openHistory()} title="История сохранённых версий доски">История</button>
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
             <span className="account-copy">
