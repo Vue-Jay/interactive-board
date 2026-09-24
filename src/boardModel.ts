@@ -71,6 +71,7 @@ export type Item = {
   quizExplanation?: string;
   flashcardBack?: string;
   flashcardFlipped?: boolean;
+  flashcardMastery?: "again" | "known";
   coverOpen?: boolean;
   mediaUrl?: string;
   mediaTitle?: string;
@@ -176,6 +177,7 @@ export function parseDocument(raw: string): DocumentData {
       if (i.text.length > 5000) throw new Error("Лицевая сторона карточки слишком длинная");
       if (i.flashcardBack != null && (typeof i.flashcardBack !== "string" || i.flashcardBack.length > 5000)) throw new Error("Повреждена обратная сторона карточки");
       if (i.flashcardFlipped != null && typeof i.flashcardFlipped !== "boolean") throw new Error("Повреждено состояние карточки");
+      if (i.flashcardMastery != null && !["again","known"].includes(i.flashcardMastery)) throw new Error("Повреждён статус изучения карточки");
       if (i.fontSize != null && (!finite(i.fontSize) || i.fontSize < 10 || i.fontSize > 48)) throw new Error("Повреждён размер текста карточки");
       if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет карточки");
     }
@@ -248,6 +250,7 @@ export function parseDocument(raw: string): DocumentData {
       ...(i.kind === "flashcard" ? {
         flashcardBack: typeof i.flashcardBack === "string" ? i.flashcardBack.slice(0, 5000) : "Ответ",
         flashcardFlipped: i.flashcardFlipped === true,
+        ...(i.flashcardMastery === "again" || i.flashcardMastery === "known" ? { flashcardMastery: i.flashcardMastery } : {}),
         ...(finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 48 ? { fontSize: i.fontSize } : {}),
         color: color(i.color) ? i.color : "#5355c9",
       } : {}),
