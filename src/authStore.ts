@@ -33,7 +33,14 @@ export const loginUser=async(input:{email:string;password:string}):Promise<AuthU
  if(isRemoteBackendEnabled()){const s=await signInRemote(email,input.password);await claimRemoteInvitations();return remoteUser(s)!}
  const u=loadUsers().find(x=>x.email===email);if(!u||await hashPassword(input.password,u.passwordSalt)!==u.passwordHash)throw new Error("Неверный email или пароль");saveSession(u.id);return publicUser(u)
 };
-export const loginGuest=async():Promise<AuthUser>=>{ if(!isRemoteBackendEnabled())throw new Error("Гостевой вход доступен только при серверной синхронизации."); const s=await signInAnonymousRemote(); return remoteUser(s)!; };
+export const loginGuest=async(name:string):Promise<AuthUser>=>{
+ const guestName=name.trim();
+ if(guestName.length<2)throw new Error("Введите имя гостя не короче 2 символов");
+ if(guestName.length>60)throw new Error("Имя гостя слишком длинное");
+ if(!isRemoteBackendEnabled())throw new Error("Гостевой вход доступен только при серверной синхронизации.");
+ const s=await signInAnonymousRemote(guestName);
+ return remoteUser(s)!;
+};
 export const logoutUser=async()=>{if(isRemoteBackendEnabled())await signOutRemote();else localStorage.removeItem(SESSION_KEY)};
 export const getUserById=(id:string):AuthUser|null=>{const u=loadUsers().find(x=>x.id===id);return u?publicUser(u):null};
 export const getUserByEmail=(email:string):AuthUser|null=>{const e=normalizeEmail(email);const u=loadUsers().find(x=>x.email===e);return u?publicUser(u):null};

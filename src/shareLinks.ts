@@ -14,6 +14,7 @@ export type ShareLink = {
   revoked_at: string | null;
   max_uses: number | null;
   use_count: number;
+  protected: boolean;
 };
 
 export type CreatedShareLink = ShareLink & { token: string };
@@ -28,6 +29,7 @@ export type BoardShareLink = {
   revokedAt: string | null;
   maxUses: number | null;
   useCount: number;
+  protected: boolean;
 };
 
 const requireRemote = () => {
@@ -45,14 +47,15 @@ const normalizeServerLink = (row: any): ShareLink => ({
   revoked_at: row.revoked_at ?? null,
   max_uses: row.max_uses == null ? null : Number(row.max_uses),
   use_count: Number(row.use_count || 0),
+  protected: Boolean(row.protected),
 });
 
 /* API expected by the current Codex-created App.tsx / ShareDialog.tsx. */
-export async function createShareLink(boardId: string, role: ShareRole, options?: { expiresAt?: string | null; maxUses?: number | null }): Promise<CreatedShareLink> {
+export async function createShareLink(boardId: string, role: ShareRole, options?: { expiresAt?: string | null; maxUses?: number | null; password?: string | null }): Promise<CreatedShareLink> {
   requireRemote();
   const row = await remoteRequest<any>("/rest/v1/rpc/create_board_share_link", {
     method: "POST",
-    body: JSON.stringify({ p_board_id: boardId, p_role: role, p_expires_at: options?.expiresAt || null, p_max_uses: options?.maxUses || null }),
+    body: JSON.stringify({ p_board_id: boardId, p_role: role, p_expires_at: options?.expiresAt || null, p_max_uses: options?.maxUses || null, p_password: options?.password?.trim() || null }),
   });
   return {
     ...normalizeServerLink({ ...row, revoked_at: null }),
@@ -81,7 +84,7 @@ export async function revokeShareLink(linkId: string): Promise<void> {
  * Returns the server-shaped RPC response because the existing App.tsx
  * navigates with redeemed.board_id after accepting /join/<token>.
  */
-export async function redeemShareLink(token: string): Promise<{
+export async function redeemShareLink(token: string, password?: string): Promise<{
   id: string;
   board_id: string;
   title: string;
@@ -93,7 +96,7 @@ export async function redeemShareLink(token: string): Promise<{
   requireRemote();
   return remoteRequest("/rest/v1/rpc/redeem_board_share_link", {
     method: "POST",
-    body: JSON.stringify({ p_token: token }),
+    body: JSON.stringify({ p_token: token, p_password: password || null }),
   });
 }
 
@@ -112,6 +115,7 @@ export async function createBoardShareLink(
     revokedAt: row.revoked_at,
     maxUses: row.max_uses,
     useCount: row.use_count,
+    protected: row.protected,
     token: row.token,
   };
 }
@@ -127,6 +131,7 @@ export async function listBoardShareLinks(boardId: string): Promise<BoardShareLi
     revokedAt: row.revoked_at,
     maxUses: row.max_uses,
     useCount: row.use_count,
+    protected: row.protected,
   }));
 }
 

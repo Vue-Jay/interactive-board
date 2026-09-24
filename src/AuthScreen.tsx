@@ -16,6 +16,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [guestName, setGuestName] = useState("");
   const joining = hasJoinLink();
 
   const submit = async (event: FormEvent) => {
@@ -91,7 +92,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
           <button className="auth-submit" type="submit" disabled={busy}>
             {busy ? "Подождите…" : mode === "register" ? "Зарегистрироваться" : "Войти"}
           </button>
-          {joining && <><div className="auth-or"><span>или</span></div><button className="auth-guest" type="button" disabled={busy} onClick={async()=>{if(busy)return;setBusy(true);setError("");try{onAuthenticated(await loginGuest())}catch(value){setError(value instanceof Error?value.message:"Не удалось войти как гость")}finally{setBusy(false)}}}>Продолжить как гость</button><p className="auth-guest-note">Без регистрации. Доступ действует в этом браузере и определяется ссылкой владельца.</p></>}
+          {joining && <><div className="auth-or"><span>или</span></div><label className="auth-field"><span>Ваше имя на доске</span><input value={guestName} onChange={e=>setGuestName(e.target.value)} placeholder="Например, Анна" maxLength={60}/></label><button className="auth-guest" type="button" disabled={busy||guestName.trim().length<2} onClick={async()=>{if(busy)return;setBusy(true);setError("");try{onAuthenticated(await loginGuest(guestName))}catch(value){setError(value instanceof Error?value.message:"Не удалось войти как гость")}finally{setBusy(false)}}}>Продолжить как гость</button><p className="auth-guest-note">Аккаунт создавать не нужно. Это имя увидят участники доски.</p></>}
         </form>
 
         <div className="auth-role-note">

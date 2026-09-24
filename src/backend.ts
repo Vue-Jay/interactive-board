@@ -73,8 +73,8 @@ export const signUpRemote = async (email: string, password: string, name: string
   return session;
 };
 
-export const signInAnonymousRemote = async () => {
-  const response = await fetch(`${url}/auth/v1/signup`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ data: { display_name: "Гость", is_guest: true } }) });
+export const signInAnonymousRemote = async (name = "Гость") => {
+  const response = await fetch(`${url}/auth/v1/signup`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ data: { display_name: name.trim() || "Гость", is_guest: true } }) });
   if (!response.ok) throw new Error(await errorMessage(response));
   const data = await response.json();
   if (!data.access_token) throw new Error("Анонимный вход отключён в настройках Supabase.");
