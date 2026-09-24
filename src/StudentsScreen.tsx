@@ -34,11 +34,12 @@ export default function StudentsScreen({user,onBack,onOpenBoard}:Props){
 
  const studentBoards=student?boards.filter(b=>student.boardIds.includes(b.id)):[];
  const totalMinutes=student?.sessions.reduce((sum,s)=>sum+s.durationMinutes,0)||0;
+ const openProgress=()=>{if(!student)return;sessionStorage.setItem("onlinerepetitor.progress.student",student.userId);window.history.pushState({},"","/?section=progress");window.dispatchEvent(new PopStateEvent("popstate"))};
 
  return <main className="students-shell">
   <header className="students-header"><div><button className="boards-secondary" onClick={onBack}>← Доски</button><div><strong>Ученики</strong><span>Карточки, история занятий и доски</span></div></div><span>{loading?"Загрузка…":`${students.length} учеников`}</span></header>
   <section className="students-content">
-   <nav className="dashboard-nav"><button onClick={onBack}>Доски</button><button className="active">Ученики</button><button onClick={()=>{window.history.pushState({},"","/?section=assignments");window.dispatchEvent(new PopStateEvent("popstate"))}}>Задания</button><button disabled>Расписание</button><button disabled>Материалы</button></nav>
+   <nav className="dashboard-nav"><button onClick={onBack}>Доски</button><button className="active">Ученики</button><button onClick={()=>{window.history.pushState({},"","/?section=assignments");window.dispatchEvent(new PopStateEvent("popstate"))}}>Задания</button><button onClick={()=>{window.history.pushState({},"","/?section=progress");window.dispatchEvent(new PopStateEvent("popstate"))}}>Прогресс</button><button disabled>Расписание</button><button disabled>Материалы</button></nav>
    <div className="students-toolbar"><input type="search" placeholder="Поиск по имени, email или тегу" value={query} onChange={e=>setQuery(e.target.value)}/><button onClick={()=>void load()}>Обновить</button></div>
    {notice&&<div className="access-notice">{notice}</div>}
    <div className="students-layout">
@@ -49,7 +50,7 @@ export default function StudentsScreen({user,onBack,onOpenBoard}:Props){
       <div className="student-stat-grid student-stat-grid-4"><div><b>{student.boardIds.length}</b><span>досок</span></div><div><b>{student.sessions.length}</b><span>занятий</span></div><div><b>{Math.round(totalMinutes/60*10)/10} ч</b><span>в истории</span></div><div><b>{fmt(student.lastBoardAt)}</b><span>активность</span></div></div>
       <label className="student-field"><span>Теги</span><input value={tags} onChange={e=>setTags(e.target.value)} placeholder="математика, 9 класс, ЕГЭ"/></label>
       <label className="student-field"><span>Заметки преподавателя</span><textarea value={note} onChange={e=>setNote(e.target.value)} rows={5} placeholder="Что важно помнить к следующему занятию…"/></label>
-      <button className="students-primary" onClick={persistCard}>Сохранить карточку</button>
+      <div className="student-card-actions"><button className="students-primary" onClick={persistCard}>Сохранить карточку</button><button className="boards-secondary" onClick={openProgress}>Открыть прогресс</button></div>
       <div className="student-section-head"><h3>История занятий</h3><button onClick={openNewSession}>+ Добавить занятие</button></div>
       <div className="student-history">{student.sessions.length===0?<div className="student-history-empty">Пока нет записей о занятиях.</div>:student.sessions.map(s=><article key={s.id} className="student-session"><div><b>{s.topic||"Занятие без темы"}</b><span>{fmt(s.date)} · {s.durationMinutes} мин · {s.boardTitle}</span>{s.result&&<p><strong>Итог:</strong> {s.result}</p>}{s.homework&&<p><strong>Домашнее:</strong> {s.homework}</p>}</div><div><button onClick={()=>editSession(s)}>Изменить</button><button className="danger" onClick={()=>{if(confirm("Удалить запись занятия?")){void deleteStudentSession(s.id).catch(()=>setNotice("Не удалось удалить занятие на сервере"));setStudents(cur=>cur.map(x=>x.userId===student.userId?{...x,sessions:x.sessions.filter(v=>v.id!==s.id)}:x))}}}>Удалить</button></div></article>)}</div>
       <div className="student-boards"><h3>Доски ученика</h3>{studentBoards.map(b=><button key={b.id} onClick={()=>onOpenBoard(b)}><span><b>{b.title}</b><small>Изменено {fmt(b.updatedAt)}</small></span><strong>Открыть →</strong></button>)}</div>

@@ -1,0 +1,44 @@
+import { useEffect,useMemo,useState } from "react";
+import type { AuthUser } from "./authStore";
+import { getStudentsForTeacher,type StudentRecord } from "./studentsStore";
+import { listAssignments,type Assignment } from "./assignmentsStore";
+
+type Props={user:AuthUser;onBack:()=>void};
+type Range="30"|"90"|"365"|"all";
+const pct=(n:number,d:number)=>d?Math.round(n/d*100):0;
+const fmt=(iso:string)=>new Intl.DateTimeFormat("ru-RU",{day:"2-digit",month:"short"}).format(new Date(iso));
+const overdue=(a:Assignment)=>a.status==="assigned"&&!!a.dueAt&&new Date(a.dueAt).getTime()<Date.now();
+
+export default function ProgressScreen({user,onBack}:Props){
+ const [students,setStudents]=useState<StudentRecord[]>([]),[assignments,setAssignments]=useState<Assignment[]>([]);
+ const [loading,setLoading]=useState(true),[range,setRange]=useState<Range>("90"),[studentId,setStudentId]=useState(()=>sessionStorage.getItem("onlinerepetitor.progress.student")||"all"),[notice,setNotice]=useState("");
+ const load=async()=>{setLoading(true);try{const [s,a]=await Promise.all([getStudentsForTeacher(user),listAssignments(user.id)]);setStudents(s);setAssignments(a.filter(x=>x.teacherId===user.id))}catch(e){setNotice(e instanceof Error?e.message:"Не удалось загрузить аналитику")}finally{setLoading(false)}};
+ useEffect(()=>{void load();return()=>sessionStorage.removeItem("onlinerepetitor.progress.student")},[user.id]);
+ const since=useMemo(()=>range==="all"?0:Date.now()-Number(range)*86400000,[range]);
+ const filteredStudents=studentId==="all"?students:students.filter(s=>s.userId===studentId);
+ const ids=new Set(filteredStudents.map(s=>s.userId));
+ const a=assignments.filter(x=>ids.has(x.studentId)&&new Date(x.createdAt).getTime()>=since);
+ const sessions=filteredStudents.flatMap(s=>s.sessions.filter(x=>new Date(x.date).getTime()>=since).map(x=>({...x,studentName:s.name})));
+ const reviewed=a.filter(x=>x.status==="reviewed"),submitted=a.filter(x=>x.status==="submitted"),waiting=a.filter(x=>x.status==="assigned"&&!overdue(x)),late=a.filter(overdue);
+ const scored=reviewed.filter(x=>x.score!=null&&x.maxScore>0);
+ const avg=scored.length?Math.round(scored.reduce((n,x)=>n+(x.score!/x.maxScore*100),0)/scored.length):null;
+ const totalMinutes=sessions.reduce((n,x)=>n+x.durationMinutes,0);
+ const completed=reviewed.length;
+ const completion=pct(completed,a.length);
+ const byStudent=filteredStudents.map(s=>{const sa=a.filter(x=>x.studentId===s.userId),sr=sa.filter(x=>x.status==="reviewed"&&x.score!=null&&x.maxScore>0);return{student:s,assignments:sa.length,done:sa.filter(x=>x.status==="reviewed").length,late:sa.filter(overdue).length,avg:sr.length?Math.round(sr.reduce((n,x)=>n+x.score!/x.maxScore*100,0)/sr.length):null,minutes:s.sessions.filter(x=>new Date(x.date).getTime()>=since).reduce((n,x)=>n+x.durationMinutes,0)}}).sort((x,y)=>(y.avg??-1)-(x.avg??-1));
+ const months=useMemo(()=>{const out:{key:string;label:string;score:number|null;count:number}[]=[];for(let i=5;i>=0;i--){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);const y=d.getFullYear(),m=d.getMonth();const xs=scored.filter(x=>{const z=new Date(x.reviewedAt||x.createdAt);return z.getFullYear()===y&&z.getMonth()===m});out.push({key:`${y}-${m}`,label:new Intl.DateTimeFormat("ru-RU",{month:"short"}).format(d),score:xs.length?Math.round(xs.reduce((n,x)=>n+x.score!/x.maxScore*100,0)/xs.length):null,count:xs.length})}return out},[assignments,studentId,range]);
+ const maxSessions=Math.max(1,...filteredStudents.map(s=>s.sessions.filter(x=>new Date(x.date).getTime()>=since).length));
+ return <main className="progress-shell"><header className="students-header"><div><button className="boards-secondary" onClick={onBack}>← Доски</button><div><strong>Прогресс</strong><span>Занятия, задания и результаты учеников</span></div></div><button className="boards-secondary" onClick={()=>void load()}>Обновить</button></header>
+  <section className="progress-content"><nav className="dashboard-nav"><button onClick={onBack}>Доски</button><button onClick={()=>{window.history.pushState({},"","/?section=students");window.dispatchEvent(new PopStateEvent("popstate"))}}>Ученики</button><button onClick={()=>{window.history.pushState({},"","/?section=assignments");window.dispatchEvent(new PopStateEvent("popstate"))}}>Задания</button><button className="active">Прогресс</button><button disabled>Расписание</button><button disabled>Материалы</button></nav>
+   <div className="progress-toolbar"><label>Ученик<select value={studentId} onChange={e=>setStudentId(e.target.value)}><option value="all">Все ученики</option>{students.map(s=><option key={s.userId} value={s.userId}>{s.name}</option>)}</select></label><label>Период<select value={range} onChange={e=>setRange(e.target.value as Range)}><option value="30">30 дней</option><option value="90">90 дней</option><option value="365">Год</option><option value="all">Всё время</option></select></label></div>
+   {notice&&<div className="access-notice">{notice}</div>}
+   {loading?<div className="boards-empty"><strong>Собираем статистику…</strong></div>:<>
+    <div className="progress-kpis"><article><span>Занятий</span><b>{sessions.length}</b><small>{Math.round(totalMinutes/6)/10} ч суммарно</small></article><article><span>Заданий</span><b>{a.length}</b><small>{completion}% проверено</small></article><article><span>Средний результат</span><b>{avg==null?"—":`${avg}%`}</b><small>{scored.length} работ с баллом</small></article><article className={late.length?"warn":""}><span>Просрочено</span><b>{late.length}</b><small>{submitted.length} на проверке</small></article></div>
+    <div className="progress-grid"><section className="progress-panel"><div className="progress-panel-head"><div><h2>Результаты за 6 месяцев</h2><p>Средний процент по проверенным работам</p></div></div><div className="progress-bars">{months.map(m=><div key={m.key}><div className="progress-bar-track"><span style={{height:`${m.score??0}%`}}/></div><b>{m.score==null?"—":`${m.score}%`}</b><small>{m.label}</small></div>)}</div></section>
+     <section className="progress-panel"><div className="progress-panel-head"><div><h2>Состояние заданий</h2><p>Что сейчас происходит с работами</p></div></div><div className="status-donut" style={{background:`conic-gradient(#49a873 0 ${pct(reviewed.length,a.length)}%,#e0a22c ${pct(reviewed.length,a.length)}% ${pct(reviewed.length+submitted.length,a.length)}%,#d85b5b ${pct(reviewed.length+submitted.length,a.length)}% ${pct(reviewed.length+submitted.length+late.length,a.length)}%,#9b9eab 0)`}}><div><b>{a.length}</b><span>всего</span></div></div><div className="progress-legend"><span><i className="done"/>Проверено <b>{reviewed.length}</b></span><span><i className="review"/>На проверке <b>{submitted.length}</b></span><span><i className="late"/>Просрочено <b>{late.length}</b></span><span><i/>Ожидают <b>{waiting.length}</b></span></div></section>
+    </div>
+    <section className="progress-panel progress-table-panel"><div className="progress-panel-head"><div><h2>Ученики</h2><p>Сводка по выбранному периоду</p></div></div>{byStudent.length===0?<div className="student-history-empty">Нет данных за выбранный период.</div>:<div className="progress-table"><div className="progress-tr head"><span>Ученик</span><span>Занятия</span><span>Время</span><span>Задания</span><span>Просрочено</span><span>Средний балл</span></div>{byStudent.map(x=><button className="progress-tr" key={x.student.userId} onClick={()=>setStudentId(x.student.userId)}><span><i className="student-avatar mini">{x.student.name.charAt(0).toUpperCase()}</i><b>{x.student.name}</b></span><span>{x.student.sessions.filter(s=>new Date(s.date).getTime()>=since).length}<em style={{width:`${x.student.sessions.filter(s=>new Date(s.date).getTime()>=since).length/maxSessions*100}%`}}/></span><span>{Math.round(x.minutes/6)/10} ч</span><span>{x.done}/{x.assignments}</span><span className={x.late?"bad":""}>{x.late}</span><span><strong>{x.avg==null?"—":`${x.avg}%`}</strong></span></button>)}</div>}</section>
+    <section className="progress-panel"><div className="progress-panel-head"><div><h2>Последние занятия</h2><p>Свежие записи из истории</p></div></div><div className="progress-recent">{sessions.sort((x,y)=>y.date.localeCompare(x.date)).slice(0,8).map(s=><article key={s.id}><span>{fmt(s.date)}</span><div><b>{s.studentName}</b><p>{s.topic||"Занятие без темы"}</p></div><strong>{s.durationMinutes} мин</strong></article>)}{sessions.length===0&&<div className="student-history-empty">Занятий за период нет.</div>}</div></section>
+   </>}
+  </section></main>
+}
