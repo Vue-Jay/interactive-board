@@ -2,7 +2,8 @@ import { remoteRequest } from "./backend";
 import type { DocumentData } from "./boardModel";
 
 export type BoardHistoryEntry={
- id:number; version:number; saved_at:string; saved_by:string|null; item_count:number; title:string;
+ id:number; version:number; saved_at:string; saved_by:string|null; saved_by_name:string;
+ item_count:number; title:string; added_count:number; removed_count:number; changed_count:number;
 };
 
 export async function listBoardHistory(boardId:string,limit=30):Promise<BoardHistoryEntry[]>{
