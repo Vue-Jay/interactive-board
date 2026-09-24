@@ -13,6 +13,7 @@ import AssignmentsScreen from "./AssignmentsScreen";
 import ProgressScreen from "./ProgressScreen";
 import ScheduleScreen from "./ScheduleScreen";
 import MaterialsScreen from "./MaterialsScreen";
+import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
 import ShareDialog from "./ShareDialog";
 import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
@@ -1531,6 +1532,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setTool("select");
     return item;
   };
+
+  useEffect(()=>{if(!canEdit)return;let raw=sessionStorage.getItem("onlinerepetitor.material.pick");if(!raw)return;sessionStorage.removeItem("onlinerepetitor.material.pick");(async()=>{try{const picked=JSON.parse(raw) as Pick<Material,"id"|"title"|"fileName"|"mime"|"storagePath">;if(!picked.id||!(picked.mime.startsWith("image/")||picked.mime==="application/pdf")){setNotice("На доску сейчас можно вставить изображение или PDF");return}const blob=await materialBlob(picked as Material);const file=new File([blob],picked.fileName,{type:picked.mime});await addMediaFile(file);await markMaterialUsed(picked.id);setNotice(`Материал «${picked.title}» добавлен на доску`)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось добавить материал")}})()},[boardSummary.id,canEdit]);
 
   const openMediaAsset = async (item: Item) => {
     if ((item.kind !== "image" && item.kind !== "pdf") || !item.assetId) return;
