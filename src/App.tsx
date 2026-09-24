@@ -8,6 +8,7 @@ import {
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
+import StudentsScreen from "./StudentsScreen";
 import ShareDialog from "./ShareDialog";
 import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
 import { redeemShareLink } from "./shareLinks";
@@ -5498,7 +5499,9 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
-        {route.kind === "home" && <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />}
+        {route.kind === "home" && (new URLSearchParams(window.location.search).get("section")==="students"
+          ? <StudentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
+          : <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />)}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
       </>
