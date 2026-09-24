@@ -3872,3 +3872,52 @@ button {
   .presence-menu > summary { width:34px; justify-content:center; padding:0; }
   .presence-popover { right:-80px; width:min(260px,calc(100vw - 28px)); }
 }
+
+
+/* v27 · live cursors */
+.remote-cursors-layer {
+  position:absolute;
+  inset:0;
+  z-index:1800;
+  overflow:hidden;
+  pointer-events:none;
+}
+.remote-cursor {
+  position:absolute;
+  left:0;
+  top:0;
+  display:flex;
+  align-items:flex-start;
+  gap:3px;
+  transform-origin:0 0;
+  transition:transform 48ms linear;
+  will-change:transform;
+}
+.remote-cursor-pointer {
+  width:20px;
+  height:25px;
+  overflow:visible;
+  filter:drop-shadow(0 1px 2px rgba(25,28,40,.18));
+}
+.remote-cursor-pointer path {
+  fill:#5355c9;
+  stroke:#fff;
+  stroke-width:1.4;
+  stroke-linejoin:round;
+}
+.remote-cursor > span {
+  margin:13px 0 0 -2px;
+  max-width:150px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  padding:4px 7px;
+  border-radius:7px;
+  background:#5355c9;
+  color:#fff;
+  box-shadow:0 3px 10px rgba(35,39,70,.18);
+  font-size:9px;
+  font-weight:800;
+  line-height:1;
+}
+.presentation-mode .remote-cursors-layer { z-index:2200; }

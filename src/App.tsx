@@ -16,6 +16,7 @@ import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from 
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
 import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
+import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor } from "./boardBroadcast";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
@@ -978,6 +979,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const canEdit = boardSummary.role !== "viewer";
   const [sharing, setSharing] = useState(false);
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
+  const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+  const cursorChannel = useRef<BoardCursorChannel | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3465,6 +3468,49 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setPresenceUsers,
   ), [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
 
+  useEffect(() => {
+    const channel = connectBoardCursorChannel(
+      boardSummary.id,
+      { userId: authUser.id, name: authUser.name, role: boardSummary.role },
+      (cursor) => setRemoteCursors((current) => ({ ...current, [cursor.userId]: cursor })),
+    );
+    cursorChannel.current = channel;
+    return () => {
+      cursorChannel.current = null;
+      channel.close();
+      setRemoteCursors({});
+    };
+  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+
+  useEffect(() => {
+    const online = new Set(presenceUsers.map((user) => user.userId));
+    setRemoteCursors((current) => {
+      let changed = false;
+      const next: Record<string, RemoteCursor> = {};
+      for (const [userId, cursor] of Object.entries(current)) {
+        if (online.has(userId)) next[userId] = cursor;
+        else changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [presenceUsers]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const cutoff = Date.now() - 12000;
+      setRemoteCursors((current) => {
+        let changed = false;
+        const next: Record<string, RemoteCursor> = {};
+        for (const [userId, cursor] of Object.entries(current)) {
+          if (cursor.updatedAt >= cutoff) next[userId] = cursor;
+          else changed = true;
+        }
+        return changed ? next : current;
+      });
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const keepLocalChanges = () => {
     const row = pendingRemote.current;
     if (!row) return;
@@ -4269,7 +4315,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
           onPointerDown={(e) => { if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); } move(e); }}
+          onPointerMove={(e) => { const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -4319,6 +4365,20 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           onPointerCancel={() => end(true)}
           onLostPointerCapture={() => end(true)}
         >
+          <div className="remote-cursors-layer" aria-hidden="true">
+            {Object.values(remoteCursors).map((cursor) => <div
+              className="remote-cursor"
+              key={cursor.userId}
+              style={{
+                transform: `translate(${cursor.x * view.zoom + view.x}px,${cursor.y * view.zoom + view.y}px)`,
+              }}
+            >
+              <svg className="remote-cursor-pointer" viewBox="0 0 24 30">
+                <path d="M2 2 19 17l-8.2 1.5L7 27 2 2Z"/>
+              </svg>
+              <span>{cursor.name}</span>
+            </div>)}
+          </div>
           <div
             className="world"
             style={{
