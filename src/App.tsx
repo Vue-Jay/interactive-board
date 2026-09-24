@@ -18,6 +18,7 @@ import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
 import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
 import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor } from "./boardBroadcast";
 import { connectBoardViewControl, type BoardViewControlChannel } from "./boardViewSync";
+import { connectBoardWorkChannel, type BoardWorkChannel, type RemoteWorkState } from "./boardWorkSync";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
@@ -988,6 +989,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [guidedFollow, setGuidedFollow] = useState(false);
   const guidedFollowRef = useRef(false);
   const teacherViewBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [remoteWork, setRemoteWork] = useState<Record<string, RemoteWorkState>>({});
+  const workChannel = useRef<BoardWorkChannel | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3539,6 +3542,55 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   }, [followTeacher]);
 
   useEffect(() => {
+    const channel = connectBoardWorkChannel(
+      boardSummary.id,
+      { userId: authUser.id, name: authUser.name, role: boardSummary.role },
+      (state) => setRemoteWork((current) => ({ ...current, [state.userId]: state })),
+      (userId) => setRemoteWork((current) => {
+        if (!(userId in current)) return current;
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      }),
+    );
+    workChannel.current = channel;
+    return () => {
+      workChannel.current = null;
+      channel.close();
+      setRemoteWork({});
+    };
+  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+
+  useEffect(() => {
+    workChannel.current?.publish(selected, editing);
+  }, [selected, editing]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const cutoff = Date.now() - 15000;
+      const online = new Set(presenceUsers.map((user) => user.userId));
+      setRemoteWork((current) => {
+        let changed = false;
+        const next: Record<string, RemoteWorkState> = {};
+        for (const [userId, state] of Object.entries(current)) {
+          if (state.updatedAt >= cutoff && online.has(userId)) next[userId] = state;
+          else changed = true;
+        }
+        return changed ? next : current;
+      });
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [presenceUsers]);
+
+  const remoteEditorFor = (itemId: string) =>
+    Object.values(remoteWork).find((state) => state.editingId === itemId);
+
+  const remoteSelectorsFor = (itemId: string) =>
+    Object.values(remoteWork).filter((state) => state.selectedIds.includes(itemId));
+
+  const remoteEditingCount = Object.values(remoteWork).filter((state) => state.editingId).length;
+
+  useEffect(() => {
     if (boardSummary.role !== "owner") return;
     if (teacherViewBroadcastTimer.current) clearTimeout(teacherViewBroadcastTimer.current);
 
@@ -3700,7 +3752,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 <span className="presence-avatar" aria-hidden="true">{user.name.trim().charAt(0).toUpperCase() || "U"}</span>
                 <span className="presence-person-copy">
                   <b>{user.name}{user.userId === authUser.id ? " · Вы" : ""}</b>
-                  <small>{BOARD_ROLE_LABELS[user.role]}</small>
+                  <small>{BOARD_ROLE_LABELS[user.role]}{remoteWork[user.userId]?.editingId ? " · редактирует объект" : remoteWork[user.userId]?.selectedIds.length ? ` · выбрано: ${remoteWork[user.userId].selectedIds.length}` : ""}</small>
                 </span>
                 {boardSummary.role === "owner" && user.userId !== authUser.id && <button
                   type="button"
@@ -3725,6 +3777,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
               </div>}
             </div>
           </details>}
+          {remoteEditingCount > 0 && <span className="collab-editing-status" title="Сейчас другие участники редактируют объекты">
+            ✎ {remoteEditingCount}
+          </span>}
           {boardSummary.role !== "owner" && isRemoteBackendEnabled() && <button
             type="button"
             className={`lesson-button follow-teacher-button ${followTeacher ? "active" : ""}`}
@@ -4580,6 +4635,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                         : "#fff",
                 }}
                 onDoubleClick={() => {
+                  const remoteEditor = remoteEditorFor(item.id);
+                  if (remoteEditor) {
+                    setNotice(`${remoteEditor.name} уже редактирует этот объект`);
+                    return;
+                  }
                   if (
                     tool === "select" &&
                     !space &&
@@ -4606,6 +4666,14 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   }
                 }}
               >
+                {remoteSelectorsFor(item.id).slice(0, 3).map((remote, indexValue) => <div
+                  key={remote.userId}
+                  className={`remote-selection-outline ${remote.editingId === item.id ? "editing" : ""}`}
+                  style={{ inset: -3 - indexValue * 3 }}
+                  aria-hidden="true"
+                >
+                  <span>{remote.name}{remote.editingId === item.id ? " · редактирует" : ""}</span>
+                </div>)}
                 {item.points && <Ink item={item} />}
                 {item.kind === "shape" && <Shape type={item.shapeType} color={item.color}/>}
                 {item.kind === "connector" && <Connector item={item}/>}
