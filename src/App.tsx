@@ -45,6 +45,7 @@ import {
 } from "./boardModel";
 import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
+import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
 
 type Tool =
   | "select"
@@ -66,7 +67,8 @@ type Tool =
   | "quiz"
   | "flashcard"
   | "cover"
-  | "media";
+  | "media"
+  | "linkmedia";
 
 type IconName =
   | Tool
@@ -103,6 +105,7 @@ const iconBody = (name: IconName) => {
     case "sticky": return <><path d="M5 4h14v11l-5 5H5V4Z"/><path d="M14 20v-5h5"/></>;
     case "shape": return <><rect x="4.5" y="5" width="7" height="7" rx="1.5"/><circle cx="16.5" cy="8.5" r="3.5"/><path d="m8 19 3.5-5 3.5 5H8Z"/></>;
     case "media": return <><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5.5 17 4.2-4 3.1 2.8 2.3-2.2 3.4 3.4"/></>;
+    case "linkmedia": return <><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m10 9 5 3-5 3V9Z"/><path d="M6 18 18 6"/></>;
     case "search": return <><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></>;
     case "present": return <><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M12 16v4M8.5 20h7"/><path d="m10 9 5 2.5-5 2.5V9Z"/></>;
     case "layers": return <><path d="m12 4 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 16l8 4 8-4"/></>;
@@ -280,6 +283,7 @@ const tools: { id: Tool; icon: IconName; label: string; dividerAfter?: boolean }
   { id: "flashcard", icon: "flashcard", label: "Карточка вопрос–ответ · J / О" },
   { id: "cover", icon: "cover", label: "Шторка / открыть ответ · U / Г", dividerAfter: true },
   { id: "media", icon: "media", label: "Фото / PDF · I / Ш" },
+  { id: "linkmedia", icon: "linkmedia", label: "Видео / аудио по ссылке · L / Д" },
 ];
 const keyTools: Record<string, Tool> = {
   KeyV: "select",
@@ -302,6 +306,7 @@ const keyTools: Record<string, Tool> = {
   KeyJ: "flashcard",
   KeyU: "cover",
   KeyI: "media",
+  KeyL: "linkmedia",
 };
 const inside = (p: Point, polygon: Point[]) => {
   let hit = false;
@@ -958,6 +963,7 @@ function CommentCard({ item }: { item: Item }) {
 const itemLabel = (item: Item) => {
   if (item.kind === "image") return item.name || "Изображение";
   if (item.kind === "pdf") return item.name || "PDF";
+  if (item.kind === "linkmedia") return item.mediaTitle || "Мультимедиа";
   if (item.kind === "pen") return "Карандаш";
   if (item.kind === "marker") return "Маркер";
   if (item.kind === "connector") return item.text.trim() || (item.connectorStyle === "line" ? "Линия" : item.connectorStyle === "double" ? "Двусторонняя стрелка" : "Стрелка");
@@ -991,12 +997,14 @@ const itemKindLabel = (item: Item) => {
   if (item.kind === "connector") return "Связь";
   if (item.kind === "image") return "Изображение";
   if (item.kind === "pdf") return "PDF";
+  if (item.kind === "linkmedia") return "Видео / аудио по ссылке";
   if (item.kind === "pen") return "Карандаш";
   return "Маркер";
 };
 
 const itemIconName = (item: Item): IconName => {
   if (item.kind === "image" || item.kind === "pdf") return "media";
+  if (item.kind === "linkmedia") return "linkmedia";
   if (item.kind === "connector") return "connector";
   if (item.kind === "frame") return "frame";
   if (item.kind === "comment") return "comment";
@@ -1051,6 +1059,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [saveBlocked, setSaveBlocked] = useState(!!initial.error);
   const fileInput = useRef<HTMLInputElement>(null);
   const mediaInput = useRef<HTMLInputElement>(null);
+  const [linkMediaOpen,setLinkMediaOpen]=useState(false);
+  const [linkMediaUrl,setLinkMediaUrl]=useState("");
+  const [linkMediaTitle,setLinkMediaTitle]=useState("");
+  const [linkMediaEditId,setLinkMediaEditId]=useState<string|null>(null);
   const [shapeType, setShapeType] = useState<ShapeType>("rounded");
   const [connectorStyle, setConnectorStyle] = useState<ConnectorStyle>("arrow");
   const [connectorWeight, setConnectorWeight] = useState(3);
@@ -1608,6 +1620,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     return item;
   };
 
+  const openLinkMediaEditor=(item?:Item)=>{setLinkMediaEditId(item?.kind==="linkmedia"?item.id:null);setLinkMediaUrl(item?.kind==="linkmedia"?item.mediaUrl??"":"");setLinkMediaTitle(item?.kind==="linkmedia"?item.mediaTitle??"":"");setLinkMediaOpen(true)};
+  const saveLinkMedia=()=>{if(!canEdit)return;const info=resolveLinkMedia(linkMediaUrl);if(!info){setNotice("Нужна корректная ссылка http/https");return}const title=linkMediaTitle.trim()||({youtube:"YouTube",vimeo:"Vimeo",audio:"Аудио",video:"Видео",web:"Медиа по ссылке"} as const)[info.kind];if(linkMediaEditId){commit(itemsRef.current.map(i=>i.id===linkMediaEditId?{...i,mediaUrl:info.sourceUrl,mediaTitle:title}:i));setNotice("Ссылка мультимедиа обновлена")}else{const rect=board.current?.getBoundingClientRect();const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});const audio=info.kind==="audio";const item:Item={id:crypto.randomUUID(),kind:"linkmedia",x:center.x-240,y:center.y-(audio?70:150),width:480,height:audio?140:300,text:"",mediaUrl:info.sourceUrl,mediaTitle:title};commit([...itemsRef.current,item]);setSelected([item.id]);setNotice("Мультимедиа добавлено без загрузки файла в хранилище")}setLinkMediaOpen(false);setLinkMediaEditId(null);setTool("select")};
+
   useEffect(()=>{if(!canEdit)return;let raw=sessionStorage.getItem("onlinerepetitor.material.pick");if(!raw)return;sessionStorage.removeItem("onlinerepetitor.material.pick");(async()=>{try{const picked=JSON.parse(raw) as Pick<Material,"id"|"title"|"fileName"|"mime"|"storagePath">;if(!picked.id||!(picked.mime.startsWith("image/")||picked.mime==="application/pdf")){setNotice("На доску сейчас можно вставить изображение или PDF");return}const blob=await materialBlob(picked as Material);const file=new File([blob],picked.fileName,{type:picked.mime});await addMediaFile(file);await markMaterialUsed(picked.id);setNotice(`Материал «${picked.title}» добавлен на доску`)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось добавить материал")}})()},[boardSummary.id,canEdit]);
 
   const openMediaAsset = async (item: Item) => {
@@ -1844,6 +1859,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       mode = "connector";
       setSelected([]);
     } else if (tool === "media") { mediaInput.current?.click(); setTool("select"); return;
+    } else if (tool === "linkmedia") { openLinkMediaEditor(); return;
     } else if (tool === "frame") {
       e.preventDefault();
       const item: Item = {
@@ -3881,6 +3897,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
+      {linkMediaOpen&&<div className="access-backdrop link-media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkMediaOpen(false)}}><section className="access-modal link-media-dialog"><div className="access-head"><div><h2>{linkMediaEditId?"Изменить мультимедиа":"Мультимедиа по ссылке"}</h2><p>Файл не загружается в OnlineRepetitor и не занимает Storage.</p></div><button onClick={()=>setLinkMediaOpen(false)}>×</button></div><label className="link-media-field"><span>Ссылка</span><input autoFocus value={linkMediaUrl} onChange={e=>setLinkMediaUrl(e.target.value)} placeholder="YouTube, Vimeo, MP3, MP4 или другая http/https ссылка"/></label><label className="link-media-field"><span>Название</span><input value={linkMediaTitle} onChange={e=>setLinkMediaTitle(e.target.value)} placeholder="Необязательно"/></label><div className="link-media-support"><strong>Внутренний плеер</strong><span>YouTube и Vimeo открываются внутри доски. Прямые ссылки на MP3/MP4/WebM и другие поддерживаемые браузером файлы используют встроенный HTML5-плеер. Для остальных ссылок показывается безопасная карточка перехода.</span></div><div className="access-actions"><button onClick={()=>setLinkMediaOpen(false)}>Отмена</button><button className="boards-create" onClick={saveLinkMedia}>{linkMediaEditId?"Сохранить":"Добавить на доску"}</button></div></section></div>}
+
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
       {lessonOpen && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Начать урок</h2><p>Текущая доска станет рабочим пространством занятия.</p></div><button onClick={()=>setLessonOpen(false)}>×</button></div><label><span>Ученик</span><select value={lessonStudentId} onChange={e=>setLessonStudentId(e.target.value)}><option value="">Выберите</option>{lessonStudents.map(u=><option key={u.userId} value={u.userId}>{u.name}</option>)}</select></label><label><span>Тема</span><input value={lessonTopic} onChange={e=>setLessonTopic(e.target.value)} placeholder="Тема занятия"/></label><div className="session-actions"><button className="students-primary" onClick={()=>void beginLiveLesson()}>Начать и запустить таймер</button><button className="boards-secondary" onClick={()=>setLessonOpen(false)}>Отмена</button></div></section></div>}
       {lessonPanelOpen && liveLesson && <aside className="lesson-control-panel">
@@ -4968,6 +4986,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 {item.kind === "shape" && <Shape type={item.shapeType} color={item.color}/>}
                 {item.kind === "connector" && <Connector item={item}/>}
                 {(item.kind === "image" || item.kind === "pdf") && <Media item={item} boardId={boardSummary.id}/>}
+                {item.kind === "linkmedia" && <LinkMediaPlayer item={item}/>}
                 {item.kind === "frame" && editing !== item.id && <div className="frame-title">{item.text || "Без названия"}</div>}
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
                 {item.kind === "table" && <TableView item={item} />}
@@ -5172,6 +5191,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   : `${selectedItems.length} объектов`}
               </span>
 
+              {singleSelected?.kind === "linkmedia" && !selectionLocked && (<span className="linkmedia-selection-controls"><button onClick={()=>openLinkMediaEditor(singleSelected)} title="Изменить ссылку"><Icon name="rename" size={15}/><span>Ссылка</span></button><a href={singleSelected.mediaUrl} target="_blank" rel="noreferrer" onPointerDown={e=>e.stopPropagation()} title="Открыть источник"><Icon name="open" size={15}/></a></span>)}
               {singleSelected?.kind === "frame" && !selectionLocked && (
                 <button className="frame-name-action" onClick={renameSelectedFrame} title="Переименовать фрейм · Enter / F2">
                   <Icon name="rename" size={15} />

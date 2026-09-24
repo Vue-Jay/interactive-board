@@ -6,7 +6,7 @@ export type ConnectorRouting = "straight" | "elbow";
 export type ConnectorBinding = { itemId: string; nx: number; ny: number };
 export type Item = {
   id: string;
-  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "graph" | "checklist" | "quiz" | "flashcard" | "cover";
+  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "graph" | "checklist" | "quiz" | "flashcard" | "cover" | "linkmedia";
   x: number;
   y: number;
   width: number;
@@ -72,6 +72,8 @@ export type Item = {
   flashcardBack?: string;
   flashcardFlipped?: boolean;
   coverOpen?: boolean;
+  mediaUrl?: string;
+  mediaTitle?: string;
 };
 export type DocumentData = { version: 1; title: string; view: View; items: Item[] };
 export const STORAGE_KEY = "lesson-board.document.v1";
@@ -86,7 +88,7 @@ const binding = (v: unknown): v is ConnectorBinding => !!v && typeof v === "obje
 export function parseDocument(raw: string): DocumentData {
   if (raw.length > 10 * 1024 * 1024) throw new Error("Файл слишком большой");
   const d = JSON.parse(raw);
-  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover"];
+  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"];
   if (!d || d.version !== 1 || typeof d.title !== "string" || d.title.length > 10000 || !point(d.view) || !finite(d.view.zoom) || d.view.zoom < .1 || d.view.zoom > 8 || !Array.isArray(d.items) || d.items.length > 10000) throw new Error("Неверный формат доски");
   const ids = new Set<string>();
   let pointCount = 0;
@@ -177,6 +179,10 @@ export function parseDocument(raw: string): DocumentData {
       if (i.fontSize != null && (!finite(i.fontSize) || i.fontSize < 10 || i.fontSize > 48)) throw new Error("Повреждён размер текста карточки");
       if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет карточки");
     }
+    if (i.kind === "linkmedia") {
+      if (typeof i.mediaUrl !== "string" || i.mediaUrl.length > 5000 || !/^https?:\/\//i.test(i.mediaUrl)) throw new Error("Повреждена ссылка мультимедиа");
+      if (i.mediaTitle != null && (typeof i.mediaTitle !== "string" || i.mediaTitle.length > 500)) throw new Error("Повреждено название мультимедиа");
+    }
     if (i.kind === "cover") {
       if (i.text.length > 5000) throw new Error("Подпись шторки слишком длинная");
       if (i.coverOpen != null && typeof i.coverOpen !== "boolean") throw new Error("Повреждено состояние шторки");
@@ -245,6 +251,7 @@ export function parseDocument(raw: string): DocumentData {
         ...(finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 48 ? { fontSize: i.fontSize } : {}),
         color: color(i.color) ? i.color : "#5355c9",
       } : {}),
+      ...(i.kind === "linkmedia" ? { mediaUrl: i.mediaUrl, ...(typeof i.mediaTitle === "string" ? { mediaTitle: i.mediaTitle.slice(0,500) } : {}) } : {}),
       ...(i.kind === "cover" ? {
         coverOpen: i.coverOpen === true,
         ...(finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 48 ? { fontSize: i.fontSize } : {}),
