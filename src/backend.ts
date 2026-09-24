@@ -141,6 +141,23 @@ export const claimRemoteInvitations = async () => {
   await remoteRequest("/rest/v1/rpc/claim_my_board_invites", { method: "POST", body: "{}" });
 };
 
+// Binary Storage requests use the same session and refresh flow as board documents.
+export const remoteAssetRequest = async (path: string, blob?: Blob): Promise<Blob | null> => {
+  const session = await getRemoteSession();
+  if (!session) throw new Error("Сессия истекла. Войдите снова.");
+  const response = await fetch(`${url}/storage/v1/object/${blob ? "" : "authenticated/"}board-assets/${path}`, {
+    method: blob ? "POST" : "GET",
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${session.access_token}`,
+      ...(blob ? { "Content-Type": blob.type, "x-upsert": "false" } : {}),
+    },
+    ...(blob ? { body: blob } : {}),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return blob ? null : response.blob();
+};
+
 
 export type RemoteBoardDocument = {
   board_id: string;

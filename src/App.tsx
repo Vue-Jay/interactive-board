@@ -24,7 +24,7 @@ import {
   type Item,
   type DocumentData,
 } from "./boardModel";
-import { getAsset, putAsset } from "./assetStore";
+import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
 
 type Tool =
   | "select"
@@ -614,9 +614,9 @@ function Connector({ item }: { item: Item }) {
   );
 }
 
-function Media({ item }: { item: Item }) {
+function Media({ item, boardId }: { item: Item; boardId: string }) {
   const [src, setSrc] = useState("");
-  useEffect(() => { let url=""; let alive=true; if(!item.assetId)return; getAsset(item.assetId).then(blob=>{if(blob&&alive){url=URL.createObjectURL(blob);setSrc(url)}}); return()=>{alive=false;if(url)URL.revokeObjectURL(url)} },[item.assetId]);
+  useEffect(() => { let url=""; let alive=true; setSrc(""); if(!item.assetId)return; getAsset(item.assetId, boardId).then(blob=>{if(blob&&alive){url=URL.createObjectURL(blob);setSrc(url)}}).catch(()=>{}); return()=>{alive=false;if(url)URL.revokeObjectURL(url)} },[item.assetId, boardId]);
   if(!src) return <div className="media-missing">Файл недоступен</div>;
   if (item.kind === "image") return <img className="media-image" src={src} alt={item.name??"Изображение"}/>;
   const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
@@ -1093,6 +1093,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }
     remoteSaveInFlight.current = true;
     try {
+      await ensureBoardAssets(boardSummary.id, data);
       const result = await saveRemoteBoardDocument(boardSummary.id, data, remoteVersion.current);
       if (result.conflict) {
         setSaveStatus("Есть более новая версия на сервере · вернитесь к списку и откройте доску снова");
@@ -1199,7 +1200,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       for (const item of media) {
         if (!item.assetId || seen.has(item.assetId)) continue;
         seen.add(item.assetId);
-        const blob = await getAsset(item.assetId);
+        const blob = await getAsset(item.assetId, boardSummary.id);
         if (!blob) continue;
         assets.push({
           id: item.assetId,
@@ -1297,14 +1298,24 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         JSON.stringify(before),
       );
       setPrevious(before);
+      const importedIds = new Map<string, string>();
       for (const asset of bundledAssets) {
+        if (importedIds.has(asset.id) || !data.items.some(item => item.assetId === asset.id)) continue;
         try {
-          const blob = await fetch(asset.data).then((r) => r.blob());
-          await putAsset(asset.id, blob);
-        } catch {
-          // One damaged attachment should not block the rest of the board.
+          if (!asset.data.startsWith("data:")) throw new Error("Некорректное вложение в копии");
+          const blob = await fetch(asset.data).then(r => r.blob());
+          const item = data.items.find(item => item.assetId === asset.id);
+          const id = crypto.randomUUID();
+          await putAsset(id, item?.kind === "pdf" ? blob.slice(0, blob.size, "application/pdf") : blob, boardSummary.id);
+          importedIds.set(asset.id, id);
+        } catch (error) {
+          // Preserve v19 local imports even when one attachment is damaged.
+          if (isRemoteBackendEnabled()) throw error;
         }
       }
+      data.items = data.items.map(item => item.assetId && importedIds.has(item.assetId)
+        ? { ...item, assetId: importedIds.get(item.assetId)! } : item);
+      await ensureBoardAssets(boardSummary.id, data);
       applyDocument(data);
       setNotice(
         bundledAssets.length
@@ -1408,6 +1419,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       : [item.id];
 
   const addMediaFile = async (file: File, position?: Point, offset = 0) => {
+    if (!canEdit) throw new Error("У вас доступ только для просмотра");
     if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name}: файл больше 50 МБ`);
     const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     const isImage = file.type.startsWith("image/");
@@ -1433,7 +1445,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }
 
     const id = crypto.randomUUID();
-    await putAsset(id, file);
+    await putAsset(id, isPdf ? file.slice(0, file.size, "application/pdf") : file, boardSummary.id);
     const rect = board.current?.getBoundingClientRect();
     const center = position ?? world({ x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 });
     const item: Item = {
@@ -1456,7 +1468,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
   const openMediaAsset = async (item: Item) => {
     if ((item.kind !== "image" && item.kind !== "pdf") || !item.assetId) return;
-    const blob = await getAsset(item.assetId);
+    const blob = await getAsset(item.assetId, boardSummary.id);
     if (!blob) { setNotice("Исходный файл не найден в хранилище браузера"); return; }
     const url = URL.createObjectURL(blob);
     const targetUrl = item.kind === "pdf" ? `${url}#page=${Math.max(1, item.pdfPage ?? 1)}` : url;
@@ -1466,7 +1478,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
   const downloadMediaAsset = async (item: Item) => {
     if ((item.kind !== "image" && item.kind !== "pdf") || !item.assetId) return;
-    const blob = await getAsset(item.assetId);
+    const blob = await getAsset(item.assetId, boardSummary.id);
     if (!blob) { setNotice("Исходный файл не найден в хранилище браузера"); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2351,7 +2363,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       };
       const loadImage = async (item: Item) => {
         if (!item.assetId) return null;
-        const blob = await getAsset(item.assetId);
+        const blob = await getAsset(item.assetId, boardSummary.id);
         if (!blob) return null;
         const url = URL.createObjectURL(blob);
         try {
@@ -3349,6 +3361,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const cardIds = new Set(presentationFlashcards.map((item) => item.id));
     const checklistIds = new Set(presentationChecklists.map((item) => item.id));
     const coverIds = new Set(presentationCovers.map((item) => item.id));
+    if (quizIds.size && !cardIds.size && !checklistIds.size && !coverIds.size) { resetPresentationQuizzes(); return; }
     if (!quizIds.size && !cardIds.size && !checklistIds.size && !coverIds.size) { setNotice("На текущем слайде нет интерактивных заданий"); return; }
     commit(itemsRef.current.map((item) => {
       if (quizIds.has(item.id)) return { ...item, quizSelected: undefined, quizRevealed: false };
@@ -4246,7 +4259,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 {item.points && <Ink item={item} />}
                 {item.kind === "shape" && <Shape type={item.shapeType} color={item.color}/>}
                 {item.kind === "connector" && <Connector item={item}/>}
-                {(item.kind === "image" || item.kind === "pdf") && <Media item={item}/>}
+                {(item.kind === "image" || item.kind === "pdf") && <Media item={item} boardId={boardSummary.id}/>}
                 {item.kind === "frame" && editing !== item.id && <div className="frame-title">{item.text || "Без названия"}</div>}
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
                 {item.kind === "table" && <TableView item={item} />}
@@ -4882,8 +4895,15 @@ export default function App() {
           const raw = localStorage.getItem(key);
           if (raw && board.role !== "viewer") {
             const localDocument = parseDocument(raw);
-            const saved = await saveRemoteBoardDocument(board.id, localDocument, null);
-            setRemoteVersion(saved.version);
+            try {
+              await ensureBoardAssets(board.id, localDocument);
+              const saved = await saveRemoteBoardDocument(board.id, localDocument, null);
+              setRemoteVersion(saved.version);
+            } catch {
+              // A missing v19 attachment or unavailable Storage must not prevent
+              // opening the local document. Autosave will retry synchronization.
+              setRemoteVersion(null);
+            }
           } else {
             setRemoteVersion(null);
           }

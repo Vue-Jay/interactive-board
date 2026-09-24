@@ -12,7 +12,7 @@ const randomSalt=()=>{const b=new Uint8Array(16);crypto.getRandomValues(b);retur
 const hashPassword=async(p:string,s:string)=>bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(`${s}:${p}`))));
 const loadUsers=():StoredUser[]=>{try{const v=JSON.parse(localStorage.getItem(USERS_KEY)||"[]");return Array.isArray(v)?v:[]}catch{return []}};
 const saveUsers=(v:StoredUser[])=>localStorage.setItem(USERS_KEY,JSON.stringify(v));
-const saveSession=(id:string)=>localStorage.setItem(SESSION_KEY,JSON.stringify({userId:id,createdAt:new Date().toISOString()}));
+const saveSession=(id:string)=>localStorage.setItem(SESSION_KEY,JSON.stringify({userId:id,createdAt:new Date().toISOString()} satisfies Session));
 const publicUser=({passwordHash:_h,passwordSalt:_s,...u}:StoredUser):AuthUser=>u;
 const remoteUser=(s:Awaited<ReturnType<typeof getRemoteSession>>):AuthUser|null=>{
  if(!s)return null; const meta=s.user.user_metadata||{}; const name=String(meta.display_name||meta.full_name||s.user.email?.split("@")[0]||"Пользователь");
