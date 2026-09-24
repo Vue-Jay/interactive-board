@@ -15,7 +15,8 @@ import ScheduleScreen from "./ScheduleScreen";
 import MaterialsScreen from "./MaterialsScreen";
 import NotificationsScreen from "./NotificationsScreen";
 import ProfileScreen from "./ProfileScreen";
-import { getAccountRole,type AccountRole } from "./accountRoleStore";
+import { getAccountAccess,type AccountRole } from "./accountRoleStore";
+import AdminScreen from "./AdminScreen";
 import TemplatesScreen from "./TemplatesScreen";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
@@ -5625,7 +5626,8 @@ export default function App() {
     return () => window.removeEventListener("popstate", changed);
   }, []);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [accountRole,setAccountRoleState]=useState<AccountRole>("teacher");
+  const [accountRole,setAccountRoleState]=useState<AccountRole>("student");
+  const [isAppAdmin,setIsAppAdmin]=useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [activeBoard, setActiveBoard] = useState<BoardSummary | null>(null);
   const boardChanged = useCallback((updated: BoardSummary) => {
@@ -5750,7 +5752,7 @@ export default function App() {
     return <main className="auth-shell"><section className="auth-card"><div className="auth-brand-row"><div className="auth-logo">B</div><div><div className="auth-brand">Учебная доска</div><div className="auth-subtitle">Проверяем сессию…</div></div></div></section></main>;
   }
 
-  useEffect(()=>{if(!authUser)return;let alive=true;const refresh=()=>void getAccountRole().then(r=>{if(alive)setAccountRoleState(r)}).catch(()=>{});refresh();const listener=(e:Event)=>setAccountRoleState((e as CustomEvent<AccountRole>).detail);window.addEventListener("onlinerepetitor:account-role",listener);return()=>{alive=false;window.removeEventListener("onlinerepetitor:account-role",listener)}},[authUser?.id]);
+  useEffect(()=>{if(!authUser)return;let alive=true;const refresh=()=>void getAccountAccess().then(x=>{if(alive){setAccountRoleState(x.role);setIsAppAdmin(x.isAdmin)}}).catch(()=>{});refresh();const listener=()=>refresh();window.addEventListener("onlinerepetitor:account-access",listener);return()=>{alive=false;window.removeEventListener("onlinerepetitor:account-access",listener)}},[authUser?.id]);
 
   if (!authUser) {
     return <AuthScreen onAuthenticated={(user) => { setAuthUser(user); setActiveBoard(null); }} />;
@@ -5759,7 +5761,9 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
-        {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="students"
+        {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="admin" && isAppAdmin
+          ? <AdminScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="students"
           ? <StudentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : section==="assignments"
           ? <AssignmentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
@@ -5773,9 +5777,9 @@ export default function App() {
           ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="profile"
           ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
-          : section==="templates"
+          : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
-          : <BoardsScreen user={authUser} accountRole={accountRole} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
+          : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
         {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" autoFocus value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
