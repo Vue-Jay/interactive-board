@@ -1172,10 +1172,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const deferredRemote = useRef<RemoteBoardDocument | null>(null);
   const pendingRemote = useRef<RemoteBoardDocument | null>(null);
   const lastAttempt = useRef<{ version: number; fingerprint: string } | null>(null);
-  const [remoteConflict, setRemoteConflict] = useState<RemoteBoardDocument | null>(null);
-  const [conflictLocalBackup, setConflictLocalBackup] = useState<DocumentData | null>(null);
-  const [conflictBusy, setConflictBusy] = useState(false);
-  const [conflictDetailsOpen, setConflictDetailsOpen] = useState(false);
+  const [, setRemoteConflict] = useState<RemoteBoardDocument | null>(null);
+  const [, setConflictLocalBackup] = useState<DocumentData | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("reconnecting");
   const receiveRemote = useRef<(row: RemoteBoardDocument) => void>(() => {});
   const boardMounted = useRef(true);
@@ -3616,7 +3614,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     pendingRemote.current = null;
     queuedRemoteSnapshot.current = null;
     setRemoteConflict(null);
-    setConflictBusy(false);
     setTableEditorId(null); setChecklistEditorId(null); setQuizEditorId(null);
     setFlashcardEditorId(null); setFormulaEditorId(null); setFrameNotesEditorId(null);
     applyDocument(data, true);
@@ -3641,19 +3638,29 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         return;
       }
       if (decision === "conflict") {
-        if (pendingRemote.current && row.version <= pendingRemote.current.version) return;
-        pendingRemote.current = { ...row, document: data };
-        setRemoteConflict(pendingRemote.current);
-        snapshot.current = currentDocument();
-        setConflictLocalBackup(parseDocument(JSON.stringify(snapshot.current)));
-        setConflictDetailsOpen(false);
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(snapshot.current));
-          localStorage.setItem(`${storageKey}.conflict-backup`, JSON.stringify(snapshot.current));
-        } catch { /* keep edits in memory */ }
-        queuedRemoteSnapshot.current = null;
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        setSaveStatus("Есть новая серверная версия · выберите действие");
+        // Collaborative boards should converge automatically instead of asking the user
+        // to choose between "my" and "server" versions.
+        const local = parseDocument(JSON.stringify(currentDocument()));
+        const remote = data;
+        const remoteIds = new Set(remote.items.map(item => item.id));
+        const localOnly = local.items.filter(item => !remoteIds.has(item.id));
+        const merged: DocumentData = {
+          ...remote,
+          view: local.view,
+          items: [...remote.items, ...localOnly],
+        };
+
+        remoteVersion.current = row.version;
+        acknowledgedDocument.current = documentFingerprint(remote);
+        pendingRemote.current = null;
+        setRemoteConflict(null);
+        setConflictLocalBackup(null);
+        try { localStorage.removeItem(storageKey + ".conflict-backup"); } catch {}
+        applyDocument(merged, true);
+        snapshot.current = merged;
+        queuedRemoteSnapshot.current = merged;
+        setSaveStatus("Синхронизировано");
+        window.setTimeout(() => void pushRemoteSnapshot(merged), 0);
         return;
       }
       applyServerDocument(row);
@@ -3830,78 +3837,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     return () => window.clearInterval(timer);
   }, []);
 
-  const keepLocalChanges = async () => {
-    const row = pendingRemote.current;
-    if (!row || conflictBusy) return;
-    const local = parseDocument(JSON.stringify(conflictLocalBackup ?? currentDocument()));
-    setConflictBusy(true);
-    try {
-      await ensureBoardAssets(boardSummary.id, local);
-      const result = await saveRemoteBoardDocument(boardSummary.id, local, row.version);
-      if (result.conflict) {
-        const newer = {
-          board_id: boardSummary.id,
-          version: result.version,
-          document: result.document,
-          updated_at: result.updated_at ?? "",
-        };
-        pendingRemote.current = newer;
-        setRemoteConflict(newer);
-        setSaveStatus("Сервер снова изменился · ваши данные сохранены в резервной копии");
-        return;
-      }
-      remoteVersion.current = result.version;
-      acknowledgedDocument.current = documentFingerprint(local);
-      pendingRemote.current = null;
-      setRemoteConflict(null);
-      setConflictLocalBackup(null);
-      try { localStorage.removeItem(`${storageKey}.conflict-backup`); } catch {}
-      setSaveStatus("Ваши изменения сохранены поверх предыдущей серверной версии");
-      setNotice("Конфликт разрешён: сохранена ваша версия");
-    } catch {
-      setSaveStatus("Не удалось разрешить конфликт · резервная копия сохранена локально");
-      setNotice("Сервер недоступен. Ваши изменения не потеряны.");
-    } finally {
-      setConflictBusy(false);
-    }
-  };
-
-  const applyServerKeepingBackup = () => {
-    const row = pendingRemote.current;
-    if (!row) return;
-    if (!conflictLocalBackup) setConflictLocalBackup(parseDocument(JSON.stringify(currentDocument())));
-    applyServerDocument(row);
-    setNotice("Серверная версия применена. Ваш вариант можно восстановить.");
-  };
-
-  const restoreConflictBackup = () => {
-    if (!conflictLocalBackup) return;
-    const restored = parseDocument(JSON.stringify(conflictLocalBackup));
-    applyDocument(restored, true);
-    snapshot.current = restored;
-    try { localStorage.setItem(storageKey, JSON.stringify(restored)); } catch {}
-    setSaveStatus("Восстановлена локальная копия · сохраните её на сервер");
-    setNotice("Ваш вариант восстановлен");
-  };
-
-  const discardConflictBackup = () => {
-    setConflictLocalBackup(null);
-    try { localStorage.removeItem(`${storageKey}.conflict-backup`); } catch {}
-    setNotice("Резервная копия конфликта удалена");
-  };
-
-  const exportConflictBackup = () => {
-    if (!conflictLocalBackup) return;
-    const blob = new Blob([JSON.stringify(conflictLocalBackup, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `onlinerepetitor-conflict-${boardSummary.id}.json`;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setNotice("Резервная копия скачана");
-  };
-
   useEffect(()=>{if(boardSummary.role!=="owner")return;void getActiveLesson(boardSummary.id).then(existing=>{if(existing){setLiveLesson(existing);return}try{const raw=sessionStorage.getItem("onlinerepetitor.schedule.start");if(!raw)return;const planned=JSON.parse(raw);sessionStorage.removeItem("onlinerepetitor.schedule.start");if(!planned?.studentId)return;setLessonStudentId(planned.studentId);setLessonTopic(planned.topic||"");setLessonScheduleId(planned.scheduleId||null);setLessonOpen(true);setNotice("Занятие из расписания готово к запуску")}catch{sessionStorage.removeItem("onlinerepetitor.schedule.start")}}).catch(()=>undefined)},[boardSummary.id,boardSummary.role]);
   useEffect(()=>{if(!liveLesson)return;setLessonClock(Date.now());const t=window.setInterval(()=>setLessonClock(Date.now()),1000);return()=>window.clearInterval(t)},[liveLesson?.id]);
   const beginLiveLesson=async()=>{const student=lessonStudents.find(u=>u.userId===lessonStudentId);if(!student){setNotice("Выберите ученика, который сейчас на доске");return}try{const lesson=await startLesson(boardSummary.id,student.userId,student.name,lessonTopic,lessonScheduleId);setLiveLesson(lesson);setLessonScheduleId(null);setLessonOpen(false);setPresentationElapsed(0);setPresentationTimerMode("elapsed");setPresentationTimerRunning(true);setNotice("Урок начат")}catch{setNotice("Не удалось начать урок")}};
@@ -3929,31 +3864,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button className="lesson-control-finish" onClick={()=>{setLessonPanelOpen(false);setLessonFinishOpen(true)}}>Завершить урок и записать результат</button>
       </aside>}
       {lessonFinishOpen && liveLesson && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Завершить урок</h2><p>{liveLesson.studentName} · {lessonTime}</p></div><button onClick={()=>setLessonFinishOpen(false)}>×</button></div><label><span>Итог</span><textarea rows={4} value={lessonResult} onChange={e=>setLessonResult(e.target.value)}/></label><label><span>Домашнее задание</span><textarea rows={4} value={lessonHomework} onChange={e=>setLessonHomework(e.target.value)}/></label><div className="session-actions"><button className="students-primary" onClick={()=>void completeLiveLesson()}>Завершить и сохранить</button><button className="boards-secondary" onClick={()=>setLessonFinishOpen(false)}>Продолжить</button></div></section></div>}
-      {remoteConflict && <div className="remote-conflict remote-conflict-v34" role="alert">
-        <div className="remote-conflict-copy">
-          <b>Обнаружены параллельные изменения</b>
-          <span>Серверная версия: v{remoteConflict.version}. Ваш текущий вариант сохранён в локальной резервной копии.</span>
-          {conflictDetailsOpen && <small>
-            Ничего не будет перезаписано молча. «Серверная версия» оставит ваш вариант для восстановления,
-            а «Сохранить мою» повторно проверит номер серверной версии перед записью.
-          </small>}
-        </div>
-        <div className="remote-conflict-actions">
-          <button disabled={conflictBusy} onClick={applyServerKeepingBackup}>Серверная версия</button>
-          <button disabled={conflictBusy} onClick={() => void keepLocalChanges()} title="Сохранить ваш вариант только если серверная версия всё ещё та же">
-            {conflictBusy ? "Проверяю…" : "Сохранить мою"}
-          </button>
-          <button className="secondary" onClick={() => setConflictDetailsOpen((value) => !value)}>
-            {conflictDetailsOpen ? "Скрыть" : "Подробнее"}
-          </button>
-        </div>
-      </div>}
-      {!remoteConflict && conflictLocalBackup && <div className="conflict-backup-bar">
-        <span>Есть резервная копия ваших изменений после конфликта.</span>
-        <button onClick={restoreConflictBackup}>Восстановить</button>
-        <button onClick={exportConflictBackup}>Скачать JSON</button>
-        <button className="secondary" onClick={discardConflictBackup}>Удалить копию</button>
-      </div>}
       {historyOpen&&<div className="access-backdrop history-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!historyBusy)setHistoryOpen(false)}}><section className="access-modal history-modal" role="dialog" aria-modal="true" aria-label="История версий"><div className="access-head"><div><h2>История версий</h2><p>Последние сохранённые состояния доски</p></div><button disabled={historyBusy} onClick={()=>setHistoryOpen(false)} aria-label="Закрыть">×</button></div>{historyBusy&&<div className="history-empty">Загружаем…</div>}{historyError&&<div className="access-notice">{historyError}</div>}{!historyBusy&&!historyError&&historyRows.length===0&&<div className="history-empty">История пока пуста. Новые сохранения начнут появляться после установки v68.</div>}<div className="history-list">{historyRows.map((entry,index)=><div className="history-row" key={entry.id}><div><strong>{index===0?"Текущая сохранённая":`Версия №${entry.version}`}</strong><span>{new Date(entry.saved_at).toLocaleString("ru-RU")} · объектов: {entry.item_count}</span></div>{canEdit&&<button disabled={historyBusy||index===0} onClick={()=>void restoreHistoryVersion(entry)}>{index===0?"Текущая":"Восстановить"}</button>}</div>)}</div><p className="share-note">Хранятся последние 100 серверных снимков. Восстановление создаёт новое состояние, старые версии не удаляются.</p></section></div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
