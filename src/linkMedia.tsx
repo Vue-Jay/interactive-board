@@ -10,7 +10,7 @@ export function resolveLinkMedia(raw:string):LinkMediaInfo|null{
  let id="";
  if(host==="youtu.be")id=u.pathname.split("/").filter(Boolean)[0]||"";
  else if(host.endsWith("youtube.com")){if(u.pathname==="/watch")id=u.searchParams.get("v")||"";else{const m=u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/);id=m?.[1]||""}}
- if(id&&/^[A-Za-z0-9_-]{6,20}$/.test(id)){const origin=typeof window!=="undefined"&&/^https?:$/.test(window.location.protocol)?window.location.origin:"";const qs=new URLSearchParams({rel:"0"});if(origin){qs.set("origin",origin);qs.set("widget_referrer",window.location.href)}return{kind:"youtube",sourceUrl:u.href,embedUrl:`https://www.youtube.com/embed/${id}?${qs.toString()}`,host}}
+ if(id&&/^[A-Za-z0-9_-]{6,20}$/.test(id)){const origin=typeof window!=="undefined"&&/^https?:$/.test(window.location.protocol)?window.location.origin:"";const qs=new URLSearchParams({rel:"0"});if(origin){qs.set("origin",origin);qs.set("widget_referrer",window.location.href)}return{kind:"youtube",sourceUrl:u.href,embedUrl:`https://www.youtube-nocookie.com/embed/${id}?${qs.toString()}`,host}}
  if(host.endsWith("vimeo.com")){const m=u.pathname.match(/\/(?:video\/)?(\d{5,})/);if(m)return{kind:"vimeo",sourceUrl:u.href,embedUrl:`https://player.vimeo.com/video/${m[1]}`,host}}
  const path=u.pathname.toLowerCase();
  if(/\.(mp3|m4a|aac|ogg|oga|wav|flac)(?:$)/.test(path))return{kind:"audio",sourceUrl:u.href,embedUrl:u.href,host};
