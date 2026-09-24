@@ -4402,3 +4402,32 @@ button {
 .presentation-progress{width:110px;height:3px;margin-top:4px;border-radius:999px;background:rgba(255,255,255,.18);overflow:hidden}.presentation-progress i{display:block;height:100%;border-radius:inherit;background:currentColor;transition:width .2s ease}
 .profile-save-actions{display:flex;align-items:center;gap:8px}.profile-dirty{font-size:10px;color:#8a8e99}.profile-dirty.active{color:#9b6a13}.profile-field-error{margin-top:7px;padding:7px 9px;border-radius:8px;background:#fff1f1;color:#a33d48;font-size:10px}.profile-preview{margin-top:12px;padding:12px;border:1px solid #e2e3ea;border-radius:10px;background:#fafbfc;overflow:hidden}.profile-preview>span{display:block;margin-bottom:8px;color:#858995;font-size:9px}.profile-preview>div{width:100px;transform-origin:left top;padding:10px;border-radius:8px;background:#fff;border:1px solid #dedfe7;font-weight:700;transition:transform .18s ease}
 @media(max-width:700px){.profile-save-actions{flex-wrap:wrap;justify-content:flex-end}.profile-dirty{width:100%;text-align:right}.presentation-progress{width:80px}}
+
+/* v98 · mobile and PWA finish */
+@media (pointer:coarse){
+  button,.tool-button,.topbar button,.mobile-quick-tools button{min-height:40px}
+  .resize-handle{width:18px!important;height:18px!important}
+  .rotate-handle{width:30px!important;height:30px!important}
+  .selection-toolbar button{min-width:36px;min-height:36px}
+  .context-menu button{min-height:42px}
+  .board{touch-action:none}
+}
+@media(max-width:700px){
+  .topbar{min-height:52px;padding:5px 7px;gap:5px}
+  .topbar-left{min-width:0;flex:1}.topbar-right{gap:4px}
+  .logo-mark{display:none}.board-title{min-width:80px;max-width:42vw;font-size:12px}
+  .save-status,.realtime-status{font-size:8px}.presence-menu summary span:not(.presence-live-dot){display:none}
+  .install-app-button{max-width:128px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-quick-tools{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .offline-banner,.update-banner{left:8px;right:8px;width:auto;max-width:none}
+}
+@media(max-width:430px){
+  .back-to-boards{font-size:0;width:38px}.back-to-boards::first-letter{font-size:16px}
+  .board-title{max-width:34vw}
+  .save-status{display:none}
+  .mobile-quick-tools button{padding:6px 3px}
+}
+@media(display-mode:standalone){
+  .topbar{padding-top:max(6px,env(safe-area-inset-top))}
+  .mobile-quick-tools{padding-bottom:max(5px,env(safe-area-inset-bottom))}
+}
