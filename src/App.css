@@ -4348,3 +4348,16 @@ button {
 
 /* v84 · student workspace polish */
 .student-role-banner b{white-space:nowrap}.assignment-card.status-reviewed .assignment-status{font-weight:700}
+
+/* v85: server board discussions */
+.comments-modal{width:min(720px,calc(100vw - 32px));max-height:min(780px,calc(100vh - 32px));display:flex;flex-direction:column}
+.comments-list{display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:120px;max-height:52vh;padding:4px 2px 12px}
+.comment-thread{display:flex;flex-direction:column;gap:7px}.comment-thread.resolved{opacity:.62}
+.comment-card{border:1px solid var(--line,#e4e6ec);border-radius:12px;padding:10px 12px;background:var(--panel,#fff)}
+.comment-reply{margin-left:28px}.comment-meta{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:#8a909b}.comment-meta strong{color:inherit}
+.comment-body{padding:7px 0;white-space:pre-wrap;overflow-wrap:anywhere}.comment-actions{display:flex;gap:7px}
+.comment-actions button,.comment-replying button{border:0;background:transparent;color:#5557c8;cursor:pointer;font-size:11px}
+.comment-compose{display:grid;grid-template-columns:1fr auto;gap:8px;padding-top:10px;border-top:1px solid var(--line,#e4e6ec)}
+.comment-compose textarea{grid-column:1/2;min-height:74px;resize:vertical;border:1px solid var(--line,#dfe2e8);border-radius:10px;padding:9px 10px;background:var(--panel,#fff);color:inherit;font:inherit}
+.comment-compose>button{align-self:end;min-height:38px;border:0;border-radius:9px;padding:0 14px;background:#5658ce;color:#fff;font-weight:700;cursor:pointer}
+.comment-compose>button:disabled{opacity:.45;cursor:default}.comment-replying{grid-column:1/-1;font-size:11px;color:#777d88}
