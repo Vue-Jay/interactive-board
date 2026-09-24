@@ -1126,6 +1126,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [space, setSpace] = useState(false);
   const [path, setPath] = useState<Point[]>([]);
   const [panning, setPanning] = useState(false);
+  const touchPoints = useRef(new Map<number, Point>());
+  const pinchState = useRef<{ distance:number; center:Point; view:View } | null>(null);
+  const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
   const gesture = useRef<Gesture | null>(null);
   const clipboard = useRef<Item[]>([]);
   const history = useRef<Item[][]>([initial.data.items]);
@@ -1655,6 +1658,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     element.addEventListener("wheel", wheel, { passive: false });
     return () => element.removeEventListener("wheel", wheel);
   });
+
+  const touchStart=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch")return;touchPoints.current.set(e.pointerId,local(e.clientX,e.clientY));if(touchPoints.current.size===2){end(true);const pts=[...touchPoints.current.values()];const dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y;pinchState.current={distance:Math.max(1,Math.hypot(dx,dy)),center:{x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2},view:{...view}};setPanning(true)}};
+  const touchMove=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch"||!touchPoints.current.has(e.pointerId))return;touchPoints.current.set(e.pointerId,local(e.clientX,e.clientY));const pinch=pinchState.current;if(!pinch||touchPoints.current.size<2)return;e.preventDefault();const pts=[...touchPoints.current.values()];const center={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};const distance=Math.max(1,Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y));const z=Math.max(.1,Math.min(8,pinch.view.zoom*distance/pinch.distance));const wx=(pinch.center.x-pinch.view.x)/pinch.view.zoom,wy=(pinch.center.y-pinch.view.y)/pinch.view.zoom;setView({zoom:z,x:center.x-wx*z,y:center.y-wy*z})};
+  const touchEnd=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch")return;touchPoints.current.delete(e.pointerId);if(touchPoints.current.size<2){pinchState.current=null;setPanning(false)}};
 
   const end = (cancel = false) => {
     const g = gesture.current;
@@ -4738,7 +4745,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             ))}
           </div>
         )}
-        <aside className="toolbar" aria-label="Инструменты">
+        <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button><aside className={`toolbar ${mobileToolsOpen?"mobile-open":""}`} aria-label="Инструменты">
           {tools.map((t) => (
             <div className="tool-wrap" key={t.id}>
               <button
@@ -4748,6 +4755,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 onClick={() => {
                   finishEdit();
                   setTool(t.id);
+                  setMobileToolsOpen(false);
                 }}
               >
                 <span className="tool-icon"><Icon name={t.icon} size={18} /></span>
@@ -4765,8 +4773,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
-          onPointerDown={(e) => { if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerDown={(e) => { touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
+          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -4808,12 +4816,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           onPointerEnter={(e) => { if (tool === "eraser") setEraserCursor(local(e.clientX, e.clientY)); }}
           onPointerLeave={() => { if (!gesture.current) setEraserCursor(null); }}
           onPointerUp={(e) => {
+            touchEnd(e);
             if (e.pointerId === gesture.current?.pointer) {
               move(e);
               end();
             }
           }}
-          onPointerCancel={() => end(true)}
+          onPointerCancel={(e) => { touchEnd(e); end(true); }}
           onLostPointerCapture={() => end(true)}
         >
           <div className="remote-cursors-layer" aria-hidden="true">

@@ -4218,3 +4218,46 @@ button {
 
 /* v60 · math finish */
 .graph-projections line{stroke:#9da0ad;stroke-width:1.2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}.graph-presets,.graph-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.graph-presets{grid-template-columns:repeat(4,minmax(0,1fr))}.graph-presets button,.graph-quick-actions button{border:1px solid #dfe0e7;background:#fff;border-radius:7px;padding:6px 5px;cursor:pointer;font-size:11px}.graph-presets button:hover,.graph-quick-actions button:hover{border-color:#b9baf0;background:#f5f5ff}.graph-quick-actions button:disabled{opacity:.45;cursor:default}
+
+/* v61 · mobile/tablet */
+.mobile-tools-toggle{display:none}
+.board{touch-action:none;overscroll-behavior:none}
+@media(max-width:900px){
+  .topbar{padding:6px 8px;gap:6px;min-height:48px}
+  .topbar-left,.topbar-right{gap:5px}
+  .topbar .logo-mark,.save-status{display:none}
+  .board-title{max-width:34vw;min-width:90px}
+  .back-to-boards{padding:6px 8px;font-size:12px}
+  .topbar-right>button,.topbar-right>label,.topbar-right>details>summary{min-height:36px}
+  .toolbar{left:8px;top:auto;bottom:62px;max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;transform:translateX(-130%);transition:transform .18s ease;box-shadow:0 8px 28px rgba(26,28,40,.18);z-index:80}
+  .toolbar.mobile-open{transform:translateX(0)}
+  .mobile-tools-toggle{display:flex;position:absolute;z-index:81;left:10px;bottom:10px;height:44px;align-items:center;gap:7px;padding:0 12px;border:1px solid #dfe0e7;border-radius:12px;background:#fff;color:#303341;box-shadow:0 5px 18px rgba(26,28,40,.14);font-weight:650}
+  .tool-button{width:42px;height:42px}
+  .tool-icon svg{width:20px;height:20px}
+  .zoom-controls{right:8px;bottom:10px}
+  .minimap{display:none}
+  .selection-toolbar{max-width:calc(100vw - 16px);overflow-x:auto;overscroll-behavior-x:contain}
+  .shape-palette,.connector-palette{max-width:calc(100vw - 20px);overflow-x:auto}
+  .graph-editor-modal,.formula-editor-modal,.table-editor-modal,.quiz-editor-modal,.flashcard-editor-modal,.checklist-editor-modal{width:calc(100vw - 18px);max-height:92dvh}
+}
+@media(max-width:620px){
+  .topbar{flex-wrap:wrap}
+  .topbar-left{flex:1 1 100%;min-width:0}
+  .topbar-right{flex:1 1 100%;overflow-x:auto;padding-bottom:2px}
+  .board-title{max-width:none;flex:1}
+  .realtime-status{font-size:10px}
+  .presence-menu summary span:last-child{font-size:11px}
+  .graph-editor-body{padding:10px;gap:10px}
+  .graph-editor-form{gap:9px}
+  .graph-presets{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .graph-geometry-row{grid-template-columns:1fr 1.2fr 1fr 30px 28px}
+  .graph-point-row{grid-template-columns:1fr 58px 58px 28px}
+  .table-editor-grid{max-width:100%;overflow:auto}
+  .modal-footer,.graph-editor-footer{position:sticky;bottom:0;background:#fff;z-index:4}
+}
+@media(pointer:coarse){
+  .resize-handle{width:18px!important;height:18px!important}
+  .rotate-handle{width:24px!important;height:24px!important}
+  .connector-endpoint{width:20px!important;height:20px!important}
+  button{touch-action:manipulation}
+}
