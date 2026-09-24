@@ -48,6 +48,8 @@ import {
 } from "./boardModel";
 import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
+import { createBoardComment, listBoardComments, setBoardCommentResolved, type BoardCommentThread } from "./commentThreadsStore";
+import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
 
 type Tool =
@@ -1040,6 +1042,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [historyRows,setHistoryRows]=useState<BoardHistoryEntry[]>([]);
   const [historyBusy,setHistoryBusy]=useState(false);
   const [historyError,setHistoryError]=useState("");
+  const [discussionOpen,setDiscussionOpen]=useState(false);
+  const [discussionRows,setDiscussionRows]=useState<BoardCommentThread[]>([]);
+  const [discussionBusy,setDiscussionBusy]=useState(false);
+  const [discussionError,setDiscussionError]=useState("");
+  const [discussionDraft,setDiscussionDraft]=useState("");
+  const [discussionReplyTo,setDiscussionReplyTo]=useState<string|null>(null);
   const [liveLesson,setLiveLesson]=useState<LiveLesson|null>(null);
   const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
   const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
@@ -1315,6 +1323,30 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       else editor.current?.setSelectionRange(editor.current.value.length, editor.current.value.length);
     }
   }, [editing]);
+
+  const refreshDiscussions=useCallback(async()=>{setDiscussionRows(await listBoardComments(boardSummary.id))},[boardSummary.id]);
+  const openDiscussions=async()=>{
+    if(!isRemoteBackendEnabled()){setNotice("Обсуждения доступны при серверной синхронизации");return}
+    setDiscussionOpen(true);setDiscussionBusy(true);setDiscussionError("");
+    try{await refreshDiscussions()}catch(error){setDiscussionError(error instanceof Error?error.message:"Не удалось загрузить обсуждения")}finally{setDiscussionBusy(false)}
+  };
+  useEffect(()=>{
+    if(!discussionOpen)return;
+    return subscribeBoardComments(boardSummary.id,()=>{void refreshDiscussions().catch(()=>{})});
+  },[discussionOpen,boardSummary.id,refreshDiscussions]);
+  const sendDiscussion=async()=>{
+    const body=discussionDraft.trim();if(!body)return;
+    setDiscussionBusy(true);setDiscussionError("");
+    try{await createBoardComment(boardSummary.id,body,discussionReplyTo);setDiscussionDraft("");setDiscussionReplyTo(null);await refreshDiscussions()}
+    catch(error){setDiscussionError(error instanceof Error?error.message:"Не удалось отправить комментарий")}
+    finally{setDiscussionBusy(false)}
+  };
+  const toggleDiscussionResolved=async(row:BoardCommentThread)=>{
+    if(!canEdit)return;setDiscussionBusy(true);setDiscussionError("");
+    try{await setBoardCommentResolved(row.id,!row.resolved);await refreshDiscussions()}
+    catch(error){setDiscussionError(error instanceof Error?error.message:"Не удалось изменить статус")}
+    finally{setDiscussionBusy(false)}
+  };
 
   const openHistory=async()=>{
     if(!isRemoteBackendEnabled()){setNotice("История версий доступна при серверной синхронизации");return}
@@ -3864,6 +3896,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button className="lesson-control-finish" onClick={()=>{setLessonPanelOpen(false);setLessonFinishOpen(true)}}>Завершить урок и записать результат</button>
       </aside>}
       {lessonFinishOpen && liveLesson && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Завершить урок</h2><p>{liveLesson.studentName} · {lessonTime}</p></div><button onClick={()=>setLessonFinishOpen(false)}>×</button></div><label><span>Итог</span><textarea rows={4} value={lessonResult} onChange={e=>setLessonResult(e.target.value)}/></label><label><span>Домашнее задание</span><textarea rows={4} value={lessonHomework} onChange={e=>setLessonHomework(e.target.value)}/></label><div className="session-actions"><button className="students-primary" onClick={()=>void completeLiveLesson()}>Завершить и сохранить</button><button className="boards-secondary" onClick={()=>setLessonFinishOpen(false)}>Продолжить</button></div></section></div>}
+      {discussionOpen&&<div className="access-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!discussionBusy)setDiscussionOpen(false)}}><section className="access-modal discussions-modal" role="dialog" aria-modal="true" aria-label="Обсуждения доски"><div className="access-head"><div><h2>Обсуждения</h2><p>Комментарии синхронизируются между участниками доски в реальном времени</p></div><button disabled={discussionBusy} onClick={()=>setDiscussionOpen(false)} aria-label="Закрыть">×</button></div>{discussionError&&<div className="access-notice">{discussionError}</div>}<div className="discussions-list">{discussionBusy&&discussionRows.length===0&&<div className="history-empty">Загружаем…</div>}{!discussionBusy&&discussionRows.length===0&&<div className="history-empty">Обсуждений пока нет. Начните первое ниже.</div>}{discussionRows.filter(x=>!x.parent_id).map(row=><div className={`discussion-thread ${row.resolved?"resolved":""}`} key={row.id}><article className="discussion-card"><div className="discussion-meta"><strong>{row.author_name}</strong><span>{new Date(row.created_at).toLocaleString("ru-RU")}{row.resolved?" · решено":""}</span></div><div className="discussion-body">{row.body}</div><div className="discussion-actions"><button onClick={()=>setDiscussionReplyTo(row.id)}>Ответить</button>{canEdit&&<button disabled={discussionBusy} onClick={()=>void toggleDiscussionResolved(row)}>{row.resolved?"Открыть снова":"Решено"}</button>}</div></article>{discussionRows.filter(x=>x.parent_id===row.id).map(reply=><article className="discussion-card discussion-reply" key={reply.id}><div className="discussion-meta"><strong>{reply.author_name}</strong><span>{new Date(reply.created_at).toLocaleString("ru-RU")}</span></div><div className="discussion-body">{reply.body}</div></article>)}</div>)}</div><div className="discussion-compose">{discussionReplyTo&&<div className="discussion-replying">Ответ на комментарий <button onClick={()=>setDiscussionReplyTo(null)}>отменить</button></div>}<textarea value={discussionDraft} onChange={e=>setDiscussionDraft(e.target.value)} maxLength={4000} placeholder={discussionReplyTo?"Напишите ответ… Можно использовать @Имя":"Новый комментарий… Можно использовать @Имя"} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();void sendDiscussion()}}}/><button disabled={discussionBusy||!discussionDraft.trim()} onClick={()=>void sendDiscussion()}>Отправить</button><small>Ctrl+Enter · до 4000 символов</small></div></section></div>}
       {historyOpen&&<div className="access-backdrop history-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!historyBusy)setHistoryOpen(false)}}><section className="access-modal history-modal" role="dialog" aria-modal="true" aria-label="История версий"><div className="access-head"><div><h2>История версий</h2><p>Последние сохранённые состояния доски</p></div><button disabled={historyBusy} onClick={()=>setHistoryOpen(false)} aria-label="Закрыть">×</button></div>{historyBusy&&<div className="history-empty">Загружаем…</div>}{historyError&&<div className="access-notice">{historyError}</div>}{!historyBusy&&!historyError&&historyRows.length===0&&<div className="history-empty">История пока пуста. Новые сохранения начнут появляться после установки v68.</div>}<div className="history-list">{historyRows.map((entry,index)=><div className="history-row" key={entry.id}><div><strong>{index===0?"Текущая сохранённая":`Версия №${entry.version}`}</strong><span>{new Date(entry.saved_at).toLocaleString("ru-RU")} · объектов: {entry.item_count}</span></div>{canEdit&&<button disabled={historyBusy||index===0} onClick={()=>void restoreHistoryVersion(entry)}>{index===0?"Текущая":"Восстановить"}</button>}</div>)}</div><p className="share-note">Хранятся последние 100 серверных снимков. Восстановление создаёт новое состояние, старые версии не удаляются.</p></section></div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
@@ -4004,6 +4037,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
+          <button className="lesson-button discussions-button" onClick={()=>void openDiscussions()} title="Серверные обсуждения доски">Обсуждения</button>
           <button className="lesson-button history-button" onClick={()=>void openHistory()} title="История сохранённых версий доски">История</button>
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
