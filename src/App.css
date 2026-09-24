@@ -4617,3 +4617,146 @@ button {
     font-size:16px;font-weight:750;
   }
 }
+
+/* v106 · legibility, subtle selects, compact mobile dashboard */
+
+/* Text should wrap instead of disappearing behind fixed boxes. */
+button,label,.boards-secondary,.boards-create,.student-board-note,.access-notice,
+.board-card-title,.board-card-meta,.topbar-menu-section button,.dashboard-nav button{
+  line-height:1.3;
+}
+.access-modal,.history-modal,.discussions-modal,.study-modal,.templates-panel,.comments-panel{
+  overflow-wrap:anywhere;
+}
+.board-card-title,.boards-heading-row h1,.boards-heading-row p,.student-board-note,
+.guest-lifecycle-note span,.access-head h2,.access-head p{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+.topbar-more-popover{max-width:min(300px,calc(100vw - 20px))!important}
+.topbar-menu-section button{min-height:40px!important;height:auto!important;padding-top:8px!important;padding-bottom:8px!important}
+.topbar-menu-account strong,.topbar-menu-account small{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+
+/* Quiet, integrated dropdowns instead of bright native white rectangles. */
+select{
+  min-height:36px;
+  padding:0 34px 0 11px!important;
+  border:1px solid #e4e5eb!important;
+  border-radius:10px!important;
+  background-color:#f6f6f9!important;
+  color:#4d515d!important;
+  font:inherit;
+  font-size:12px!important;
+  font-weight:600;
+  box-shadow:none!important;
+  outline:none;
+  cursor:pointer;
+  transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+select:hover{background-color:#f0f0f6!important;border-color:#d9dae4!important}
+select:focus{background-color:#fff!important;border-color:#bfc0ec!important;box-shadow:0 0 0 3px rgba(91,91,214,.09)!important}
+select:disabled{opacity:.55;cursor:not-allowed}
+option{background:#fff;color:#343741}
+
+/* v105 portrait blocker is intentionally cancelled.
+   The board remains usable in portrait; PWA still requests landscape and the
+   landscape layout is the primary phone layout. */
+@media(max-width:700px) and (orientation:portrait){
+  .workspace{overflow:hidden!important}
+  .workspace::before,.workspace::after{content:none!important;display:none!important}
+}
+
+/* Mobile dashboard / main menu: one compact horizontal navigation strip,
+   readable cards and controls, no desktop-sized header crowding. */
+@media(max-width:900px){
+  .boards-shell{min-height:100dvh}
+  .boards-header{
+    min-height:54px!important;
+    padding:7px 10px!important;
+    gap:8px!important;
+  }
+  .boards-brand{min-width:0!important}
+  .boards-brand>div:last-child{min-width:0!important}
+  .boards-brand strong{font-size:14px!important}
+  .boards-brand span{font-size:10px!important;white-space:normal!important}
+  .boards-account{gap:5px!important;min-width:0!important}
+  .boards-account .account-copy{display:none!important}
+  .boards-account .boards-secondary{min-height:36px!important;padding:0 9px!important;font-size:11px!important}
+  .boards-content{padding:14px 12px 28px!important}
+  .dashboard-nav{
+    display:flex!important;
+    gap:5px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    padding:3px!important;
+    margin:0 0 14px!important;
+    border:1px solid #e8e8ef!important;
+    border-radius:12px!important;
+    background:#f7f7fa!important;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .dashboard-nav::-webkit-scrollbar{display:none}
+  .dashboard-nav button{
+    flex:0 0 auto!important;
+    min-height:36px!important;
+    padding:0 11px!important;
+    border-radius:9px!important;
+    font-size:11px!important;
+    white-space:nowrap!important;
+  }
+  .boards-heading-row{align-items:flex-start!important;gap:10px!important;margin-bottom:12px!important}
+  .boards-heading-row h1{font-size:22px!important;line-height:1.15!important}
+  .boards-heading-row p{font-size:11px!important;line-height:1.45!important}
+  .boards-heading-actions{gap:6px!important;flex-wrap:wrap!important;justify-content:flex-end!important}
+  .boards-heading-actions .boards-secondary,.boards-heading-actions .boards-create{min-height:38px!important;font-size:11px!important}
+  .boards-toolbar{
+    display:grid!important;
+    grid-template-columns:minmax(150px,1.5fr) minmax(125px,1fr) minmax(150px,1fr) auto!important;
+    gap:7px!important;
+    align-items:center!important;
+    padding:8px!important;
+    border:1px solid #e8e8ef!important;
+    border-radius:13px!important;
+    background:#fafafd!important;
+  }
+  .boards-toolbar input[type="search"],.boards-toolbar select{width:100%!important;min-width:0!important;min-height:38px!important;font-size:11px!important}
+  .boards-toolbar>span{font-size:10px!important;white-space:nowrap!important}
+  .backup-menu{grid-column:1/-1!important;display:flex!important;gap:6px!important;flex-wrap:wrap!important}
+  .backup-menu .boards-secondary,.trash-open-button{min-height:36px!important;font-size:10px!important}
+  .boards-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+  .board-card-title{font-size:13px!important;line-height:1.35!important}
+  .board-card-meta{font-size:10px!important;flex-wrap:wrap!important;gap:4px 8px!important}
+  .board-card-actions{flex-wrap:wrap!important;gap:5px!important}
+  .board-card-actions button{min-height:34px!important;font-size:10px!important}
+}
+
+/* Landscape phone gets the densest, most useful layout. */
+@media(max-width:900px) and (orientation:landscape){
+  .boards-header{min-height:48px!important;padding:5px 9px!important}
+  .boards-content{padding:10px 12px 18px!important}
+  .dashboard-nav{margin-bottom:9px!important}
+  .boards-heading-row{margin-bottom:8px!important}
+  .boards-heading-row h1{font-size:19px!important}
+  .boards-heading-row p{display:none!important}
+  .boards-toolbar{padding:6px!important;gap:5px!important}
+  .boards-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+
+/* Narrow portrait remains functional, without any rotate message. */
+@media(max-width:560px){
+  .boards-header{align-items:center!important}
+  .boards-brand span{display:none!important}
+  .boards-account .boards-secondary{font-size:0!important;width:38px!important;padding:0!important}
+  .boards-account .boards-secondary:first-of-type::after{content:"⚙";font-size:16px}
+  .boards-account .boards-secondary:last-of-type::after{content:"↪";font-size:16px}
+  .boards-content{padding:10px 9px 22px!important}
+  .boards-heading-row{display:grid!important;grid-template-columns:1fr!important}
+  .boards-heading-actions{justify-content:flex-start!important}
+  .boards-toolbar{grid-template-columns:1fr 1fr!important}
+  .boards-toolbar input[type="search"]{grid-column:1/-1!important}
+  .boards-toolbar>span{justify-self:end}
+  .backup-menu{grid-column:1/-1!important}
+  .boards-grid{grid-template-columns:1fr!important}
+}
