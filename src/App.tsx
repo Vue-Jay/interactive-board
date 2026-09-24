@@ -18,6 +18,7 @@ import ProfileScreen from "./ProfileScreen";
 import { getAccountAccess,type AccountRole } from "./accountRoleStore";
 import AdminScreen from "./AdminScreen";
 import TemplatesScreen from "./TemplatesScreen";
+import TestingGuideScreen from "./TestingGuideScreen";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -5819,6 +5820,8 @@ export default function App() {
           ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="profile"
           ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onLogout={logout} installAvailable={Boolean(globalInstallPrompt)} isInstalled={globalStandalone} onInstall={()=>void installGlobalApp()} />
+          : section==="guide"
+          ? <TestingGuideScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
