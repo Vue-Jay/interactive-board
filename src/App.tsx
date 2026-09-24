@@ -10,7 +10,9 @@ import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
 import { BOARD_ROLE_LABELS, getCurrentUser, logoutUser, type AuthUser } from "./authStore";
 import { boardStorageKey, touchBoard, type BoardSummary } from "./boardStore";
-import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument } from "./backend";
+import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
+import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
+import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
   stroke,
@@ -1063,6 +1065,18 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const remoteVersion = useRef<number | null>(initialRemoteVersion);
   const remoteSaveInFlight = useRef(false);
   const queuedRemoteSnapshot = useRef<DocumentData | null>(null);
+  const acknowledgedDocument = useRef<string | null>(initialRemoteVersion == null ? null : documentFingerprint(initial.data));
+  const deferredRemote = useRef<RemoteBoardDocument | null>(null);
+  const pendingRemote = useRef<RemoteBoardDocument | null>(null);
+  const lastAttempt = useRef<{ version: number; fingerprint: string } | null>(null);
+  const [remoteConflict, setRemoteConflict] = useState<RemoteBoardDocument | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("reconnecting");
+  const receiveRemote = useRef<(row: RemoteBoardDocument) => void>(() => {});
+  const boardMounted = useRef(true);
+  useEffect(() => {
+    boardMounted.current = true;
+    return () => { boardMounted.current = false; };
+  }, []);
   useEffect(() => {
     localStorage.setItem("lesson-board.grid-mode", gridMode);
   }, [gridMode]);
@@ -1086,7 +1100,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   }, [presentation, presentationTimerRunning, presentationTimerMode]);
 
   const pushRemoteSnapshot = useCallback(async (data: DocumentData) => {
-    if (!isRemoteBackendEnabled() || !canEdit) return;
+    if (!isRemoteBackendEnabled() || !canEdit || !boardMounted.current || pendingRemote.current) return;
+    if (documentFingerprint(data) === acknowledgedDocument.current) return;
     if (remoteSaveInFlight.current) {
       queuedRemoteSnapshot.current = data;
       return;
@@ -1094,17 +1109,26 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     remoteSaveInFlight.current = true;
     try {
       await ensureBoardAssets(boardSummary.id, data);
-      const result = await saveRemoteBoardDocument(boardSummary.id, data, remoteVersion.current);
+      if (!boardMounted.current) return;
+      const expectedVersion = remoteVersion.current ?? 0;
+      lastAttempt.current = { version: expectedVersion + 1, fingerprint: documentFingerprint(data) };
+      const result = await saveRemoteBoardDocument(boardSummary.id, data, expectedVersion);
+      if (!boardMounted.current) return;
       if (result.conflict) {
-        setSaveStatus("Есть более новая версия на сервере · вернитесь к списку и откройте доску снова");
+        const row = { board_id: boardSummary.id, version: result.version, document: result.document, updated_at: result.updated_at ?? "" };
+        if (!deferredRemote.current || row.version > deferredRemote.current.version) deferredRemote.current = row;
         return;
       }
       remoteVersion.current = result.version;
+      acknowledgedDocument.current = documentFingerprint(data);
       setSaveStatus("Сохранено на сервере");
     } catch {
       setSaveStatus("Сохранено локально · сервер временно недоступен");
     } finally {
       remoteSaveInFlight.current = false;
+      const deferred = deferredRemote.current;
+      deferredRemote.current = null;
+      if (boardMounted.current && deferred) receiveRemote.current(deferred);
       const queued = queuedRemoteSnapshot.current;
       queuedRemoteSnapshot.current = null;
       if (queued) void pushRemoteSnapshot(queued);
@@ -1119,6 +1143,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     try {
       const data = snapshot.current;
       localStorage.setItem(storageKey, JSON.stringify(data));
+      if (!boardMounted.current) return;
+      if (isRemoteBackendEnabled() && (pendingRemote.current || documentFingerprint(data) === acknowledgedDocument.current)) return;
       void touchBoard(authUser.id, boardSummary.id, data.title).then((updatedBoard) => {
         if (updatedBoard) onBoardChanged(updatedBoard);
       }).catch(() => {});
@@ -1145,6 +1171,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         : items,
     };
     snapshot.current = data;
+    if (pendingRemote.current) {
+      try { localStorage.setItem(storageKey, JSON.stringify(data)); }
+      catch { setSaveStatus("Не удалось сохранить локальную копию — скачайте её"); }
+      return;
+    }
+    if (isRemoteBackendEnabled() && (!canEdit || pendingRemote.current || documentFingerprint(data) === acknowledgedDocument.current)) return;
     setSaveStatus("Сохранение…");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flushSave, 250);
@@ -1244,7 +1276,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         )
       : itemsRef.current,
   });
-  const applyDocument = (data: DocumentData) => {
+  const applyDocument = (data: DocumentData, fromRemote = false) => {
     end(true);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setEditing(null);
@@ -1258,7 +1290,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     index.current = 0;
     snapshot.current = data;
     setSaveBlocked(false);
-    flushSave();
+    if (!fromRemote) flushSave();
   };
   const importBoard = async (file: File) => {
     if (!canEdit) { setNotice("У вас доступ только для просмотра"); return; }
@@ -3373,8 +3405,73 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setNotice("Интерактивные задания текущего слайда сброшены");
   };
 
+  const applyServerDocument = (row: RemoteBoardDocument) => {
+    const data = parseDocument(JSON.stringify(row.document));
+    // Normalize connector positions before setting the clean baseline.
+    data.items = syncBoundConnectors(data.items);
+    remoteVersion.current = row.version;
+    acknowledgedDocument.current = documentFingerprint(data);
+    pendingRemote.current = null;
+    queuedRemoteSnapshot.current = null;
+    setRemoteConflict(null);
+    setTableEditorId(null); setChecklistEditorId(null); setQuizEditorId(null);
+    setFlashcardEditorId(null); setFormulaEditorId(null); setFrameNotesEditorId(null);
+    applyDocument(data, true);
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* still usable in memory */ }
+    setSaveStatus("Получена серверная версия");
+  };
+  receiveRemote.current = row => {
+    if (!boardMounted.current || row.board_id !== boardSummary.id) return;
+    const busy = !!(gesture.current || editing || tableEditorId || checklistEditorId || quizEditorId || flashcardEditorId || formulaEditorId || frameNotesEditorId);
+    const dirty = canEdit && (busy || documentFingerprint(currentDocument()) !== acknowledgedDocument.current);
+    const decision = remoteUpdateDecision(remoteVersion.current, row.version, remoteSaveInFlight.current, dirty || !!pendingRemote.current);
+    if (decision === "ignore") return;
+    if (decision === "defer") {
+      if (!deferredRemote.current || row.version > deferredRemote.current.version) deferredRemote.current = row;
+      return;
+    }
+    try {
+      const data = parseDocument(JSON.stringify(row.document));
+      if (isOwnRemoteRevision(row, authUser.id, lastAttempt.current)) {
+        remoteVersion.current = row.version;
+        acknowledgedDocument.current = lastAttempt.current!.fingerprint;
+        return;
+      }
+      if (decision === "conflict") {
+        if (pendingRemote.current && row.version <= pendingRemote.current.version) return;
+        pendingRemote.current = { ...row, document: data };
+        setRemoteConflict(pendingRemote.current);
+        snapshot.current = currentDocument();
+        try { localStorage.setItem(storageKey, JSON.stringify(snapshot.current)); } catch { /* keep edits in memory */ }
+        queuedRemoteSnapshot.current = null;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        setSaveStatus("Есть новая серверная версия · выберите действие");
+        return;
+      }
+      applyServerDocument(row);
+    } catch { setNotice("Не удалось прочитать новую серверную версию. Ваши изменения сохранены на доске."); }
+  };
+  useEffect(() => subscribeBoardDocument(boardSummary.id, row => receiveRemote.current(row), setRealtimeStatus), [boardSummary.id]);
+
+  const keepLocalChanges = () => {
+    const row = pendingRemote.current;
+    if (!row) return;
+    // Explicit consent to replace this version, still protected against a later save.
+    remoteVersion.current = row.version;
+    acknowledgedDocument.current = documentFingerprint(parseDocument(JSON.stringify(row.document)));
+    pendingRemote.current = null;
+    setRemoteConflict(null);
+    snapshot.current = currentDocument();
+    flushSave();
+  };
+
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
+      {remoteConflict && <div className="remote-conflict" role="alert">
+        <span>На сервере появилась более новая версия. У вас есть несохранённые изменения.</span>
+        <button onClick={() => applyServerDocument(remoteConflict)}>Применить серверную</button>
+        <button onClick={keepLocalChanges} title="Сохранить свои изменения вместо этой серверной версии">Оставить мои изменения</button>
+      </div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       <header className="topbar">
         <div className="topbar-left">
@@ -3405,6 +3502,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             readOnly={!canEdit}
           />
           <span className="save-status">{saveStatus}</span>
+          {isRemoteBackendEnabled() && <span className={`realtime-status ${realtimeStatus}`} role="status">
+            {realtimeStatus === "online" ? "Онлайн" : realtimeStatus === "reconnecting" ? "Переподключение..." : "Офлайн"}
+          </span>}
         </div>
         <div className="topbar-right">
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
@@ -4874,6 +4974,7 @@ export default function App() {
   }, []);
 
   const logout = () => {
+    setActiveBoard(null);
     void logoutUser().finally(() => {
       setActiveBoard(null);
       setAuthUser(null);
@@ -4897,8 +4998,9 @@ export default function App() {
             const localDocument = parseDocument(raw);
             try {
               await ensureBoardAssets(board.id, localDocument);
-              const saved = await saveRemoteBoardDocument(board.id, localDocument, null);
-              setRemoteVersion(saved.version);
+              const saved = await saveRemoteBoardDocument(board.id, localDocument, 0);
+              // Keep local data; the mounted subscription will offer conflict resolution.
+              setRemoteVersion(saved.conflict ? null : saved.version);
             } catch {
               // A missing v19 attachment or unavailable Storage must not prevent
               // opening the local document. Autosave will retry synchronization.

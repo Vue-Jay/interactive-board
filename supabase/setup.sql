@@ -1,4 +1,4 @@
--- Interactive Board v20 backend for Supabase
+-- Interactive Board v21 backend for Supabase
 -- Run once in Supabase SQL Editor.
 
 create extension if not exists pgcrypto;
@@ -277,5 +277,53 @@ with check (bucket_id = 'board-assets' and public.can_edit_board(public.board_as
 drop policy if exists board_assets_delete on storage.objects;
 create policy board_assets_delete on storage.objects for delete to authenticated
 using (bucket_id = 'board-assets' and public.can_edit_board(public.board_asset_board_id(name)));
+
+commit;
+
+-- InteractiveBoard v21: publish board documents; existing SELECT RLS still applies.
+-- Run after v20. Safe to run repeatedly.
+begin;
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'board_documents'
+  ) then
+    alter publication supabase_realtime add table public.board_documents;
+  end if;
+end;
+$$;
+commit;
+
+-- Owner identity comes exclusively from the authenticated JWT, never RPC input.
+begin;
+
+create or replace function public.create_board(p_title text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_owner uuid := auth.uid();
+  v_board public.boards%rowtype;
+begin
+  if v_owner is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+
+  insert into public.boards (title, owner_id)
+  values (coalesce(nullif(btrim(p_title), ''), 'Новая доска'), v_owner)
+  returning * into v_board;
+
+  return to_jsonb(v_board);
+end;
+$$;
+
+revoke all on function public.create_board(text) from public, anon;
+grant execute on function public.create_board(text) to authenticated;
 
 commit;

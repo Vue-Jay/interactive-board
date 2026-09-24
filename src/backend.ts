@@ -16,6 +16,9 @@ const SESSION_KEY = "lesson-board.supabase.session.v1";
 
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
 
+export const getRealtimeSocketUrl = () =>
+  `${url.replace(/^http/, "ws")}/realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0`;
+
 const loadSession = (): BackendSession | null => {
   try {
     const raw = localStorage.getItem(SESSION_KEY);

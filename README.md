@@ -1,5 +1,33 @@
 # React + TypeScript + Vite
 
+## InteractiveBoard v21: live board updates
+
+After v20, run `supabase/v21_realtime.sql` in the Supabase SQL Editor.
+For a new project, `supabase/setup.sql` includes all migrations. The v21 SQL
+idempotently adds `public.board_documents` to `supabase_realtime`; the existing
+SELECT RLS policies continue to control viewer/editor/owner access.
+
+The open board uses one native WebSocket subscription, with INSERT/UPDATE
+filters for its board ID, the current user's JWT, heartbeats, token refresh and
+bounded reconnect backoff. No new dependency is needed. After subscribing or
+reconnecting, and on change notifications, the document is read through the
+existing authenticated REST API, recovering missed versions.
+
+Clean boards (including viewers) receive new versions automatically. Unsaved
+edits or open editors pause remote saving and show two choices: apply the server
+version, or keep local changes and save them against that server version. Keeping
+local changes replaces the whole server document; it is not a per-object merge.
+A newer concurrent save still triggers the existing optimistic version check.
+Acknowledged versions and own echoes are ignored; applying a remote document
+does not schedule another remote save. Leaving the board/logging out removes
+the socket, timers and listeners and ignores delayed responses.
+
+Validation: `node --test tests/*.test.mjs` and `npm.cmd run build` on Windows
+(`npm run build` elsewhere). The tests use mocked WebSocket/REST adapters;
+verify two real browser sessions after applying the migration.
+
+Protocol reference: [Supabase Realtime protocol](https://supabase.com/docs/guides/realtime/protocol).
+
 ## InteractiveBoard v20: media storage
 
 For an existing v19 Supabase project, run `supabase/v20_board_assets.sql` in

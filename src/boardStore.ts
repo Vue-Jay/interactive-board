@@ -35,8 +35,8 @@ export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoa
 export const createBoard=async(user:AuthUser,title="Новая доска",migrateLegacy=false):Promise<BoardSummary>=>{
  const clean=title.trim()||"Новая доска";
  if(isRemoteBackendEnabled()){
-   const rows=await remoteRequest<any[]>("/rest/v1/boards?select=id,title,owner_id,created_at,updated_at",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({title:clean,owner_id:user.id})});
-   const b=rowToBoard(rows[0],"owner"); if(migrateLegacy){const legacy=localStorage.getItem(STORAGE_KEY);if(legacy)localStorage.setItem(boardStorageKey(b.id),legacy)} return b;
+   const row=await remoteRequest<any>("/rest/v1/rpc/create_board",{method:"POST",body:JSON.stringify({p_title:clean})});
+   const b=rowToBoard(row,"owner"); if(migrateLegacy){const legacy=localStorage.getItem(STORAGE_KEY);if(legacy)localStorage.setItem(boardStorageKey(b.id),legacy)} return b;
  }
  const now=new Date().toISOString();const b:BoardSummary={id:crypto.randomUUID(),title:clean,ownerId:user.id,role:"owner",createdAt:now,updatedAt:now};write(BOARDS_KEY,[...boards(),b]);if(migrateLegacy){const legacy=localStorage.getItem(STORAGE_KEY);if(legacy)localStorage.setItem(boardStorageKey(b.id),legacy)}return b;
 };

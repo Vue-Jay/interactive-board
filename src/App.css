@@ -3780,3 +3780,8 @@ button {
 }
 .board-server-card strong { font-size: 18px; }
 .board-server-card span { opacity: .72; line-height: 1.45; }
+.realtime-status { font-size: 11px; white-space: nowrap; color: #7a7d88; }
+.realtime-status.online { color: #277545; }
+.realtime-status.reconnecting { color: #906500; }
+.remote-conflict { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; width: min(760px, calc(100vw - 32px)); padding: 14px; border: 1px solid #dfbe68; border-radius: 12px; background: #fff8e4; box-shadow: 0 4px 20px #0002; font-size: 13px; }
+.remote-conflict button { padding: 8px 12px; border-radius: 7px; border: 1px solid #d6c392; background: white; cursor: pointer; }
