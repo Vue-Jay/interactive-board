@@ -46,6 +46,8 @@ export type Item = {
   graphA?: number; graphB?: number; graphC?: number;
   graphXMin?: number; graphXMax?: number; graphYMin?: number; graphYMax?: number;
   graphGrid?: boolean;
+  graphPoints?: { x:number; y:number; label:string }[];
+  graphShowLabels?: boolean;
   resolved?: boolean;
   commentTargetId?: string;
   presentationOrder?: number;
@@ -110,6 +112,8 @@ export function parseDocument(raw: string): DocumentData {
       if (i.graphType != null && !["linear","quadratic","sin","cos"].includes(i.graphType)) throw new Error("Повреждён тип графика");
       for (const value of [i.graphA,i.graphB,i.graphC,i.graphXMin,i.graphXMax,i.graphYMin,i.graphYMax]) if (value != null && !finite(value)) throw new Error("Повреждены параметры графика");
       if (i.graphGrid != null && typeof i.graphGrid !== "boolean") throw new Error("Повреждена сетка графика");
+      if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24))) throw new Error("Повреждены точки графика");
+      if (i.graphShowLabels != null && typeof i.graphShowLabels !== "boolean") throw new Error("Повреждены подписи графика");
       if ((i.graphXMin ?? -10) >= (i.graphXMax ?? 10) || (i.graphYMin ?? -10) >= (i.graphYMax ?? 10)) throw new Error("Повреждён диапазон графика");
     }
     if (i.kind === "table") {
