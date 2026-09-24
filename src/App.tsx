@@ -17,6 +17,7 @@ import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
 import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
 import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor } from "./boardBroadcast";
+import { connectBoardViewControl, type BoardViewControlChannel } from "./boardViewSync";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
@@ -981,6 +982,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
+  const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3483,6 +3485,31 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
 
   useEffect(() => {
+    const channel = connectBoardViewControl(
+      boardSummary.id,
+      { userId: authUser.id, name: authUser.name },
+      (command) => {
+        const rect = board.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        setView({
+          x: rect.width / 2 - command.centerX * command.zoom,
+          y: rect.height / 2 - command.centerY * command.zoom,
+          zoom: command.zoom,
+        });
+        setNotice(`${command.senderName} переместил вас к своей области доски`);
+      },
+    );
+
+    viewControlChannel.current = channel;
+
+    return () => {
+      viewControlChannel.current = null;
+      channel.close();
+    };
+  }, [boardSummary.id, authUser.id, authUser.name]);
+
+  useEffect(() => {
     const online = new Set(presenceUsers.map((user) => user.userId));
     setRemoteCursors((current) => {
       let changed = false;
@@ -3579,6 +3606,20 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   <b>{user.name}{user.userId === authUser.id ? " · Вы" : ""}</b>
                   <small>{BOARD_ROLE_LABELS[user.role]}</small>
                 </span>
+                {boardSummary.role === "owner" && user.userId !== authUser.id && <button
+                  type="button"
+                  className="presence-focus-button"
+                  title={`Переместить экран пользователя ${user.name} к вашей текущей области доски`}
+                  onClick={() => {
+                    const rect = board.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    const center = world({ x: rect.width / 2, y: rect.height / 2 });
+                    viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
+                    setNotice(`${user.name}: экран перемещён к вам`);
+                  }}
+                >
+                  Ко мне
+                </button>}
               </div>) : <div className="presence-person">
                 <span className="presence-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
                 <span className="presence-person-copy">
