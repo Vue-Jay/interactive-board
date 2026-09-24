@@ -13,6 +13,7 @@ import AssignmentsScreen from "./AssignmentsScreen";
 import ProgressScreen from "./ProgressScreen";
 import ScheduleScreen from "./ScheduleScreen";
 import MaterialsScreen from "./MaterialsScreen";
+import NotificationsScreen from "./NotificationsScreen";
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
 import ShareDialog from "./ShareDialog";
@@ -5549,6 +5550,8 @@ export default function App() {
           ? <ScheduleScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : section==="materials"
           ? <MaterialsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="notifications"
+          ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
