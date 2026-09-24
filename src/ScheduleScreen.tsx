@@ -1,20 +1,21 @@
 import { useEffect,useMemo,useState } from "react";
 import type { AuthUser } from "./authStore";
+import type { AccountRole } from "./accountRoleStore";
 import { getStudentsForTeacher,type StudentRecord } from "./studentsStore";
 import { getUserBoards,type BoardSummary } from "./boardStore";
 import { createScheduledLessons,deleteScheduledLesson,listScheduledLessons,updateScheduledLesson,type ScheduledLesson,type ScheduleRecurrence } from "./scheduleStore";
-type Props={user:AuthUser;onBack:()=>void;onOpenBoard:(b:BoardSummary)=>void};
+type Props={user:AuthUser;accountRole:AccountRole;onBack:()=>void;onOpenBoard:(b:BoardSummary)=>void};
 const localInput=(d:Date)=>{const p=(n:number)=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`};
 const fmt=(iso:string)=>new Intl.DateTimeFormat("ru-RU",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(iso));
 const dayKey=(d:Date)=>`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-export default function ScheduleScreen({user,onBack,onOpenBoard}:Props){
+export default function ScheduleScreen({user,accountRole,onBack,onOpenBoard}:Props){
  const [rows,setRows]=useState<ScheduledLesson[]>([]),[students,setStudents]=useState<StudentRecord[]>([]),[boards,setBoards]=useState<BoardSummary[]>([]),[loading,setLoading]=useState(true),[notice,setNotice]=useState("");
  const [weekOffset,setWeekOffset]=useState(0),[modal,setModal]=useState(false),[studentId,setStudentId]=useState(""),[boardId,setBoardId]=useState(""),[title,setTitle]=useState(""),[starts,setStarts]=useState(""),[duration,setDuration]=useState("60"),[recurrence,setRecurrence]=useState<ScheduleRecurrence>("none"),[weeks,setWeeks]=useState("8"),[note,setNote]=useState("");
- const load=async()=>{setLoading(true);try{const [r,s,b]=await Promise.all([listScheduledLessons(user.id),getStudentsForTeacher(user).catch(()=>[]),getUserBoards(user)]);setRows(r);setStudents(s);setBoards(b)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось загрузить расписание")}finally{setLoading(false)}};
- useEffect(()=>{void load()},[user.id]);
+ const load=async()=>{setLoading(true);try{const [r,s,b]=await Promise.all([listScheduledLessons(user.id),accountRole==="teacher"?getStudentsForTeacher(user).catch(()=>[]):Promise.resolve([]),getUserBoards(user)]);setRows(r);setStudents(s);setBoards(b)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось загрузить расписание")}finally{setLoading(false)}};
+ useEffect(()=>{void load()},[user.id,accountRole]);
  const monday=useMemo(()=>{const d=new Date();d.setHours(0,0,0,0);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd+weekOffset*7);return d},[weekOffset]);
  const days=Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return d});
- const teacher=students.length>0||rows.some(x=>x.teacherId===user.id);
+ const teacher=accountRole==="teacher";
  const visible=rows.filter(x=>x.status!=="cancelled"&&new Date(x.startsAt)>=monday&&new Date(x.startsAt)<new Date(monday.getTime()+7*86400000));
  const upcoming=rows.filter(x=>x.status==="planned"&&new Date(x.startsAt)>=new Date()).slice(0,6);
  const openNew=(date?:Date)=>{const s=students[0];setStudentId(s?.userId||"");setBoardId(s?.boardIds[0]||"");setTitle("");const d=date?new Date(date):new Date(Date.now()+3600000);d.setMinutes(Math.ceil(d.getMinutes()/30)*30,0,0);setStarts(localInput(d));setDuration("60");setRecurrence("none");setWeeks("8");setNote("");setModal(true)};
