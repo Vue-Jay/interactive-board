@@ -4302,3 +4302,6 @@ button {
 /* v69 · board trash */
 .trash-open-button{margin-left:auto}.trash-modal{width:min(680px,calc(100vw - 28px));max-height:min(760px,calc(100vh - 32px));overflow:auto}.trash-list{display:grid;gap:8px}.trash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e3e5ea;border-radius:12px}.trash-row>div:first-child{display:grid;gap:4px}.trash-row span{font-size:12px;color:#858895}.trash-row>div:last-child{display:flex;gap:7px;flex-wrap:wrap}.trash-warning{margin-top:14px;padding:10px 12px;border-radius:10px;background:#fff6f2;color:#8b5141;font-size:12px;line-height:1.45}.trash-empty{margin:10px 0}
 @media(max-width:700px){.trash-row{align-items:flex-start;flex-direction:column}.trash-open-button{margin-left:0}}
+
+/* v70 · trash safety */
+.trash-row span{line-height:1.45}.trash-warning{border:1px solid #f0ddd5}.trash-row .danger{font-weight:650}

@@ -2,7 +2,7 @@ import { STORAGE_KEY } from "./boardModel";
 import { getUserByEmail, getUserById, type AuthUser, type BoardRole } from "./authStore";
 import { claimRemoteInvitations, isRemoteBackendEnabled, remoteRequest } from "./backend";
 
-export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null};
+export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null;purgeAfter?:string|null};
 export type BoardMember={boardId:string;userId:string;role:Exclude<BoardRole,"owner">;addedAt:string};
 export type BoardInvitation={id:string;boardId:string;email:string;role:Exclude<BoardRole,"owner">;createdAt:string};
 export type BoardAccessMember=BoardMember&{user:AuthUser|null};
@@ -16,7 +16,7 @@ export const boardStorageKey=(id:string)=>`${STORAGE_KEY}.board.${id}`;
 const localRole=(u:string,b:string):BoardRole|null=>{const x=boards().find(v=>v.id===b);if(!x)return null;if(x.ownerId===u)return"owner";return members().find(m=>m.boardId===b&&m.userId===u)?.role??null};
 const claimLocal=(user:AuthUser)=>{const matched=invites().filter(i=>norm(i.email)===norm(user.email));if(!matched.length)return;const next=members();for(const i of matched)if(!next.some(m=>m.boardId===i.boardId&&m.userId===user.id))next.push({boardId:i.boardId,userId:user.id,role:i.role,addedAt:new Date().toISOString()});write(MEMBERS_KEY,next);write(INVITES_KEY,invites().filter(i=>!matched.some(x=>x.id===i.id)))};
 
-const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null});
+const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null,purgeAfter:row.purge_after??null});
 
 export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
  if(isRemoteBackendEnabled()){
@@ -66,10 +66,10 @@ export const changeMemberRole=async(o:string,b:string,u:string,role:Exclude<Boar
 export const removeMember=async(o:string,b:string,u:string)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/board_members?board_id=eq.${encodeURIComponent(b)}&user_id=eq.${encodeURIComponent(u)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});return true}if(localRole(o,b)!=="owner")return false;write(MEMBERS_KEY,members().filter(m=>!(m.boardId===b&&m.userId===u)));return true};
 export const revokeInvitation=async(o:string,b:string,id:string)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/board_invites?id=eq.${encodeURIComponent(id)}&board_id=eq.${encodeURIComponent(b)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});return true}if(localRole(o,b)!=="owner")return false;write(INVITES_KEY,invites().filter(i=>!(i.boardId===b&&i.id===id)));return true};
 
-export const getTrashedBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
+export const getTrashedBoards=async(_user:AuthUser):Promise<BoardSummary[]>=>{
  if(!isRemoteBackendEnabled())return[];
- const rows=await remoteRequest<any[]>(`/rest/v1/boards?owner_id=eq.${encodeURIComponent(user.id)}&deleted_at=not.is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&order=deleted_at.desc`);
+ const rows=await remoteRequest<any[]>("/rest/v1/rpc/list_my_trashed_boards",{method:"POST",body:"{}"});
  return rows.map(row=>rowToBoard(row,"owner"));
 };
 export const restoreBoard=async(id:string)=>{await remoteRequest("/rest/v1/rpc/restore_board",{method:"POST",body:JSON.stringify({p_board_id:id})});return true};
-export const deleteBoardForever=async(id:string)=>{await remoteRequest("/rest/v1/rpc/delete_board_forever",{method:"POST",body:JSON.stringify({p_board_id:id})});return true};
+export const deleteBoardForever=async(id:string,confirmation:string)=>{await remoteRequest("/rest/v1/rpc/delete_board_forever",{method:"POST",body:JSON.stringify({p_board_id:id,p_confirmation:confirmation})});return true};
