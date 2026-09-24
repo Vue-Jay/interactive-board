@@ -4545,3 +4545,75 @@ button {
     transform:none!important;
   }
 }
+
+/* v105 · readable typography + phone landscape experience */
+:root{--ui-font-xs:10px;--ui-font-sm:11px;--ui-font-md:12px;--ui-font-lg:14px}
+
+/* Raise the visual floor: v100 made many service labels 8–10px, which is too small at 1080p. */
+.topbar{font-size:13px!important}
+.board-title{font-size:14px!important}
+.back-to-boards,.topbar .lesson-button,.presence-menu>summary{font-size:12px!important}
+.save-status,.realtime-status{font-size:10px!important}
+.topbar-menu-account strong{font-size:13px!important}
+.topbar-menu-account small{font-size:10px!important}
+.topbar-menu-section button{font-size:12px!important}
+.topbar-menu-section button b{font-size:10px!important}
+.guest-session-badge{font-size:10px!important}
+.tool-tooltip,.compact-toolbar .tool-tooltip{font-size:11px!important}
+.coordinates{font-size:10px!important}
+.board-controls button{font-size:11px!important}
+.access-head h2{font-size:18px!important}
+.access-head p{font-size:12px!important}
+.welcome-badge{font-size:10px!important}
+.welcome-card h1{font-size:24px!important}
+.welcome-card>p{font-size:13px!important}
+.welcome-actions b{font-size:12px!important}
+.welcome-actions small,.welcome-tip{font-size:10px!important}
+.context-menu,.selection-toolbar,.selection-toolbar-screen,.shape-palette,.connector-palette,
+.ink-settings,.connector-settings,.edit-selected,.access-modal,.history-modal,.discussions-modal,
+.study-modal,.templates-panel,.comments-panel{font-size:12px}
+.context-menu button,.selection-toolbar button,.selection-toolbar-screen button,
+.shape-palette button,.connector-palette button{font-size:11px!important}
+.shape-palette span{font-size:10px!important}
+.text-line-height,.table-clipboard-controls button{font-size:11px!important}
+.profile-dirty,.profile-field-error{font-size:11px!important}
+.profile-preview>span{font-size:10px!important}
+.public-presentation-badge{font-size:10px!important}
+
+/* Phone/tablet board is designed for landscape. */
+@media (max-width:900px) and (orientation:landscape){
+  .topbar{height:48px!important;min-height:48px!important;padding:4px 8px!important}
+  .board-title{font-size:13px!important;max-width:26vw!important}
+  .topbar .lesson-button{font-size:11px!important;height:34px!important;min-height:34px!important}
+  .workspace{height:calc(100dvh - 48px)!important}
+  .mobile-quick-tools{left:50%!important;right:auto!important;bottom:max(8px,env(safe-area-inset-bottom))!important;transform:translateX(-50%);width:auto!important;display:flex!important;gap:3px!important;padding:4px!important;border-radius:13px!important}
+  .mobile-quick-tools button{width:40px!important;height:40px!important;min-height:40px!important}
+  .mobile-tools-toggle{left:8px!important;bottom:max(8px,env(safe-area-inset-bottom))!important;height:40px!important;min-height:40px!important;font-size:11px!important}
+  .zoom-controls{right:8px!important;bottom:max(8px,env(safe-area-inset-bottom))!important}
+  .notice{bottom:62px!important}
+}
+
+/* In a normal browser we cannot reliably rotate the physical device ourselves.
+   Instead, portrait phone view becomes an explicit rotate screen. Installed PWA
+   is locked to landscape by manifest. */
+@media (max-width:700px) and (orientation:portrait){
+  .workspace{overflow:hidden!important}
+  .workspace::before{
+    content:"↻";
+    position:absolute;z-index:9998;inset:0;
+    display:grid;place-items:center;
+    padding-bottom:74px;
+    background:#f7f7fb;
+    color:#5b5bd6;
+    font-size:52px;font-weight:700;
+  }
+  .workspace::after{
+    content:"Поверните телефон горизонтально";
+    position:absolute;z-index:9999;
+    left:24px;right:24px;top:50%;
+    transform:translateY(22px);
+    text-align:center;
+    color:#30323b;
+    font-size:16px;font-weight:750;
+  }
+}
