@@ -4305,3 +4305,7 @@ button {
 
 /* v70 · trash safety */
 .trash-row span{line-height:1.45}.trash-warning{border:1px solid #f0ddd5}.trash-row .danger{font-weight:650}
+
+/* v73 · dashboard import */
+.boards-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.boards-import{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.boards-import.disabled{opacity:.55;pointer-events:none}.import-board-modal{width:min(620px,calc(100vw - 28px))}.import-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.import-summary>div{padding:12px;border:1px solid #e4e5eb;border-radius:11px;display:grid;gap:4px}.import-summary strong{overflow:hidden;text-overflow:ellipsis}.import-summary span{font-size:11px;color:#858895}.access-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@media(max-width:700px){.boards-heading-actions{width:100%}.boards-heading-actions>*{flex:1}.import-summary{grid-template-columns:1fr 1fr}}
