@@ -5670,6 +5670,22 @@ export default function App() {
   const [sharePasswordRequired, setSharePasswordRequired] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState<number | null>(null);
   const [boardMountKey, setBoardMountKey] = useState(0);
+  const [globalInstallPrompt,setGlobalInstallPrompt]=useState<Event|null>(null);
+  const [globalStandalone,setGlobalStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)").matches===true);
+  useEffect(()=>{
+    const ready=(e:Event)=>{e.preventDefault();setGlobalInstallPrompt(e)};
+    const installed=()=>{setGlobalInstallPrompt(null);setGlobalStandalone(true)};
+    window.addEventListener("beforeinstallprompt",ready);
+    window.addEventListener("appinstalled",installed);
+    return()=>{window.removeEventListener("beforeinstallprompt",ready);window.removeEventListener("appinstalled",installed)};
+  },[]);
+  const installGlobalApp=async()=>{
+    const prompt=globalInstallPrompt as (Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>})|null;
+    if(!prompt)return;
+    await prompt.prompt();
+    await prompt.userChoice;
+    setGlobalInstallPrompt(null);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -5809,7 +5825,7 @@ export default function App() {
           : section==="notifications"
           ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="profile"
-          ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onLogout={logout} installAvailable={Boolean(globalInstallPrompt)} isInstalled={globalStandalone} onInstall={()=>void installGlobalApp()} />
           : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
