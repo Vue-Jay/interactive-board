@@ -3,9 +3,11 @@ import type { AuthUser } from "./authStore";
 import type { BoardSummary } from "./boardStore";
 import { getUserBoards } from "./boardStore";
 import {
-  deleteStudentSession,getStudentsForTeacher,saveStudentNote,saveStudentSession,saveStudentTags,
+  deleteStudentSession,getStudentsForTeacher,saveStudentProfile,saveStudentSession,
   type StudentRecord,type StudentSession,
 } from "./studentsStore";
+import { listStudentMaterials,unlinkMaterial,type MaterialLink } from "./materialLinksStore";
+import { downloadMaterial,type Material } from "./materialsStore";
 
 type Props={user:AuthUser;onBack:()=>void;onOpenBoard:(board:BoardSummary)=>void};
 const fmt=(iso:string)=>iso?new Intl.DateTimeFormat("ru-RU",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(iso)):"—";
@@ -15,6 +17,7 @@ export default function StudentsScreen({user,onBack,onOpenBoard}:Props){
  const [students,setStudents]=useState<StudentRecord[]>([]),[boards,setBoards]=useState<BoardSummary[]>([]);
  const [loading,setLoading]=useState(true),[query,setQuery]=useState(""),[selected,setSelected]=useState<string|null>(null);
  const [note,setNote]=useState(""),[tags,setTags]=useState(""),[notice,setNotice]=useState("");
+ const [linkedMaterials,setLinkedMaterials]=useState<MaterialLink[]>([]);
  const [sessionOpen,setSessionOpen]=useState(false),[sessionId,setSessionId]=useState<string|null>(null);
  const [sessionDate,setSessionDate]=useState(today()),[sessionBoard,setSessionBoard]=useState("");
  const [sessionDuration,setSessionDuration]=useState("60"),[sessionTopic,setSessionTopic]=useState("");
@@ -24,9 +27,9 @@ export default function StudentsScreen({user,onBack,onOpenBoard}:Props){
  useEffect(()=>{void load()},[user.id]);
  const visible=useMemo(()=>{const q=query.trim().toLowerCase();return students.filter(s=>!q||s.name.toLowerCase().includes(q)||s.email.toLowerCase().includes(q)||s.tags.some(t=>t.toLowerCase().includes(q)))},[students,query]);
  const student=students.find(s=>s.userId===selected)||null;
- useEffect(()=>{setNote(student?.note||"");setTags(student?.tags.join(", ")||"")},[selected,student?.note]);
+ useEffect(()=>{setNote(student?.note||"");setTags(student?.tags.join(", ")||"");if(student)void listStudentMaterials(student.userId).then(setLinkedMaterials).catch(()=>setLinkedMaterials([]));else setLinkedMaterials([])},[selected,student?.note]);
 
- const persistCard=()=>{if(!student)return;const parsed=tags.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12);void Promise.all([saveStudentNote(student.userId,note),saveStudentTags(student.userId,parsed)]).catch(()=>setNotice("Не удалось сохранить карточку на сервере"));setStudents(cur=>cur.map(s=>s.userId===student.userId?{...s,note,tags:parsed}:s));setNotice("Карточка ученика сохранена")};
+ const persistCard=()=>{if(!student)return;const parsed=tags.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12);void saveStudentProfile(student.userId,note,parsed).catch(()=>setNotice("Не удалось сохранить карточку на сервере"));setStudents(cur=>cur.map(s=>s.userId===student.userId?{...s,note,tags:parsed}:s));setNotice("Карточка ученика сохранена")};
  const resetSession=()=>{setSessionId(null);setSessionDate(today());setSessionBoard(student?.boardIds[0]||"");setSessionDuration("60");setSessionTopic("");setSessionHomework("");setSessionResult("")};
  const openNewSession=()=>{resetSession();setSessionOpen(true)};
  const editSession=(s:StudentSession)=>{setSessionId(s.id);setSessionDate(s.date.slice(0,10));setSessionBoard(s.boardId);setSessionDuration(String(s.durationMinutes));setSessionTopic(s.topic);setSessionHomework(s.homework);setSessionResult(s.result);setSessionOpen(true)};
@@ -53,7 +56,7 @@ export default function StudentsScreen({user,onBack,onOpenBoard}:Props){
       <div className="student-card-actions"><button className="students-primary" onClick={persistCard}>Сохранить карточку</button><button className="boards-secondary" onClick={openProgress}>Открыть прогресс</button></div>
       <div className="student-section-head"><h3>История занятий</h3><button onClick={openNewSession}>+ Добавить занятие</button></div>
       <div className="student-history">{student.sessions.length===0?<div className="student-history-empty">Пока нет записей о занятиях.</div>:student.sessions.map(s=><article key={s.id} className="student-session"><div><b>{s.topic||"Занятие без темы"}</b><span>{fmt(s.date)} · {s.durationMinutes} мин · {s.boardTitle}</span>{s.result&&<p><strong>Итог:</strong> {s.result}</p>}{s.homework&&<p><strong>Домашнее:</strong> {s.homework}</p>}</div><div><button onClick={()=>editSession(s)}>Изменить</button><button className="danger" onClick={()=>{if(confirm("Удалить запись занятия?")){void deleteStudentSession(s.id).catch(()=>setNotice("Не удалось удалить занятие на сервере"));setStudents(cur=>cur.map(x=>x.userId===student.userId?{...x,sessions:x.sessions.filter(v=>v.id!==s.id)}:x))}}}>Удалить</button></div></article>)}</div>
-      <div className="student-boards"><h3>Доски ученика</h3>{studentBoards.map(b=><button key={b.id} onClick={()=>onOpenBoard(b)}><span><b>{b.title}</b><small>Изменено {fmt(b.updatedAt)}</small></span><strong>Открыть →</strong></button>)}</div>
+      <div className="student-materials"><div className="student-section-head"><h3>Материалы ученика</h3><span>{linkedMaterials.length}</span></div>{linkedMaterials.length===0?<div className="student-history-empty">Материалы пока не назначены.</div>:linkedMaterials.map(m=><article key={m.id}><div><b>{m.materialTitle}</b><span>{m.assignmentId?"К заданию":"Личный материал"}</span></div><div><button onClick={()=>void downloadMaterial({id:m.materialId,ownerId:user.id,folder:"",title:m.materialTitle,fileName:m.fileName,mime:m.mime,size:0,storagePath:m.storagePath,createdAt:m.createdAt,favorite:false,useCount:0,lastUsedAt:null} as Material).catch(e=>setNotice(e.message))}>Скачать</button><button className="danger" onClick={async()=>{await unlinkMaterial(m.id);setLinkedMaterials(x=>x.filter(v=>v.id!==m.id))}}>Убрать</button></div></article>)}</div><div className="student-boards"><h3>Доски ученика</h3>{studentBoards.map(b=><button key={b.id} onClick={()=>onOpenBoard(b)}><span><b>{b.title}</b><small>Изменено {fmt(b.updatedAt)}</small></span><strong>Открыть →</strong></button>)}</div>
      </>}
     </aside>
    </div>

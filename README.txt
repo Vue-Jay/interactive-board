@@ -1,15 +1,7 @@
-OnlineRepetitor v35 hotfix
+Исправляет ошибку TS2304 saveLocal в src/studentsStore.ts.
 
-Исправляет ошибки TypeScript TS6192 и TS6133 в src/studentsStore.ts.
-Удалены неиспользуемые импорты backend и BoardSummary.
-
-Замена:
-скопируйте папку src из архива в корень проекта с заменой файла.
-
-После этого:
+Запуск:
+node install_v48_hotfix1.mjs
 npm run build
 
-Если сборка успешна:
-git add .
-git commit -m "fix: remove unused student store imports"
-git push
+SQL повторно выполнять не нужно.

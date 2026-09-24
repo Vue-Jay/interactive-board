@@ -67,3 +67,14 @@ export async function getStudentsForTeacher(user:AuthUser):Promise<StudentRecord
  }catch{/* skip inaccessible board */}}
  return [...byUser.values()].sort((a,b)=>a.name.localeCompare(b.name,"ru",{sensitivity:"base"}));
 }
+
+export async function saveStudentProfile(userId:string,note:string,tags:string[]){
+ const notes=readObject<Record<string,string>>(NOTES_KEY,{});
+ const allTags=readObject<Record<string,string[]>>(TAGS_KEY,{});
+ notes[userId]=note;
+ allTags[userId]=tags;
+ write(NOTES_KEY,notes);
+ write(TAGS_KEY,allTags);
+ if(!isRemoteBackendEnabled())return;
+ await remoteRequest("/rest/v1/student_profiles?on_conflict=teacher_id,student_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({student_id:userId,note,tags})});
+}

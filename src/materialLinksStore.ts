@@ -1,0 +1,9 @@
+import { isRemoteBackendEnabled,remoteRequest } from "./backend";
+export type MaterialLink={id:string;materialId:string;studentId:string;assignmentId:string|null;materialTitle:string;fileName:string;mime:string;storagePath:string;createdAt:string};
+const KEY="onlinerepetitor.material-links.v48";
+const read=():MaterialLink[]=>{try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return[]}};
+const write=(x:MaterialLink[])=>localStorage.setItem(KEY,JSON.stringify(x));
+const map=(r:any):MaterialLink=>({id:r.id,materialId:r.material_id,studentId:r.student_id,assignmentId:r.assignment_id||null,materialTitle:r.material_title,fileName:r.file_name,mime:r.mime,storagePath:r.storage_path,createdAt:r.created_at});
+export async function listStudentMaterials(studentId?:string){if(!isRemoteBackendEnabled())return read().filter(x=>!studentId||x.studentId===studentId);return (await remoteRequest<any[]>("/rest/v1/rpc/list_linked_materials",{method:"POST",body:JSON.stringify({p_student_id:studentId||null})})).map(map)}
+export async function linkMaterial(materialId:string,studentId:string,assignmentId?:string|null){const id=crypto.randomUUID();if(!isRemoteBackendEnabled()){write([{id,materialId,studentId,assignmentId:assignmentId||null,materialTitle:"Материал",fileName:"",mime:"",storagePath:"",createdAt:new Date().toISOString()},...read()]);return}await remoteRequest("/rest/v1/material_links",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({id,material_id:materialId,student_id:studentId,assignment_id:assignmentId||null})})}
+export async function unlinkMaterial(id:string){if(!isRemoteBackendEnabled()){write(read().filter(x=>x.id!==id));return}await remoteRequest(`/rest/v1/material_links?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}})}

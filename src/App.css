@@ -4179,3 +4179,6 @@ button {
 /* v45 · reusable materials */
 .materials-toolbar{grid-template-columns:minmax(220px,1fr) 180px auto auto}.materials-fav{border:1px solid #dedfe7;border-radius:8px;background:#fff;padding:8px 10px;font-size:9px;cursor:pointer}.materials-fav.active,.material-actions .favorite.active{background:#fff3c9;color:#8b6b00;border-color:#ecd77b}.material-actions .favorite{font-size:11px;padding:3px 7px}.material-card:has(.favorite.active){border-color:#e5d486;box-shadow:0 2px 12px #d7c66c20}
 @media(max-width:560px){.materials-toolbar{grid-template-columns:1fr}}
+
+/* v48 · student materials */
+.student-materials{margin-top:16px}.student-materials article{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #eeeef2}.student-materials article>div{display:grid;gap:2px}.student-materials b{font-size:10px}.student-materials span{font-size:8px;color:#858895}.student-materials button{border:1px solid #e1e2e8;background:#fff;border-radius:6px;padding:5px 7px;font-size:8px;cursor:pointer}.student-materials .danger{color:#a94a4a}.assignment-materials{display:grid;gap:4px;margin:10px 0;padding:9px;border-radius:9px;background:#f5f5fb}.assignment-materials b,.assignment-materials span{font-size:9px}
