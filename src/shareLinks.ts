@@ -12,6 +12,8 @@ export type ShareLink = {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
+  max_uses: number | null;
+  use_count: number;
 };
 
 export type CreatedShareLink = ShareLink & { token: string };
@@ -24,6 +26,8 @@ export type BoardShareLink = {
   createdAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
+  maxUses: number | null;
+  useCount: number;
 };
 
 const requireRemote = () => {
@@ -39,14 +43,16 @@ const normalizeServerLink = (row: any): ShareLink => ({
   created_at: String(row.created_at),
   expires_at: row.expires_at ?? null,
   revoked_at: row.revoked_at ?? null,
+  max_uses: row.max_uses == null ? null : Number(row.max_uses),
+  use_count: Number(row.use_count || 0),
 });
 
 /* API expected by the current Codex-created App.tsx / ShareDialog.tsx. */
-export async function createShareLink(boardId: string, role: ShareRole): Promise<CreatedShareLink> {
+export async function createShareLink(boardId: string, role: ShareRole, options?: { expiresAt?: string | null; maxUses?: number | null }): Promise<CreatedShareLink> {
   requireRemote();
   const row = await remoteRequest<any>("/rest/v1/rpc/create_board_share_link", {
     method: "POST",
-    body: JSON.stringify({ p_board_id: boardId, p_role: role }),
+    body: JSON.stringify({ p_board_id: boardId, p_role: role, p_expires_at: options?.expiresAt || null, p_max_uses: options?.maxUses || null }),
   });
   return {
     ...normalizeServerLink({ ...row, revoked_at: null }),
@@ -104,6 +110,8 @@ export async function createBoardShareLink(
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,
+    maxUses: row.max_uses,
+    useCount: row.use_count,
     token: row.token,
   };
 }
@@ -117,6 +125,8 @@ export async function listBoardShareLinks(boardId: string): Promise<BoardShareLi
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,
+    maxUses: row.max_uses,
+    useCount: row.use_count,
   }));
 }
 
