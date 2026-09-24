@@ -15,6 +15,7 @@ import { BOARD_ROLE_LABELS, getCurrentUser, logoutUser, type AuthUser } from "./
 import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from "./boardStore";
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
+import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
@@ -976,6 +977,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 }) {
   const canEdit = boardSummary.role !== "viewer";
   const [sharing, setSharing] = useState(false);
+  const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3457,6 +3459,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
   useEffect(() => subscribeBoardDocument(boardSummary.id, row => receiveRemote.current(row), setRealtimeStatus), [boardSummary.id]);
 
+  useEffect(() => subscribeBoardPresence(
+    boardSummary.id,
+    { userId: authUser.id, name: authUser.name, role: boardSummary.role },
+    setPresenceUsers,
+  ), [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+
   const keepLocalChanges = () => {
     const row = pendingRemote.current;
     if (!row) return;
@@ -3512,6 +3520,28 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </span>}
         </div>
         <div className="topbar-right">
+          {isRemoteBackendEnabled() && <details className="presence-menu">
+            <summary title="Пользователи, которые сейчас находятся на доске">
+              <span className="presence-live-dot" aria-hidden="true"/>
+              <span>В сети {Math.max(1, presenceUsers.length)}</span>
+            </summary>
+            <div className="presence-popover">
+              <strong>Сейчас на доске</strong>
+              {presenceUsers.length ? presenceUsers.map((user) => <div className="presence-person" key={user.userId}>
+                <span className="presence-avatar" aria-hidden="true">{user.name.trim().charAt(0).toUpperCase() || "U"}</span>
+                <span className="presence-person-copy">
+                  <b>{user.name}{user.userId === authUser.id ? " · Вы" : ""}</b>
+                  <small>{BOARD_ROLE_LABELS[user.role]}</small>
+                </span>
+              </div>) : <div className="presence-person">
+                <span className="presence-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
+                <span className="presence-person-copy">
+                  <b>{authUser.name} · Вы</b>
+                  <small>{BOARD_ROLE_LABELS[boardSummary.role]}</small>
+                </span>
+              </div>}
+            </div>
+          </details>}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
