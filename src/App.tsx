@@ -3599,7 +3599,29 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
               <span>В сети {Math.max(1, presenceUsers.length)}</span>
             </summary>
             <div className="presence-popover">
-              <strong>Сейчас на доске</strong>
+              <div className="presence-popover-head">
+                <strong>Сейчас на доске</strong>
+                {boardSummary.role === "owner" && presenceUsers.some((user) => user.userId !== authUser.id) && <button
+                  type="button"
+                  className="presence-gather-button"
+                  title="Переместить всех остальных участников к вашей текущей области доски"
+                  onClick={() => {
+                    const rect = board.current?.getBoundingClientRect();
+                    if (!rect) return;
+
+                    const center = world({ x: rect.width / 2, y: rect.height / 2 });
+                    const targets = presenceUsers.filter((user) => user.userId !== authUser.id);
+
+                    for (const user of targets) {
+                      viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
+                    }
+
+                    setNotice(targets.length === 1 ? "Участник перемещён к вам" : `Участники перемещены к вам: ${targets.length}`);
+                  }}
+                >
+                  Собрать всех
+                </button>}
+              </div>
               {presenceUsers.length ? presenceUsers.map((user) => <div className="presence-person" key={user.userId}>
                 <span className="presence-avatar" aria-hidden="true">{user.name.trim().charAt(0).toUpperCase() || "U"}</span>
                 <span className="presence-person-copy">
