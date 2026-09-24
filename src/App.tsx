@@ -291,6 +291,14 @@ const tools: { id: Tool; icon: IconName; label: string; dividerAfter?: boolean }
   { id: "media", icon: "media", label: "Фото / PDF · I / Ш" },
   { id: "linkmedia", icon: "linkmedia", label: "Видео / аудио по ссылке · L / Д" },
 ];
+const toolShortLabel: Record<Tool, string> = {
+  select:"Выбрать",hand:"Двигать",lasso:"Петля",pen:"Карандаш",marker:"Маркер",eraser:"Ластик",
+  connector:"Стрелка",frame:"Фрейм",comment:"Комментарий",text:"Текст",sticky:"Стикер",shape:"Фигуры",
+  table:"Таблица",formula:"Формула",graph:"График",checklist:"Чек-лист",quiz:"Тест",flashcard:"Карточка",
+  cover:"Шторка",media:"Фото / PDF",linkmedia:"Видео / аудио",
+};
+const primaryDesktopTools = new Set<Tool>(["select","hand","pen","marker","eraser","connector","text","sticky","shape","media"]);
+
 const keyTools: Record<string, Tool> = {
   KeyV: "select",
   KeyH: "hand",
@@ -1164,6 +1172,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const touchPoints = useRef(new Map<number, Point>());
   const pinchState = useRef<{ distance:number; center:Point; view:View } | null>(null);
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
+  const [desktopToolsExpanded,setDesktopToolsExpanded]=useState(false);
   const [isCoarsePointer,setIsCoarsePointer]=useState(()=>window.matchMedia?.("(pointer: coarse)").matches===true);
   useEffect(()=>{const mq=window.matchMedia?.("(pointer: coarse)");if(!mq)return;const sync=()=>setIsCoarsePointer(mq.matches);sync();mq.addEventListener?.("change",sync);return()=>mq.removeEventListener?.("change",sync)},[]);
   const [installPrompt,setInstallPrompt]=useState<Event|null>(null);
@@ -4811,25 +4820,26 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <nav className="mobile-quick-tools" aria-label="Быстрые инструменты">
           {(["select","hand","pen","eraser","sticky","text","shape"] as Tool[]).map(id=><button key={id} type="button" className={tool===id?"active":""} aria-label={tools.find(t=>t.id===id)?.label??id} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={id} size={20}/></button>)}
         </nav>
-        <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button><aside className={`toolbar ${mobileToolsOpen?"mobile-open":""}`} aria-label="Инструменты">
-          {tools.map((t) => (
-            <div className="tool-wrap" key={t.id}>
-              <button
-                aria-label={t.label}
-                title={t.label}
-                className={`tool-button ${tool === t.id ? "active" : ""}`}
-                onClick={() => {
-                  finishEdit();
-                  setTool(t.id);
-                  setMobileToolsOpen(false);
-                }}
-              >
-                <span className="tool-icon"><Icon name={t.icon} size={18} /></span>
-                <span className="tool-tooltip">{t.label}</span>
-              </button>
-              {t.dividerAfter && <span className="tool-divider" aria-hidden="true" />}
-            </div>
-          ))}
+        <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button>
+        <aside className={`toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
+          <div className="toolbar-heading"><span>Инструменты</span><small>{toolShortLabel[tool]}</small></div>
+          <div className="toolbar-list">
+            {tools.map((t) => {
+              const secondary=!primaryDesktopTools.has(t.id);
+              return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
+                <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
+                  <span className="tool-icon"><Icon name={t.icon} size={17}/></span>
+                  <span className="tool-name">{toolShortLabel[t.id]}</span>
+                  {tool===t.id&&<span className="tool-active-dot" aria-hidden="true"/>}
+                  <span className="tool-tooltip">{t.label}</span>
+                </button>
+                {t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+              </div>;
+            })}
+          </div>
+          <button type="button" className="toolbar-more" onClick={()=>setDesktopToolsExpanded(v=>!v)} aria-expanded={desktopToolsExpanded}>
+            <Icon name={desktopToolsExpanded?"chevron-left":"plus"} size={15}/><span>{desktopToolsExpanded?"Свернуть":"Ещё инструменты"}</span>
+          </button>
         </aside>
         <section
           ref={board}
@@ -4913,13 +4923,16 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           >
             {!items.length && (
               <div className="welcome-card">
-                <div className="welcome-badge">Ваша доска</div>
-                <h1>Начните с первой идеи</h1>
-                <p>
-                  Добавьте стикер, текст, карточку вопрос–ответ, шторку, чек-лист, таблицу, формулу или готовый шаблон.
-                  Двойной щелчок открывает редактирование, а комментарии можно
-                  привязывать прямо к объектам.
-                </p>
+                <div className="welcome-badge">Пустая доска</div>
+                <h1>С чего начнём?</h1>
+                <p>Выберите действие. Остальные инструменты всегда доступны слева.</p>
+                <div className="welcome-actions">
+                  <button onClick={(e)=>{e.stopPropagation();setTool("pen")}}><Icon name="pen" size={18}/><span><b>Рисовать</b><small>Карандаш и маркер</small></span></button>
+                  <button onClick={(e)=>{e.stopPropagation();setTool("text")}}><Icon name="text" size={18}/><span><b>Добавить текст</b><small>Текст или стикер</small></span></button>
+                  <button onClick={(e)=>{e.stopPropagation();setTool("shape")}}><Icon name="shape" size={18}/><span><b>Фигура</b><small>Схемы и стрелки</small></span></button>
+                  <button onClick={(e)=>{e.stopPropagation();mediaInput.current?.click()}}><Icon name="media" size={18}/><span><b>Загрузить</b><small>Фото или PDF</small></span></button>
+                </div>
+                <div className="welcome-tip">Наведите курсор на инструмент, чтобы увидеть горячую клавишу.</div>
               </div>
             )}
             <svg className="comment-links-world" aria-hidden="true">
@@ -5508,7 +5521,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             ? selectionLocked
               ? `Выделено: ${selected.length} · объект заблокирован · разблокируйте для редактирования`
               : `Выделено: ${selected.length} · Alt+перетаскивание — копия · стрелки — сдвиг · Shift+стрелка — 10 px`
-            : "C / С — стрелка · F / А — фрейм · Q / Й — петля · правый клик — меню"}
+            : `Сейчас: ${toolShortLabel[tool]} · правый клик — меню · колесо мыши — масштаб`}
         </div>
         <div className="board-controls">
           <button aria-label="Уменьшить" title="Уменьшить" onClick={() => zoom(0.8)}><Icon name="zoom-out" size={16} /></button>
