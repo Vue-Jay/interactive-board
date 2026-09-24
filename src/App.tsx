@@ -9,6 +9,7 @@ import "./App.css";
 import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
 import StudentsScreen from "./StudentsScreen";
+import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
 import ShareDialog from "./ShareDialog";
 import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
 import { redeemShareLink } from "./shareLinks";
@@ -981,6 +982,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 }) {
   const canEdit = boardSummary.role !== "viewer";
   const [sharing, setSharing] = useState(false);
+  const [liveLesson,setLiveLesson]=useState<LiveLesson|null>(null);
+  const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
+  const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
+  const [lessonResult,setLessonResult]=useState(""),[lessonHomework,setLessonHomework]=useState(""),[lessonClock,setLessonClock]=useState(Date.now());
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
@@ -3599,6 +3604,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     Object.values(remoteWork).filter((state) => state.selectedIds.includes(itemId));
 
   const remoteEditingCount = Object.values(remoteWork).filter((state) => state.editingId).length;
+  const lessonStudents=presenceUsers.filter((u)=>u.userId!==authUser.id);
+  const lessonSeconds=liveLesson?Math.max(0,Math.floor((lessonClock-Date.parse(liveLesson.startedAt))/1000)):0;
+  const lessonTime=`${String(Math.floor(lessonSeconds/3600)).padStart(2,"0")}:${String(Math.floor((lessonSeconds%3600)/60)).padStart(2,"0")}:${String(lessonSeconds%60).padStart(2,"0")}`;
 
   useEffect(() => {
     if (boardSummary.role !== "owner") return;
@@ -3722,9 +3730,16 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setNotice("Резервная копия скачана");
   };
 
+  useEffect(()=>{if(boardSummary.role==="owner")void getActiveLesson(boardSummary.id).then(setLiveLesson).catch(()=>undefined)},[boardSummary.id,boardSummary.role]);
+  useEffect(()=>{if(!liveLesson)return;setLessonClock(Date.now());const t=window.setInterval(()=>setLessonClock(Date.now()),1000);return()=>window.clearInterval(t)},[liveLesson?.id]);
+  const beginLiveLesson=async()=>{const student=lessonStudents.find(u=>u.userId===lessonStudentId);if(!student){setNotice("Выберите ученика, который сейчас на доске");return}try{const lesson=await startLesson(boardSummary.id,student.userId,student.name,lessonTopic);setLiveLesson(lesson);setLessonOpen(false);setPresentationElapsed(0);setPresentationTimerMode("elapsed");setPresentationTimerRunning(true);setNotice("Урок начат")}catch{setNotice("Не удалось начать урок")}};
+  const completeLiveLesson=async()=>{if(!liveLesson)return;try{const done=await finishLesson(liveLesson,lessonResult,lessonHomework);setLiveLesson(null);setLessonFinishOpen(false);setPresentationTimerRunning(false);setLessonResult("");setLessonHomework("");setNotice(`Урок завершён · ${done.minutes} мин. Запись добавлена в историю`)}catch{setNotice("Не удалось завершить урок")}};
+
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
+      {lessonOpen && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Начать урок</h2><p>Текущая доска станет рабочим пространством занятия.</p></div><button onClick={()=>setLessonOpen(false)}>×</button></div><label><span>Ученик</span><select value={lessonStudentId} onChange={e=>setLessonStudentId(e.target.value)}><option value="">Выберите</option>{lessonStudents.map(u=><option key={u.userId} value={u.userId}>{u.name}</option>)}</select></label><label><span>Тема</span><input value={lessonTopic} onChange={e=>setLessonTopic(e.target.value)} placeholder="Тема занятия"/></label><div className="session-actions"><button className="students-primary" onClick={()=>void beginLiveLesson()}>Начать и запустить таймер</button><button className="boards-secondary" onClick={()=>setLessonOpen(false)}>Отмена</button></div></section></div>}
+      {lessonFinishOpen && liveLesson && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Завершить урок</h2><p>{liveLesson.studentName} · {lessonTime}</p></div><button onClick={()=>setLessonFinishOpen(false)}>×</button></div><label><span>Итог</span><textarea rows={4} value={lessonResult} onChange={e=>setLessonResult(e.target.value)}/></label><label><span>Домашнее задание</span><textarea rows={4} value={lessonHomework} onChange={e=>setLessonHomework(e.target.value)}/></label><div className="session-actions"><button className="students-primary" onClick={()=>void completeLiveLesson()}>Завершить и сохранить</button><button className="boards-secondary" onClick={()=>setLessonFinishOpen(false)}>Продолжить</button></div></section></div>}
       {remoteConflict && <div className="remote-conflict remote-conflict-v34" role="alert">
         <div className="remote-conflict-copy">
           <b>Обнаружены параллельные изменения</b>
@@ -3887,6 +3902,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           >
             {guidedFollow ? "Преподаватель ведёт экран" : followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
           </button>}
+          {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
