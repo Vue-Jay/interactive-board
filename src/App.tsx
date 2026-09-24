@@ -1177,25 +1177,18 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   useEffect(()=>{const mq=window.matchMedia?.("(pointer: coarse)");if(!mq)return;const sync=()=>setIsCoarsePointer(mq.matches);sync();mq.addEventListener?.("change",sync);return()=>mq.removeEventListener?.("change",sync)},[]);
   useEffect(()=>{
     if(!isCoarsePointer)return;
+    // Never force browser fullscreen: Android/Chrome may create a persistent
+    // "copy this app URL" notification for that app-like fullscreen session.
+    // Installed PWA can lock orientation without entering browser fullscreen.
+    if(!window.matchMedia?.("(display-mode: standalone)").matches)return;
     let cancelled=false;
     const lockLandscape=async()=>{
       try{
         const orientation=screen.orientation as ScreenOrientation & {lock?:(orientation:"landscape")=>Promise<void>};
-        if(orientation?.lock)await orientation.lock("landscape");
-      }catch{/* Browsers may allow orientation lock only in standalone/fullscreen mode. */}
+        if(!cancelled&&orientation?.lock)await orientation.lock("landscape");
+      }catch{/* Manifest orientation remains the fallback for installed PWA. */}
     };
-    const enterAndLock=async()=>{
-      try{
-        if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
-      }catch{/* Fullscreen may require a user gesture; PWA can still lock directly. */}
-      if(!cancelled)await lockLandscape();
-    };
-    if(window.matchMedia?.("(display-mode: standalone)").matches)void lockLandscape();
-    else {
-      const once=()=>{void enterAndLock();window.removeEventListener("pointerdown",once)};
-      window.addEventListener("pointerdown",once,{once:true});
-      return()=>{cancelled=true;window.removeEventListener("pointerdown",once)};
-    }
+    void lockLandscape();
     return()=>{cancelled=true};
   },[isCoarsePointer]);
   const [installPrompt,setInstallPrompt]=useState<Event|null>(null);
