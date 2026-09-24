@@ -20,6 +20,8 @@ export type Item = {
   fontWeight?: "normal" | "bold";
   fontStyle?: "normal" | "italic";
   textDecoration?: "none" | "underline";
+  textList?: "none" | "bullet" | "number";
+  lineHeight?: number;
   shapeType?: ShapeType;
   assetId?: string;
   name?: string;
@@ -120,6 +122,9 @@ export function parseDocument(raw: string): DocumentData {
       if (i.fontWeight != null && !["normal","bold"].includes(i.fontWeight)) throw new Error("Повреждена насыщенность текста");
       if (i.fontStyle != null && !["normal","italic"].includes(i.fontStyle)) throw new Error("Повреждено начертание текста");
       if (i.textDecoration != null && !["none","underline"].includes(i.textDecoration)) throw new Error("Повреждено подчёркивание текста");
+      if (i.textList != null && !["none","bullet","number"].includes(i.textList)) throw new Error("Повреждён тип списка");
+      if (i.lineHeight != null && (!finite(i.lineHeight) || i.lineHeight < 1 || i.lineHeight > 2.5)) throw new Error("Повреждён межстрочный интервал");
+      if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет текста");
     }
     if (i.kind === "graph") {
       if (i.graphType != null && !["linear","quadratic","sin","cos"].includes(i.graphType)) throw new Error("Повреждён тип графика");
@@ -231,6 +236,11 @@ export function parseDocument(raw: string): DocumentData {
       } : {}),
       ...((i.kind === "sticky" || i.kind === "frame" || i.kind === "formula") && color(i.color) ? { color: i.color } : {}),
       ...((i.kind === "text" || i.kind === "sticky") && finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 96 ? { fontSize: i.fontSize } : {}),
+      ...((i.kind === "text" || i.kind === "sticky") ? {
+        textAlign: i.textAlign ?? "left", fontWeight: i.fontWeight ?? "normal", fontStyle: i.fontStyle ?? "normal", textDecoration: i.textDecoration ?? "none",
+        textList: i.textList ?? "none", lineHeight: finite(i.lineHeight) ? Math.max(1, Math.min(2.5, i.lineHeight)) : 1.45,
+        ...(color(i.color) ? { color: i.color } : {}),
+      } : {}),
       ...(i.kind === "formula" && finite(i.fontSize) && i.fontSize >= 12 && i.fontSize <= 96 ? { fontSize: i.fontSize } : {}),
       ...(i.kind === "checklist" ? {
         checklistItems: Array.isArray(i.checklistItems) ? i.checklistItems.map((value) => String(value).slice(0, 2000)) : ["Новый пункт"],
