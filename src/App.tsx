@@ -1032,6 +1032,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   initialRemoteVersion?: number | null;
 }) {
   const canEdit = boardSummary.role !== "viewer";
+  const publicPresentation = !canEdit && new URLSearchParams(window.location.search).get("present")==="1";
   const [sharing, setSharing] = useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
   const [historyRows,setHistoryRows]=useState<BoardHistoryEntry[]>([]);
@@ -1091,7 +1092,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [frameNotesEditorId, setFrameNotesEditorId] = useState<string | null>(null);
   const [frameNotesDraft, setFrameNotesDraft] = useState("");
   const [presentationNotesOpen, setPresentationNotesOpen] = useState(false);
-  const [presentation, setPresentation] = useState(false);
+  const [presentation, setPresentation] = useState(() => new URLSearchParams(window.location.search).get("present")==="1");
   const [presentationFrameIndex, setPresentationFrameIndex] = useState(0);
   const [presentationSlidesOpen, setPresentationSlidesOpen] = useState(false);
   const [presentationLaser, setPresentationLaser] = useState(false);
@@ -2215,7 +2216,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       )
         return;
       if (e.code === "Escape") {
-        if (presentation) { setPresentation(false); setPresentationTimerRunning(false); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlight(false); setPresentationSpotlightPos(null); setPresentationBlackout(false); return; }
+        if (presentation && !publicPresentation) { setPresentation(false); setPresentationTimerRunning(false); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlight(false); setPresentationSpotlightPos(null); setPresentationBlackout(false); return; }
         if (frameNotesEditorId) { setFrameNotesEditorId(null); setFrameNotesDraft(""); return; }
         if (formulaEditorId) { closeFormulaEditor(); return; }
         if (checklistEditorId) { setChecklistEditorId(null); setChecklistDraft(null); return; }
@@ -2238,14 +2239,14 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       if (presentation && (e.code === "ArrowLeft" || e.code === "PageUp")) { e.preventDefault(); stepPresentation(-1); return; }
       if (presentation && e.code === "Home") { e.preventDefault(); showPresentationFrame(0); return; }
       if (presentation && e.code === "End") { e.preventDefault(); showPresentationFrame(Math.max(0, presentationFrames.length - 1)); return; }
-      if (presentation && e.code === "KeyL") { e.preventDefault(); setPresentationLaser((value) => !value); setPresentationSpotlight(false); return; }
-      if (presentation && e.code === "KeyO") { e.preventDefault(); setPresentationSpotlight((value) => !value); setPresentationLaser(false); return; }
-      if (presentation && e.code === "BracketLeft") { e.preventDefault(); setPresentationSpotlightRadius((value) => Math.max(80, value - 20)); return; }
-      if (presentation && e.code === "BracketRight") { e.preventDefault(); setPresentationSpotlightRadius((value) => Math.min(360, value + 20)); return; }
-      if (presentation && e.code === "KeyT") { e.preventDefault(); setPresentationTimerMode((mode) => mode === "elapsed" ? "countdown" : "elapsed"); return; }
-      if (presentation && e.code === "KeyP") { e.preventDefault(); setPresentationTimerRunning((value) => !value); return; }
-      if (presentation && e.code === "KeyB") { e.preventDefault(); setPresentationBlackout((value) => !value); return; }
-      if (presentation && e.code === "KeyR") { e.preventDefault(); resetPresentationInteractions(); return; }
+      if (presentation && !publicPresentation && e.code === "KeyL") { e.preventDefault(); setPresentationLaser((value) => !value); setPresentationSpotlight(false); return; }
+      if (presentation && !publicPresentation && e.code === "KeyO") { e.preventDefault(); setPresentationSpotlight((value) => !value); setPresentationLaser(false); return; }
+      if (presentation && !publicPresentation && e.code === "BracketLeft") { e.preventDefault(); setPresentationSpotlightRadius((value) => Math.max(80, value - 20)); return; }
+      if (presentation && !publicPresentation && e.code === "BracketRight") { e.preventDefault(); setPresentationSpotlightRadius((value) => Math.min(360, value + 20)); return; }
+      if (presentation && !publicPresentation && e.code === "KeyT") { e.preventDefault(); setPresentationTimerMode((mode) => mode === "elapsed" ? "countdown" : "elapsed"); return; }
+      if (presentation && !publicPresentation && e.code === "KeyP") { e.preventDefault(); setPresentationTimerRunning((value) => !value); return; }
+      if (presentation && !publicPresentation && e.code === "KeyB") { e.preventDefault(); setPresentationBlackout((value) => !value); return; }
+      if (presentation && !publicPresentation && e.code === "KeyR") { e.preventDefault(); resetPresentationInteractions(); return; }
       if (presentation) return;
       if (gesture.current) return;
       if ((e.code === "Enter" || e.code === "F2") && selected.length === 1) {
@@ -3529,6 +3530,17 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setPresentationFrameIndex(startIndex);
     showPresentationFrame(startIndex);
   };
+  const publicPresentationAutoStarted = useRef(false);
+  useEffect(() => {
+    if (!publicPresentation || publicPresentationAutoStarted.current) return;
+    publicPresentationAutoStarted.current = true;
+    setPresentation(true);
+    setPresentationTimerRunning(false);
+    setPresentationFrameIndex(0);
+    setPresentationSlidesOpen(false);
+    window.setTimeout(() => showPresentationFrame(0), 80);
+  }, [publicPresentation, boardSummary.id]);
+
   const stepPresentation = (direction: number) => {
     if (!presentationFrames.length) return;
     showPresentationFrame(presentationFrameIndex + direction);
@@ -3897,7 +3909,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const completeLiveLesson=async()=>{if(!liveLesson)return;try{const done=await finishLesson(liveLesson,lessonResult,lessonHomework);setLiveLesson(null);setLessonFinishOpen(false);setPresentationTimerRunning(false);setLessonResult("");setLessonHomework("");setNotice(`Урок завершён · ${done.minutes} мин. Запись добавлена в историю`)}catch{setNotice("Не удалось завершить урок")}};
 
   return (
-    <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
+    <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""} ${publicPresentation ? "public-presentation-mode" : ""}`}>
       {linkMediaOpen&&<div className="access-backdrop link-media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkMediaOpen(false)}}><section className="access-modal link-media-dialog"><div className="access-head"><div><h2>{linkMediaEditId?"Изменить мультимедиа":"Мультимедиа по ссылке"}</h2><p>Файл не загружается в OnlineRepetitor и не занимает Storage.</p></div><button onClick={()=>setLinkMediaOpen(false)}>×</button></div><label className="link-media-field"><span>Ссылка</span><input autoFocus value={linkMediaUrl} onChange={e=>setLinkMediaUrl(e.target.value)} placeholder="YouTube, Vimeo, MP3, MP4 или другая http/https ссылка"/></label><label className="link-media-field"><span>Название</span><input value={linkMediaTitle} onChange={e=>setLinkMediaTitle(e.target.value)} placeholder="Необязательно"/></label><div className="link-media-support"><strong>Внутренний плеер</strong><span>YouTube и Vimeo открываются внутри доски. Прямые ссылки на MP3/MP4/WebM и другие поддерживаемые браузером файлы используют встроенный HTML5-плеер. Для остальных ссылок показывается безопасная карточка перехода.</span></div><div className="access-actions"><button onClick={()=>setLinkMediaOpen(false)}>Отмена</button><button className="boards-create" onClick={saveLinkMedia}>{linkMediaEditId?"Сохранить":"Добавить на доску"}</button></div></section></div>}
 
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
@@ -4247,25 +4259,25 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             </div>
             <button disabled={!presentationFrames.length} onClick={() => stepPresentation(1)} title="Следующий фрейм · → / PageDown"><Icon name="chevron-right" size={18} /></button>
             <button className={presentationSlidesOpen ? "active" : ""} disabled={!presentationFrames.length} onClick={() => setPresentationSlidesOpen((value) => !value)} title="Список слайдов"><Icon name="slides" size={17}/></button>
-            <div className={`presentation-timer ${presentationTimerMode === "countdown" ? "countdown" : ""}`} title="Таймер · T переключает секундомер / обратный отсчёт">
+            <div className={`presentation-timer presentation-author-only ${presentationTimerMode === "countdown" ? "countdown" : ""}`} title="Таймер · T переключает секундомер / обратный отсчёт">
               <button className="timer-mode-toggle" onClick={() => setPresentationTimerMode((mode) => mode === "elapsed" ? "countdown" : "elapsed")} title="Переключить режим таймера · T"><Icon name="timer" size={15}/></button>
               <strong>{formatPresentationTime(presentationTimerMode === "elapsed" ? presentationElapsed : presentationCountdownRemaining)}</strong>
               {presentationTimerMode === "countdown" && <label className="countdown-minutes" title="Минуты обратного отсчёта"><input type="number" min="1" max="180" value={Math.max(1, Math.round(presentationCountdownTotal / 60))} onChange={(e) => { const seconds = Math.max(60, Math.min(10800, (Number(e.target.value) || 1) * 60)); setPresentationCountdownTotal(seconds); setPresentationCountdownRemaining(seconds); }}/><span>м</span></label>}
               <button onClick={() => setPresentationTimerRunning((value) => !value)} title={presentationTimerRunning ? "Пауза · P" : "Продолжить · P"}><Icon name={presentationTimerRunning ? "pause" : "play"} size={14}/></button>
               <button onClick={() => presentationTimerMode === "elapsed" ? setPresentationElapsed(0) : setPresentationCountdownRemaining(presentationCountdownTotal)} title="Сбросить таймер"><Icon name="reset" size={14}/></button>
             </div>
-            <button className={presentationLaser ? "active laser-active" : ""} onClick={() => { setPresentationLaser((value) => !value); setPresentationSpotlight(false); setPresentationLaserPos(null); }} title="Лазерная указка · L"><Icon name="laser" size={17}/></button>
-            <button className={presentationSpotlight ? "active" : ""} onClick={() => { setPresentationSpotlight((value) => !value); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlightPos({ x: (board.current?.clientWidth ?? 800) / 2, y: (board.current?.clientHeight ?? 600) / 2 }); }} title="Прожектор · O · [ ] меняют размер"><Icon name="spotlight" size={17}/></button>
-            {presentationSpotlight && <div className="presentation-spotlight-size" title="Размер прожектора · [ / ]"><button onClick={() => setPresentationSpotlightRadius((value) => Math.max(80, value - 20))}>−</button><strong>{presentationSpotlightRadius}</strong><button onClick={() => setPresentationSpotlightRadius((value) => Math.min(360, value + 20))}>+</button></div>}
-            {presentationQuizzes.length > 0 && <button className={presentationQuizzesRevealed ? "active" : ""} onClick={togglePresentationQuizAnswers} title="Показать / скрыть правильные ответы текущего слайда"><Icon name="quiz" size={17}/></button>}
-            {presentationFlashcards.length > 0 && <button className={presentationFlashcardsFlipped ? "active" : ""} onClick={togglePresentationFlashcards} title={presentationFlashcardsFlipped ? "Показать вопросы всех карточек" : "Показать ответы всех карточек"}><Icon name="flashcard" size={17}/></button>}
-            {(presentationQuizzes.length > 0 || presentationFlashcards.length > 0 || presentationChecklists.length > 0 || presentationCovers.length > 0) && <button onClick={resetPresentationInteractions} title="Сбросить все интерактивные задания текущего слайда · R"><Icon name="reset" size={16}/></button>}
-            <button className={presentationBlackout ? "active" : ""} onClick={() => setPresentationBlackout((value) => !value)} title="Затемнить экран · B"><Icon name="eye-off" size={17}/></button>
-            {activePresentationFrame && <button className={presentationNotesOpen ? "active" : ""} onClick={() => setPresentationNotesOpen((value) => !value)} title="Заметки к текущему фрейму"><Icon name="label" size={17}/></button>}
-            {activePresentationFrame && <button onClick={() => void exportItemsToPng("frame", activePresentationFrame.id)} title="Скачать текущий фрейм PNG"><Icon name="download" size={17}/></button>}
+            <button className={`presentation-author-only ${presentationLaser ? "active laser-active" : ""}`} onClick={() => { setPresentationLaser((value) => !value); setPresentationSpotlight(false); setPresentationLaserPos(null); }} title="Лазерная указка · L"><Icon name="laser" size={17}/></button>
+            <button className={`presentation-author-only ${presentationSpotlight ? "active" : ""}`} onClick={() => { setPresentationSpotlight((value) => !value); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlightPos({ x: (board.current?.clientWidth ?? 800) / 2, y: (board.current?.clientHeight ?? 600) / 2 }); }} title="Прожектор · O · [ ] меняют размер"><Icon name="spotlight" size={17}/></button>
+            {presentationSpotlight && <div className="presentation-spotlight-size presentation-author-only" title="Размер прожектора · [ / ]"><button onClick={() => setPresentationSpotlightRadius((value) => Math.max(80, value - 20))}>−</button><strong>{presentationSpotlightRadius}</strong><button onClick={() => setPresentationSpotlightRadius((value) => Math.min(360, value + 20))}>+</button></div>}
+            {presentationQuizzes.length > 0 && <button className={`presentation-author-only ${presentationQuizzesRevealed ? "active" : ""}`} onClick={togglePresentationQuizAnswers} title="Показать / скрыть правильные ответы текущего слайда"><Icon name="quiz" size={17}/></button>}
+            {presentationFlashcards.length > 0 && <button className={`presentation-author-only ${presentationFlashcardsFlipped ? "active" : ""}`} onClick={togglePresentationFlashcards} title={presentationFlashcardsFlipped ? "Показать вопросы всех карточек" : "Показать ответы всех карточек"}><Icon name="flashcard" size={17}/></button>}
+            {(presentationQuizzes.length > 0 || presentationFlashcards.length > 0 || presentationChecklists.length > 0 || presentationCovers.length > 0) && <button className="presentation-author-only" onClick={resetPresentationInteractions} title="Сбросить все интерактивные задания текущего слайда · R"><Icon name="reset" size={16}/></button>}
+            <button className={`presentation-author-only ${presentationBlackout ? "active" : ""}`} onClick={() => setPresentationBlackout((value) => !value)} title="Затемнить экран · B"><Icon name="eye-off" size={17}/></button>
+            {activePresentationFrame && <button className={`presentation-author-only ${presentationNotesOpen ? "active" : ""}`} onClick={() => setPresentationNotesOpen((value) => !value)} title="Заметки к текущему фрейму"><Icon name="label" size={17}/></button>}
+            {activePresentationFrame && <button className="presentation-author-only" onClick={() => void exportItemsToPng("frame", activePresentationFrame.id)} title="Скачать текущий фрейм PNG"><Icon name="download" size={17}/></button>}
             <button onClick={() => void toggleFullscreen()} title="Полноэкранный режим"><Icon name="fullscreen" size={17}/></button>
-            <span className="presentation-controls-separator" />
-            <button onClick={() => { setPresentation(false); setPresentationTimerRunning(false); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlight(false); setPresentationSpotlightPos(null); setPresentationBlackout(false); }} title="Выйти из режима показа · Esc"><Icon name="close" size={18} /></button>
+            <span className="presentation-controls-separator presentation-author-only" />
+            <button className="presentation-author-only" onClick={() => { setPresentation(false); setPresentationTimerRunning(false); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlight(false); setPresentationSpotlightPos(null); setPresentationBlackout(false); }} title="Выйти из режима показа · Esc"><Icon name="close" size={18} /></button>
           </div>
         )}
         {presentation && presentationSlidesOpen && presentationFrames.length > 0 && (
@@ -4278,7 +4290,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             ))}</div>
           </aside>
         )}
-        {presentation && presentationNotesOpen && activePresentationFrame && (
+        {presentation && !publicPresentation && presentationNotesOpen && activePresentationFrame && (
           <div className="presentation-notes" onPointerDown={(e) => e.stopPropagation()}>
             <div><strong>Заметки · {activePresentationFrame.text || "Без названия"}</strong><button onClick={() => setPresentationNotesOpen(false)} aria-label="Скрыть заметки"><Icon name="close" size={14}/></button></div>
             <p>{activePresentationFrame.notes?.trim() || "Для этого фрейма заметки ещё не добавлены."}</p>

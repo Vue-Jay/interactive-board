@@ -6,7 +6,7 @@ import { createShareLink, listShareLinks, revokeShareLink, type ShareLink } from
 
 export default function ShareDialog({ board, user, onClose }: { board: BoardSummary; user: AuthUser; onClose: () => void }) {
   const [links, setLinks] = useState<ShareLink[]>([]);
-  const [created, setCreated] = useState<{ id: string; url: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; url: string; presentationUrl?: string } | null>(null);
   const [access, setAccess] = useState<Awaited<ReturnType<typeof getBoardAccess>>>({ members: [], invites: [] });
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Exclude<BoardRole, "owner">>("viewer");
@@ -36,7 +36,7 @@ export default function ShareDialog({ board, user, onClose }: { board: BoardSumm
   const create = (linkRole: ShareLink["role"]) => run(async () => {
     const expiresAt=expiry==="never"?null:new Date(Date.now()+({"1d":1,"7d":7,"30d":30}[expiry])*86400000).toISOString();
     const link = await createShareLink(board.id, linkRole,{expiresAt,maxUses:maxUses>0?maxUses:null,password:linkPassword.trim()||null});
-    setCreated({ id: link.id, url: `${window.location.origin}/join/${link.token}` });
+    const url=`${window.location.origin}/join/${link.token}`; setCreated({ id: link.id, url, ...(linkRole==="viewer"?{presentationUrl:`${url}?present=1`}:{}) });
     await reload();
   });
   if (board.role !== "owner") return null;
@@ -46,7 +46,7 @@ export default function ShareDialog({ board, user, onClose }: { board: BoardSumm
       {remote ? <>
         <p>Любой пользователь с этой ссылкой сможет войти и получить выбранный доступ.</p>
         <div className="share-link-settings"><label>Срок действия<select value={expiry} onChange={e=>setExpiry(e.target.value as typeof expiry)}><option value="1d">1 день</option><option value="7d">7 дней</option><option value="30d">30 дней</option><option value="never">Без срока</option></select></label><label>Лимит входов<input type="number" min="0" max="10000" value={maxUses} onChange={e=>setMaxUses(Math.max(0,Math.min(10000,Number(e.target.value)||0)))}/><small>0 = без ограничения</small></label><label>Пароль ссылки<input type="password" value={linkPassword} onChange={e=>setLinkPassword(e.target.value)} placeholder="Необязательно" minLength={4}/><small>Пусто = без пароля</small></label></div><div className="share-actions"><button disabled={busy} onClick={() => void create("editor")}>Создать ссылку «Редактирование»</button><button disabled={busy} onClick={() => void create("viewer")}>Создать ссылку «Только просмотр»</button></div>
-        {created && <div className="share-created"><label>Скопируйте сейчас: ссылка показывается только при создании.<input readOnly value={created.url} onFocus={e => e.target.select()} aria-label="Новая ссылка"/></label><button disabled={busy} onClick={() => void run(async () => { await navigator.clipboard.writeText(created.url); setNotice("Ссылка скопирована"); })}>Копировать ссылку</button></div>}
+        {created && <div className="share-created"><label>Обычная ссылка<input readOnly value={created.url} onFocus={e => e.target.select()} aria-label="Новая ссылка"/></label><button disabled={busy} onClick={() => void run(async () => { await navigator.clipboard.writeText(created.url); setNotice("Ссылка скопирована"); })}>Копировать</button>{created.presentationUrl&&<><label>Ссылка-презентация<input readOnly value={created.presentationUrl} onFocus={e=>e.target.select()} aria-label="Ссылка-презентация"/></label><button disabled={busy} onClick={()=>void run(async()=>{await navigator.clipboard.writeText(created.presentationUrl!);setNotice("Ссылка-презентация скопирована")})}>Копировать презентацию</button><small>Откроется сразу в чистом режиме показа. Доступ остаётся «Только просмотр».</small></>}</div>}
         <h3>Активные ссылки</h3>
         {links.filter(l => !l.revoked_at && (!l.expires_at || Date.parse(l.expires_at) > Date.now())).map(link => <div className="access-person" key={link.id}>
           <div><strong>{BOARD_ROLE_LABELS[link.role]}</strong><span>{new Date(link.created_at).toLocaleString("ru-RU")}{link.expires_at?` · до ${new Date(link.expires_at).toLocaleString("ru-RU")}`:" · бессрочно"}{link.max_uses?` · входов ${link.use_count}/${link.max_uses}`:` · входов ${link.use_count}`}{link.protected?" · 🔒 пароль":""}</span></div>

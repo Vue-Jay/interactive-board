@@ -4319,3 +4319,26 @@ button {
 
 /* v76 · templates finish */
 .templates-content .dashboard-nav{margin-bottom:18px}.templates-grid{align-items:stretch}.template-card{min-height:220px}.template-card>div:last-child{min-width:0}.template-card p{overflow-wrap:anywhere}
+
+/* v78 · public presentation finish */
+.public-presentation-mode .presentation-author-only,
+.public-presentation-mode .presentation-notes,
+.public-presentation-mode .notice { display:none !important; }
+.public-presentation-mode .presentation-controls{
+  bottom:16px;
+  min-height:46px;
+  padding:5px;
+  border-radius:14px;
+  background:rgba(25,27,32,.86);
+}
+.public-presentation-mode .presentation-frame-label{width:min(260px,42vw)}
+.public-presentation-mode .presentation-controls>button{width:36px;height:36px}
+.public-presentation-mode .board{cursor:default}
+.public-presentation-mode .presentation-slides-panel{bottom:78px}
+.public-presentation-mode .remote-cursor,
+.public-presentation-mode .presence-strip{display:none!important}
+@media(max-width:650px){
+ .public-presentation-mode .presentation-controls{bottom:8px;max-width:calc(100vw - 16px)}
+ .public-presentation-mode .presentation-frame-label{width:38vw}
+ .public-presentation-mode .presentation-slides-panel{left:8px;bottom:66px;width:calc(100vw - 16px)}
+}
