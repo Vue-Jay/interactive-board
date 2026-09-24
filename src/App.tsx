@@ -2846,6 +2846,19 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }));
   };
 
+  const equalizeSelectedSize = (axis: "width" | "height" | "both") => {
+    const selectedItems = itemsRef.current.filter((item) => selected.includes(item.id) && !item.locked);
+    if (selectedItems.length < 2) return;
+    const reference = selectedItems[0];
+    const ids = new Set(selectedItems.map((item) => item.id));
+    commit(itemsRef.current.map((item) => !ids.has(item.id) ? item : {
+      ...item,
+      ...(axis === "width" || axis === "both" ? { width: reference.width } : {}),
+      ...(axis === "height" || axis === "both" ? { height: reference.height } : {}),
+    }));
+    setNotice(axis === "both" ? "Размер объектов выровнен" : axis === "width" ? "Ширина объектов выровнена" : "Высота объектов выровнена");
+  };
+
   const distributeSelected = (axis: "x" | "y") => {
     if (selectionLocked) return;
     const chosen = itemsRef.current.filter((i) => selected.includes(i.id));
@@ -4255,6 +4268,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             <div className="presentation-frame-label">
               <strong>{activePresentationFrame?.text || (presentationFrames.length ? "Без названия" : "Вся доска")}</strong>
               <span>{presentationFrames.length ? `${presentationFrameIndex + 1} / ${presentationFrames.length}` : "Фреймы не созданы"}</span>
+              {presentationFrames.length>0&&<div className="presentation-progress" title={`Слайд ${presentationFrameIndex+1} из ${presentationFrames.length}`}><i style={{width:`${((presentationFrameIndex+1)/presentationFrames.length)*100}%`}}/></div>}
             </div>
             <button disabled={!presentationFrames.length} onClick={() => stepPresentation(1)} title="Следующий фрейм · → / PageDown"><Icon name="chevron-right" size={18} /></button>
             <button className={presentationSlidesOpen ? "active" : ""} disabled={!presentationFrames.length} onClick={() => setPresentationSlidesOpen((value) => !value)} title="Список слайдов"><Icon name="slides" size={17}/></button>
@@ -5388,6 +5402,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                         <button disabled={selectionLocked} onClick={() => alignSelected("bottom")} title="По нижнему краю"><Icon name="align-bottom" size={16} /></button>
                         {selectedItems.length >= 3 && <button disabled={selectionLocked} onClick={() => distributeSelected("x")} title="Распределить по горизонтали"><Icon name="distribute-x" size={16} /></button>}
                         {selectedItems.length >= 3 && <button disabled={selectionLocked} onClick={() => distributeSelected("y")} title="Распределить по вертикали"><Icon name="distribute-y" size={16} /></button>}
+                        {selectedItems.length >= 2 && <><button disabled={selectionLocked} onClick={() => equalizeSelectedSize("width")} title="Одинаковая ширина">↔</button><button disabled={selectionLocked} onClick={() => equalizeSelectedSize("height")} title="Одинаковая высота">↕</button><button disabled={selectionLocked} onClick={() => equalizeSelectedSize("both")} title="Одинаковый размер">□</button></>}
                       </div>
                     </>
                   )}
