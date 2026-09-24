@@ -3785,3 +3785,9 @@ button {
 .realtime-status.reconnecting { color: #906500; }
 .remote-conflict { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; width: min(760px, calc(100vw - 32px)); padding: 14px; border: 1px solid #dfbe68; border-radius: 12px; background: #fff8e4; box-shadow: 0 4px 20px #0002; font-size: 13px; }
 .remote-conflict button { padding: 8px 12px; border-radius: 7px; border: 1px solid #d6c392; background: white; cursor: pointer; }
+.share-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.share-actions button, .share-created button { padding: 10px 14px; border-radius: 8px; background: #ececfa; color: #4446a6; cursor: pointer; }
+.share-created { display: grid; gap: 8px; margin: 16px 0; padding: 12px; background: #f4f4fc; border-radius: 10px; }
+.share-created input { display: block; width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
+.share-note { color: #656575; font-size: 12px; }
+.access-modal { max-height: 85vh; overflow-y: auto; }

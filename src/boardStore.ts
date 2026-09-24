@@ -32,6 +32,15 @@ export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
 };
 
 export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoards(user);if(list.length)return list;return [await createBoard(user,"Моя доска",true)]};
+// Resolve deep links through RLS, never fall back to a cached inaccessible board.
+export const getBoardForUser=async(user:AuthUser,id:string):Promise<BoardSummary|null>=>{
+ if(!isRemoteBackendEnabled())return (await getUserBoards(user)).find(b=>b.id===id)??null;
+ const rows=await remoteRequest<any[]>(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}&select=id,title,owner_id,created_at,updated_at&limit=1`);
+ if(!rows[0])return null;
+ if(rows[0].owner_id===user.id)return rowToBoard(rows[0],"owner");
+ const members=await remoteRequest<any[]>(`/rest/v1/board_members?board_id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`);
+ return members[0]?rowToBoard(rows[0],members[0].role):null;
+};
 export const createBoard=async(user:AuthUser,title="Новая доска",migrateLegacy=false):Promise<BoardSummary>=>{
  const clean=title.trim()||"Новая доска";
  if(isRemoteBackendEnabled()){

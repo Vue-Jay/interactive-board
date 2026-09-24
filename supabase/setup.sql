@@ -1,4 +1,4 @@
--- Interactive Board v21 backend for Supabase
+-- Interactive Board v22 backend for Supabase
 -- Run once in Supabase SQL Editor.
 
 create extension if not exists pgcrypto;
@@ -326,4 +326,107 @@ $$;
 revoke all on function public.create_board(text) from public, anon;
 grant execute on function public.create_board(text) to authenticated;
 
+commit;
+
+-- v22: bearer links. Only hashes persist; all access goes through RPCs.
+begin;
+
+create table if not exists public.board_share_links (
+  id uuid primary key default gen_random_uuid(),
+  board_id uuid not null references public.boards(id) on delete cascade,
+  token_hash text unique not null check (token_hash ~ '^[0-9a-f]{64}$'),
+  role text not null check (role in ('editor', 'viewer')),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  revoked_at timestamptz
+);
+create index if not exists board_share_links_board_idx on public.board_share_links(board_id);
+alter table public.board_share_links enable row level security;
+revoke all on public.board_share_links from public, anon, authenticated;
+
+create or replace function public.create_board_share_link(p_board_id uuid, p_role text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_token text;
+  v_link public.board_share_links%rowtype;
+begin
+  if auth.uid() is null or not public.is_board_owner(p_board_id) then
+    raise exception 'Only the board owner can create links' using errcode = '42501';
+  end if;
+  if p_role is null or p_role not in ('viewer', 'editor') then
+    raise exception 'Invalid link role' using errcode = '22023';
+  end if;
+  -- Two cryptographically random v4 UUIDs: 244 random bits, 64 hex characters.
+  v_token := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+  insert into public.board_share_links(board_id, token_hash, role, created_by)
+  values (p_board_id, encode(sha256(convert_to(v_token, 'UTF8')), 'hex'), p_role, auth.uid())
+  returning * into v_link;
+  return (to_jsonb(v_link) - 'token_hash') || jsonb_build_object('token', v_token);
+end;
+$$;
+
+create or replace function public.redeem_board_share_link(p_token text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := auth.uid();
+  v_link public.board_share_links%rowtype;
+  v_role text;
+begin
+  if v_user is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  if p_token is null or p_token !~ '^[0-9a-f]{64}$' then
+    raise exception 'Link is invalid, expired or revoked' using errcode = '22023';
+  end if;
+  -- Serializes redemption with revocation; the board is derived only from the hash.
+  select * into v_link from public.board_share_links
+  where token_hash = encode(sha256(convert_to(p_token, 'UTF8')), 'hex') for update;
+  if not found or v_link.revoked_at is not null or
+     (v_link.expires_at is not null and v_link.expires_at <= now()) then
+    raise exception 'Link is invalid, expired or revoked' using errcode = '22023';
+  end if;
+  if public.is_board_owner(v_link.board_id) then
+    v_role := 'owner';
+  else
+    v_role := v_link.role;
+    insert into public.board_members(board_id, user_id, role)
+    values (v_link.board_id, v_user, v_role)
+    on conflict (board_id, user_id) do update set role = excluded.role;
+  end if;
+  return jsonb_build_object('board_id', v_link.board_id, 'role', v_role);
+end;
+$$;
+
+create or replace function public.revoke_board_share_link(p_link_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_board uuid;
+begin
+  select board_id into v_board from public.board_share_links where id = p_link_id for update;
+  if auth.uid() is null or v_board is null or not public.is_board_owner(v_board) then
+    raise exception 'Only the board owner can revoke links' using errcode = '42501';
+  end if;
+  update public.board_share_links set revoked_at = coalesce(revoked_at, now()) where id = p_link_id;
+end;
+$$;
+
+create or replace function public.list_board_share_links(p_board_id uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null or not public.is_board_owner(p_board_id) then
+    raise exception 'Only the board owner can list links' using errcode = '42501';
+  end if;
+  return coalesce((select jsonb_agg(to_jsonb(l) - 'token_hash' order by l.created_at desc)
+    from public.board_share_links l where l.board_id = p_board_id), '[]'::jsonb);
+end;
+$$;
+
+revoke all on function public.create_board_share_link(uuid,text) from public, anon;
+revoke all on function public.redeem_board_share_link(text) from public, anon;
+revoke all on function public.revoke_board_share_link(uuid) from public, anon;
+revoke all on function public.list_board_share_links(uuid) from public, anon;
+grant execute on function public.create_board_share_link(uuid,text) to authenticated;
+grant execute on function public.redeem_board_share_link(text) to authenticated;
+grant execute on function public.revoke_board_share_link(uuid) to authenticated;
+grant execute on function public.list_board_share_links(uuid) to authenticated;
 commit;

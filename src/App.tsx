@@ -8,8 +8,11 @@ import {
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
+import ShareDialog from "./ShareDialog";
+import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
+import { redeemShareLink } from "./shareLinks";
 import { BOARD_ROLE_LABELS, getCurrentUser, logoutUser, type AuthUser } from "./authStore";
-import { boardStorageKey, touchBoard, type BoardSummary } from "./boardStore";
+import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from "./boardStore";
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
@@ -972,6 +975,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   initialRemoteVersion?: number | null;
 }) {
   const canEdit = boardSummary.role !== "viewer";
+  const [sharing, setSharing] = useState(false);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3467,6 +3471,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
+      {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
       {remoteConflict && <div className="remote-conflict" role="alert">
         <span>На сервере появилась более новая версия. У вас есть несохранённые изменения.</span>
         <button onClick={() => applyServerDocument(remoteConflict)}>Применить серверную</button>
@@ -3507,6 +3512,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </span>}
         </div>
         <div className="topbar-right">
+          {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
             <span className="account-copy">
@@ -4955,9 +4961,26 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
 
 export default function App() {
+  const [route, setRoute] = useState<AppRoute>(initialRoute);
+  const navigate = useCallback((path: string, replace = false) => {
+    window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    setRoute(parseRoute(path));
+  }, []);
+  useEffect(() => {
+    const changed = () => {
+      const next = parseRoute(window.location.pathname);
+      if (next.kind === "join") rememberShareToken(next.token);
+      setRoute(next);
+    };
+    window.addEventListener("popstate", changed);
+    return () => window.removeEventListener("popstate", changed);
+  }, []);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [activeBoard, setActiveBoard] = useState<BoardSummary | null>(null);
+  const boardChanged = useCallback((updated: BoardSummary) => {
+    setActiveBoard(current => current?.id === updated.id ? updated : current);
+  }, []);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardLoadError, setBoardLoadError] = useState("");
   const [remoteVersion, setRemoteVersion] = useState<number | null>(null);
@@ -4967,6 +4990,8 @@ export default function App() {
     let alive = true;
     void getCurrentUser().then((user) => {
       if (alive) setAuthUser(user);
+    }).catch(() => {
+      if (alive) setAuthUser(null);
     }).finally(() => {
       if (alive) setAuthReady(true);
     });
@@ -4974,6 +4999,9 @@ export default function App() {
   }, []);
 
   const logout = () => {
+    clearPendingShare();
+    navigate("/", true);
+    setAuthUser(null);
     setActiveBoard(null);
     void logoutUser().finally(() => {
       setActiveBoard(null);
@@ -4981,12 +5009,13 @@ export default function App() {
     });
   };
 
-  const openBoard = useCallback(async (board: BoardSummary) => {
+  const openBoard = useCallback(async (board: BoardSummary, isCurrent: () => boolean) => {
     setBoardLoadError("");
     setBoardLoading(true);
     try {
       if (isRemoteBackendEnabled()) {
         const remote = await getRemoteBoardDocument(board.id);
+        if (!isCurrent()) return;
         const key = boardStorageKey(board.id);
         if (remote?.document) {
           const parsed = parseDocument(JSON.stringify(remote.document));
@@ -4999,12 +5028,13 @@ export default function App() {
             try {
               await ensureBoardAssets(board.id, localDocument);
               const saved = await saveRemoteBoardDocument(board.id, localDocument, 0);
+              if (!isCurrent()) return;
               // Keep local data; the mounted subscription will offer conflict resolution.
               setRemoteVersion(saved.conflict ? null : saved.version);
             } catch {
               // A missing v19 attachment or unavailable Storage must not prevent
               // opening the local document. Autosave will retry synchronization.
-              setRemoteVersion(null);
+              if (isCurrent()) setRemoteVersion(null);
             }
           } else {
             setRemoteVersion(null);
@@ -5013,14 +5043,48 @@ export default function App() {
       } else {
         setRemoteVersion(null);
       }
+      if (!isCurrent()) return;
       setActiveBoard(board);
       setBoardMountKey((value) => value + 1);
     } catch (error) {
-      setBoardLoadError(error instanceof Error ? error.message : "Не удалось загрузить доску с сервера");
+      if (isCurrent()) setBoardLoadError(error instanceof Error ? error.message : "Не удалось загрузить доску с сервера");
     } finally {
-      setBoardLoading(false);
+      if (isCurrent()) setBoardLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!authReady || !authUser) return;
+    let alive = true;
+    setActiveBoard(null);
+    setBoardLoadError("");
+    if (route.kind === "home") { setBoardLoading(false); return; }
+    setBoardLoading(true);
+    void (async () => {
+      try {
+        if (route.kind === "invalid") throw new Error("Ссылка недействительна");
+        if (route.kind === "join") {
+          rememberShareToken(route.token);
+          const redeemed = await redeemShareLink(route.token);
+          if (!alive) return;
+          clearPendingShare();
+          navigate(`/board/${redeemed.board_id}`, true);
+          return;
+        }
+        const board = await getBoardForUser(authUser, route.boardId);
+        if (!alive) return;
+        if (!board) throw new Error("Доска недоступна. Попросите владельца прислать ссылку для доступа.");
+        await openBoard(board, () => alive);
+      } catch (error) {
+        if (!alive) return;
+        setBoardLoading(false);
+        setBoardLoadError(route.kind === "join"
+          ? "Не удалось принять ссылку. Возможно, она отозвана, истекла или сервер недоступен."
+          : error instanceof Error ? error.message : "Не удалось открыть доску");
+      }
+    })();
+    return () => { alive = false; };
+  }, [route, authReady, authUser, navigate, openBoard]);
 
   if (!authReady) {
     return <main className="auth-shell"><section className="auth-card"><div className="auth-brand-row"><div className="auth-logo">B</div><div><div className="auth-brand">Учебная доска</div><div className="auth-subtitle">Проверяем сессию…</div></div></div></section></main>;
@@ -5033,9 +5097,9 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
-        <BoardsScreen user={authUser} onOpenBoard={(board) => void openBoard(board)} onLogout={logout} />
+        {route.kind === "home" && <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
-        {boardLoadError && <div className="board-server-overlay" onPointerDown={() => setBoardLoadError("")}><div className="board-server-card" onPointerDown={(e) => e.stopPropagation()}><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setBoardLoadError("")}>Закрыть</button></div></div>}
+        {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
       </>
     );
   }
@@ -5046,8 +5110,8 @@ export default function App() {
       authUser={authUser}
       boardSummary={activeBoard}
       initialRemoteVersion={remoteVersion}
-      onBoardChanged={setActiveBoard}
-      onBackToBoards={() => setActiveBoard(null)}
+      onBoardChanged={boardChanged}
+      onBackToBoards={() => { setActiveBoard(null); navigate("/"); }}
       onLogout={logout}
     />
   );

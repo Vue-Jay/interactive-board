@@ -1,5 +1,84 @@
 # React + TypeScript + Vite
 
+## v22: защищённые ссылки
+
+Для существующего v21 выполните `supabase/v22_share_links.sql` в Supabase SQL
+Editor. Для нового проекта выполните весь `supabase/setup.sql`. Миграция
+идемпотентна; таблицы участников, прежние email-приглашения, Storage и Realtime
+сохраняются.
+
+Владелец открывает «Поделиться» на доске или её карточке и создаёт ссылку для
+редактирования либо просмотра. Полная ссылка показывается только после создания
+и не восстанавливается из списка. Скопируйте её до закрытия диалога. Email-доступ
+и управление существующими участниками находятся в том же диалоге.
+
+Сервер создаёт криптографически случайный токен (244 случайных бита), хранит только
+его SHA-256 и не возвращает хеши в списке. Таблица закрыта для прямого доступа
+anon/authenticated, RPC проверяют владельца или авторизованного получателя.
+`redeem_board_share_link` принимает только токен: доска и роль определяются из
+найденной серверной записи. Проверяются отзыв и срок действия; повторный вход
+обновляет существующее членство. Viewer-ссылка назначает viewer даже прежнему
+editor; owner остаётся owner. Срок `expires_at` допускает NULL (без ограничения)
+и может быть задан администратором в БД. Отзыв блокирует новые использования,
+но не удаляет уже выданное членство — удалите участника отдельно.
+
+`/join/:token` сохраняет ожидающий токен в sessionStorage текущей вкладки на время
+входа/регистрации. После входа доступ выдаётся автоматически, токен удаляется из
+sessionStorage, URL заменяется на `/board/:boardId`. Если нужна верификация email,
+подтвердите email и войдите в исходной вкладке со ссылкой. `/board/:boardId`
+проверяет доступ на сервере; знание UUID не выдаёт прав. В локальном режиме
+сохраняются прежние доски и email-приглашения между аккаунтами одного браузера;
+серверные share links недоступны.
+
+Ссылки являются секретами доступа: пересылка передаёт выбранные права любому
+авторизованному получателю. Не добавляйте запись полных `/join/` URL в аналитику.
+В приложении и Vercel установлен `Referrer-Policy: no-referrer`, после получения
+доступа токен убирается из текущего URL. Путь первоначального запроса всё равно
+может присутствовать в журналах хостинга — ограничьте доступ к этим журналам.
+
+Проверки: `node --test tests/*.test.mjs`, `npm run build`. Для исполнения SQL-тестов
+на временном PostgreSQL, без подключения к Supabase и без зависимости приложения:
+
+```powershell
+$testRuntime = Join-Path $env:TEMP 'interactiveboard-v22-sql-tests'
+npm.cmd install --prefix $testRuntime --no-save --package-lock=false @electric-sql/pglite
+$env:PGLITE_MODULE = Join-Path $testRuntime 'node_modules/@electric-sql/pglite/dist/index.js'
+node tests/shareLinks.sql.mjs
+```
+
+## Deployment
+
+1. В Supabase SQL Editor примените `supabase/v22_share_links.sql` поверх v21
+   (либо `supabase/setup.sql` для нового проекта).
+2. Когда изменения будут опубликованы в GitHub, в Vercel выберите **Add New →
+   Project → Import Git Repository** и импортируйте `Vue-Jay/interactive-board`.
+   Root Directory: корень репозитория; Framework Preset: **Vite**.
+3. Install Command: `npm ci`; Build Command: `npm run build`;
+   Output Directory: `dist`. Выберите Node.js **22.x** (не ниже 22.12).
+4. В **Settings → Environment Variables** задайте для Production:
+   `VITE_SUPABASE_URL` = URL проекта Supabase;
+   `VITE_SUPABASE_ANON_KEY` = его публичный anon/publishable key.
+   Service role / secret key не используйте. Для Preview задавайте переменные
+   отдельно, желательно от тестового проекта. После изменений переменных нужен
+   новый deployment: Vite встраивает их во время сборки.
+5. В Supabase **Authentication → URL Configuration** установите **Site URL**:
+   `https://YOUR-PROJECT.vercel.app/` (или ваш постоянный домен).
+   В **Redirect URLs** добавьте этот же адрес и, для локальной разработки,
+   `http://localhost:5173/`. Для отдельных доверенных Preview-развёртываний
+   добавьте их точные адреса. Не используйте общий wildcard для чужих проектов.
+6. Нажмите **Deploy**. `vercel.json` направляет SPA-маршруты на `index.html`,
+   поэтому `/join/:token` и `/board/:boardId` работают при прямом открытии и
+   перезагрузке. Файлы `dist/assets` обслуживаются как статические ресурсы.
+7. Проверьте с двумя аккаунтами: создать ссылку, открыть в приватном окне,
+   войти, получить нужную роль; перезагрузить `/board/...`; проверить медиа,
+   Realtime и отзыв ссылки. Подтверждение email проверяйте с реальным почтовым ящиком.
+
+`.env.example` содержит только имена двух переменных. `.env.local` исключён через
+правило `*.local` в `.gitignore` и не должен попадать в GitHub.
+
+Источники: [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite),
+[Supabase Redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
+
 ## InteractiveBoard v21: live board updates
 
 After v20, run `supabase/v21_realtime.sql` in the Supabase SQL Editor.

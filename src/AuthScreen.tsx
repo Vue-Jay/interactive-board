@@ -7,6 +7,8 @@ type Props = {
   onAuthenticated: (user: AuthUser) => void;
 };
 
+const hasJoinLink = () => window.location.pathname.startsWith("/join/") || new URL(window.location.href).searchParams.has("join");
+
 export default function AuthScreen({ onAuthenticated }: Props) {
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
@@ -14,6 +16,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const joining = hasJoinLink();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -49,6 +52,8 @@ export default function AuthScreen({ onAuthenticated }: Props) {
           </div>
         </div>
 
+        {joining && <div className="access-notice">Войдите или зарегистрируйтесь, чтобы открыть доску по приглашению.</div>}
+
         <div className="auth-tabs" role="tablist" aria-label="Вход или регистрация">
           <button type="button" className={mode === "login" ? "active" : ""} onClick={() => changeMode("login")}>Вход</button>
           <button type="button" className={mode === "register" ? "active" : ""} onClick={() => changeMode("register")}>Регистрация</button>
@@ -57,7 +62,9 @@ export default function AuthScreen({ onAuthenticated }: Props) {
         <form className="auth-form" onSubmit={submit}>
           <div>
             <h1 id="auth-title">{mode === "register" ? "Создать аккаунт" : "С возвращением"}</h1>
-            <p>{mode === "register" ? "После регистрации откроется список ваших досок." : "Войдите, чтобы продолжить работу с доской."}</p>
+            <p>{joining
+              ? "После входа откроется доска, которой с вами поделились."
+              : mode === "register" ? "После регистрации откроется список ваших досок." : "Войдите, чтобы продолжить работу с доской."}</p>
           </div>
 
           {mode === "register" && (
@@ -85,7 +92,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
         </form>
 
         <div className="auth-role-note">
-          <strong>Доступ к доскам:</strong> владелец управляет участниками, редактор изменяет содержимое, просмотр открывает доску без редактирования. При подключённом сервере приглашения работают между разными устройствами.
+          <strong>Доступ к доскам:</strong> владелец управляет доступом, редактор изменяет содержимое, просмотр открывает доску без редактирования.
         </div>
       </section>
     </main>
