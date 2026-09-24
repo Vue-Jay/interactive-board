@@ -48,6 +48,7 @@ import {
 } from "./boardModel";
 import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
+import { createBoardComment, listBoardComments, setBoardCommentResolved, type BoardCommentThread } from "./commentThreadsStore";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
 
 type Tool =
@@ -1040,6 +1041,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [historyRows,setHistoryRows]=useState<BoardHistoryEntry[]>([]);
   const [historyBusy,setHistoryBusy]=useState(false);
   const [historyError,setHistoryError]=useState("");
+  const [commentsOpen,setCommentsOpen]=useState(false);
+  const [commentRows,setCommentRows]=useState<BoardCommentThread[]>([]);
+  const [commentBusy,setCommentBusy]=useState(false);
+  const [commentError,setCommentError]=useState("");
+  const [commentDraft,setCommentDraft]=useState("");
+  const [commentReplyTo,setCommentReplyTo]=useState<string|null>(null);
   const [liveLesson,setLiveLesson]=useState<LiveLesson|null>(null);
   const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
   const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
@@ -1318,6 +1325,20 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }
   }, [editing]);
 
+  const refreshComments=async()=>{setCommentRows(await listBoardComments(boardSummary.id))};
+  const openComments=async()=>{
+    if(!isRemoteBackendEnabled()){setNotice("Обсуждения доступны при серверной синхронизации");return}
+    setCommentsOpen(true);setCommentBusy(true);setCommentError("");
+    try{await refreshComments()}catch(error){setCommentError(error instanceof Error?error.message:"Не удалось загрузить обсуждения")}finally{setCommentBusy(false)}
+  };
+  const sendComment=async()=>{
+    const body=commentDraft.trim();if(!body)return;setCommentBusy(true);setCommentError("");
+    try{await createBoardComment(boardSummary.id,body,commentReplyTo);setCommentDraft("");setCommentReplyTo(null);await refreshComments()}catch(error){setCommentError(error instanceof Error?error.message:"Не удалось отправить сообщение")}finally{setCommentBusy(false)}
+  };
+  const toggleCommentResolved=async(row:BoardCommentThread)=>{
+    setCommentBusy(true);setCommentError("");
+    try{await setBoardCommentResolved(row.id,!row.resolved);await refreshComments()}catch(error){setCommentError(error instanceof Error?error.message:"Не удалось изменить статус")}finally{setCommentBusy(false)}
+  };
   const openHistory=async()=>{
     if(!isRemoteBackendEnabled()){setNotice("История версий доступна при серверной синхронизации");return}
     setHistoryOpen(true);setHistoryBusy(true);setHistoryError("");
@@ -3954,6 +3975,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button onClick={exportConflictBackup}>Скачать JSON</button>
         <button className="secondary" onClick={discardConflictBackup}>Удалить копию</button>
       </div>}
+      {commentsOpen&&<div className="access-backdrop comments-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!commentBusy)setCommentsOpen(false)}}><section className="access-modal comments-modal" role="dialog" aria-modal="true" aria-label="Обсуждения доски"><div className="access-head"><div><h2>Обсуждения</h2><p>Серверные комментарии участников этой доски</p></div><button disabled={commentBusy} onClick={()=>setCommentsOpen(false)} aria-label="Закрыть">×</button></div>{commentError&&<div className="access-notice">{commentError}</div>}<div className="comments-list">{commentRows.filter(row=>!row.parent_id).map(row=><div className={"comment-thread"+(row.resolved?" resolved":"")} key={row.id}><div className="comment-card"><div className="comment-meta"><strong>{row.author_name}</strong><span>{new Date(row.created_at).toLocaleString("ru-RU")}</span></div><div className="comment-body">{row.body}</div><div className="comment-actions"><button onClick={()=>setCommentReplyTo(row.id)}>Ответить</button>{canEdit&&<button disabled={commentBusy} onClick={()=>void toggleCommentResolved(row)}>{row.resolved?"Вернуть":"Решено"}</button>}</div></div>{commentRows.filter(reply=>reply.parent_id===row.id).map(reply=><div className="comment-card comment-reply" key={reply.id}><div className="comment-meta"><strong>{reply.author_name}</strong><span>{new Date(reply.created_at).toLocaleString("ru-RU")}</span></div><div className="comment-body">{reply.body}</div></div>)}</div>)}{!commentBusy&&commentRows.length===0&&<div className="history-empty">Обсуждений пока нет.</div>}</div><div className="comment-compose">{commentReplyTo&&<div className="comment-replying">Ответ на комментарий <button onClick={()=>setCommentReplyTo(null)}>Отменить</button></div>}<textarea value={commentDraft} onChange={e=>setCommentDraft(e.target.value)} placeholder="Напишите комментарий" maxLength={4000}/><button disabled={commentBusy||!commentDraft.trim()} onClick={()=>void sendComment()}>Отправить</button></div></section></div>}
       {historyOpen&&<div className="access-backdrop history-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!historyBusy)setHistoryOpen(false)}}><section className="access-modal history-modal" role="dialog" aria-modal="true" aria-label="История версий"><div className="access-head"><div><h2>История версий</h2><p>Последние сохранённые состояния доски</p></div><button disabled={historyBusy} onClick={()=>setHistoryOpen(false)} aria-label="Закрыть">×</button></div>{historyBusy&&<div className="history-empty">Загружаем…</div>}{historyError&&<div className="access-notice">{historyError}</div>}{!historyBusy&&!historyError&&historyRows.length===0&&<div className="history-empty">История пока пуста. Новые сохранения начнут появляться после установки v68.</div>}<div className="history-list">{historyRows.map((entry,index)=><div className="history-row" key={entry.id}><div><strong>{index===0?"Текущая сохранённая":`Версия №${entry.version}`}</strong><span>{new Date(entry.saved_at).toLocaleString("ru-RU")} · объектов: {entry.item_count}</span></div>{canEdit&&<button disabled={historyBusy||index===0} onClick={()=>void restoreHistoryVersion(entry)}>{index===0?"Текущая":"Восстановить"}</button>}</div>)}</div><p className="share-note">Хранятся последние 100 серверных снимков. Восстановление создаёт новое состояние, старые версии не удаляются.</p></section></div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
@@ -4094,6 +4116,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
+          <button className="lesson-button comments-button" onClick={()=>void openComments()} title="Серверные обсуждения доски">Обсуждения</button>
           <button className="lesson-button history-button" onClick={()=>void openHistory()} title="История сохранённых версий доски">История</button>
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
