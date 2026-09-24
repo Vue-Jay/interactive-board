@@ -985,6 +985,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
   const [followTeacher, setFollowTeacher] = useState(false);
   const followTeacherRef = useRef(false);
+  const [guidedFollow, setGuidedFollow] = useState(false);
+  const guidedFollowRef = useRef(false);
   const teacherViewBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
@@ -3513,6 +3515,15 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           zoom: teacherView.zoom,
         });
       },
+      (guided) => {
+        guidedFollowRef.current = guided.enabled;
+        setGuidedFollow(guided.enabled);
+        followTeacherRef.current = guided.enabled || followTeacherRef.current;
+        if (guided.enabled) setFollowTeacher(true);
+        setNotice(guided.enabled
+          ? `${guided.senderName} включил режим общего следования`
+          : `${guided.senderName} выключил режим общего следования`);
+      },
     );
 
     viewControlChannel.current = channel;
@@ -3642,6 +3653,30 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 <strong>Сейчас на доске</strong>
                 {boardSummary.role === "owner" && presenceUsers.some((user) => user.userId !== authUser.id) && <button
                   type="button"
+                  className={`presence-gather-button ${guidedFollow ? "active" : ""}`}
+                  title={guidedFollow ? "Отключить обязательное следование участников" : "Включить следование всех участников за преподавателем"}
+                  onClick={() => {
+                    const next = !guidedFollow;
+                    guidedFollowRef.current = next;
+                    setGuidedFollow(next);
+                    viewControlChannel.current?.sendGuidedFollow(next);
+
+                    const rect = board.current?.getBoundingClientRect();
+                    if (next && rect) {
+                      const center = world({ x: rect.width / 2, y: rect.height / 2 });
+                      const targets = presenceUsers.filter((user) => user.userId !== authUser.id);
+                      for (const user of targets) {
+                        viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
+                      }
+                    }
+
+                    setNotice(next ? "Все участники следуют за вами" : "Общее следование отключено");
+                  }}
+                >
+                  {guidedFollow ? "Все следуют" : "Вести всех"}
+                </button>}
+                {boardSummary.role === "owner" && presenceUsers.some((user) => user.userId !== authUser.id) && <button
+                  type="button"
                   className="presence-gather-button"
                   title="Переместить всех остальных участников к вашей текущей области доски"
                   onClick={() => {
@@ -3693,8 +3728,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           {boardSummary.role !== "owner" && isRemoteBackendEnabled() && <button
             type="button"
             className={`lesson-button follow-teacher-button ${followTeacher ? "active" : ""}`}
-            title={followTeacher ? "Перестать автоматически следовать за экраном преподавателя" : "Автоматически следовать за экраном преподавателя"}
+            title={guidedFollow ? "Преподаватель включил общий режим следования" : followTeacher ? "Перестать автоматически следовать за экраном преподавателя" : "Автоматически следовать за экраном преподавателя"}
+            disabled={guidedFollow}
             onClick={() => {
+              if (guidedFollow) return;
               setFollowTeacher((current) => {
                 const next = !current;
                 followTeacherRef.current = next;
@@ -3703,7 +3740,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
               });
             }}
           >
-            {followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
+            {guidedFollow ? "Преподаватель ведёт экран" : followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
           </button>}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>

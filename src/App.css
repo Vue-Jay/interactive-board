@@ -3991,3 +3991,17 @@ button {
   border-color:#5355c9;
   box-shadow:0 0 0 2px rgba(83,85,201,.12);
 }
+
+
+/* v31 · guided follow */
+.presence-gather-button.active {
+  background:#34369f;
+  box-shadow:0 0 0 2px rgba(83,85,201,.16);
+}
+.follow-teacher-button:disabled {
+  opacity:1;
+  cursor:not-allowed;
+  background:#5355c9;
+  color:#fff;
+  border-color:#5355c9;
+}

@@ -17,9 +17,16 @@ export type TeacherViewUpdate = {
   zoom: number;
 };
 
+export type GuidedFollowUpdate = {
+  senderUserId: string;
+  senderName: string;
+  enabled: boolean;
+};
+
 export type BoardViewControlChannel = {
   sendFocus: (targetUserId: string, centerX: number, centerY: number, zoom: number) => void;
   sendTeacherView: (centerX: number, centerY: number, zoom: number) => void;
+  sendGuidedFollow: (enabled: boolean) => void;
   close: () => void;
 };
 
@@ -28,9 +35,10 @@ export function connectBoardViewControl(
   me: { userId: string; name: string },
   onFocus: (command: ViewFocusCommand) => void,
   onTeacherView: (update: TeacherViewUpdate) => void,
+  onGuidedFollow: (update: GuidedFollowUpdate) => void,
 ): BoardViewControlChannel {
   if (!isRemoteBackendEnabled()) {
-    return { sendFocus: () => {}, sendTeacherView: () => {}, close: () => {} };
+    return { sendFocus: () => {}, sendTeacherView: () => {}, sendGuidedFollow: () => {}, close: () => {} };
   }
 
   let stopped = false;
@@ -216,6 +224,26 @@ export function connectBoardViewControl(
 
           if (
             message.event === "broadcast" &&
+            message.payload?.event === "guided_follow"
+          ) {
+            const payload = message.payload?.payload ?? {};
+            const senderUserId = String(payload.senderUserId || "").trim();
+            const senderName = String(payload.senderName || "Преподаватель").trim() || "Преподаватель";
+
+            if (!senderUserId || senderUserId === me.userId || typeof payload.enabled !== "boolean") {
+              return;
+            }
+
+            onGuidedFollow({
+              senderUserId,
+              senderName,
+              enabled: payload.enabled,
+            });
+            return;
+          }
+
+          if (
+            message.event === "broadcast" &&
             message.payload?.event === "teacher_view"
           ) {
             const payload = message.payload?.payload ?? {};
@@ -368,6 +396,34 @@ export function connectBoardViewControl(
     }));
   };
 
+  const sendGuidedFollow = (enabled: boolean) => {
+    if (
+      stopped ||
+      !ready ||
+      !socket ||
+      socket.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+
+    socket.send(JSON.stringify({
+      topic,
+      event: "broadcast",
+      payload: {
+        type: "broadcast",
+        event: "guided_follow",
+        payload: {
+          senderUserId: me.userId,
+          senderName: me.name,
+          enabled,
+          sentAt: Date.now(),
+        },
+      },
+      ref: String(++sequence),
+      join_ref: null,
+    }));
+  };
+
   const networkChanged = () => reconnect();
   window.addEventListener("online", networkChanged);
   window.addEventListener("offline", networkChanged);
@@ -377,6 +433,7 @@ export function connectBoardViewControl(
   return {
     sendFocus,
     sendTeacherView,
+    sendGuidedFollow,
     close: () => {
       stopped = true;
       generation++;
