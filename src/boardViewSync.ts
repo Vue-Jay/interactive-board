@@ -9,8 +9,17 @@ export type ViewFocusCommand = {
   zoom: number;
 };
 
+export type TeacherViewUpdate = {
+  senderUserId: string;
+  senderName: string;
+  centerX: number;
+  centerY: number;
+  zoom: number;
+};
+
 export type BoardViewControlChannel = {
   sendFocus: (targetUserId: string, centerX: number, centerY: number, zoom: number) => void;
+  sendTeacherView: (centerX: number, centerY: number, zoom: number) => void;
   close: () => void;
 };
 
@@ -18,9 +27,10 @@ export function connectBoardViewControl(
   boardId: string,
   me: { userId: string; name: string },
   onFocus: (command: ViewFocusCommand) => void,
+  onTeacherView: (update: TeacherViewUpdate) => void,
 ): BoardViewControlChannel {
   if (!isRemoteBackendEnabled()) {
-    return { sendFocus: () => {}, close: () => {} };
+    return { sendFocus: () => {}, sendTeacherView: () => {}, close: () => {} };
   }
 
   let stopped = false;
@@ -206,6 +216,37 @@ export function connectBoardViewControl(
 
           if (
             message.event === "broadcast" &&
+            message.payload?.event === "teacher_view"
+          ) {
+            const payload = message.payload?.payload ?? {};
+            const senderUserId = String(payload.senderUserId || "").trim();
+            const senderName = String(payload.senderName || "Преподаватель").trim() || "Преподаватель";
+            const centerX = Number(payload.centerX);
+            const centerY = Number(payload.centerY);
+            const zoom = Number(payload.zoom);
+
+            if (
+              !senderUserId ||
+              senderUserId === me.userId ||
+              !Number.isFinite(centerX) ||
+              !Number.isFinite(centerY) ||
+              !Number.isFinite(zoom)
+            ) {
+              return;
+            }
+
+            onTeacherView({
+              senderUserId,
+              senderName,
+              centerX,
+              centerY,
+              zoom: Math.min(4, Math.max(0.1, zoom)),
+            });
+            return;
+          }
+
+          if (
+            message.event === "broadcast" &&
             message.payload?.event === "focus_view"
           ) {
             const payload = message.payload?.payload ?? {};
@@ -290,6 +331,43 @@ export function connectBoardViewControl(
     }));
   };
 
+  const sendTeacherView = (
+    centerX: number,
+    centerY: number,
+    zoom: number,
+  ) => {
+    if (
+      stopped ||
+      !ready ||
+      !Number.isFinite(centerX) ||
+      !Number.isFinite(centerY) ||
+      !Number.isFinite(zoom) ||
+      !socket ||
+      socket.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+
+    socket.send(JSON.stringify({
+      topic,
+      event: "broadcast",
+      payload: {
+        type: "broadcast",
+        event: "teacher_view",
+        payload: {
+          senderUserId: me.userId,
+          senderName: me.name,
+          centerX,
+          centerY,
+          zoom: Math.min(4, Math.max(0.1, zoom)),
+          sentAt: Date.now(),
+        },
+      },
+      ref: String(++sequence),
+      join_ref: null,
+    }));
+  };
+
   const networkChanged = () => reconnect();
   window.addEventListener("online", networkChanged);
   window.addEventListener("offline", networkChanged);
@@ -298,6 +376,7 @@ export function connectBoardViewControl(
 
   return {
     sendFocus,
+    sendTeacherView,
     close: () => {
       stopped = true;
       generation++;

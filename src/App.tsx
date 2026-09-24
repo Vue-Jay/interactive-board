@@ -983,6 +983,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
   const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
+  const [followTeacher, setFollowTeacher] = useState(false);
+  const followTeacherRef = useRef(false);
+  const teacherViewBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const [initial] = useState(() => loadInitial(storageKey));
@@ -3499,6 +3502,17 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         });
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
+      (teacherView) => {
+        if (!followTeacherRef.current) return;
+        const rect = board.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        setView({
+          x: rect.width / 2 - teacherView.centerX * teacherView.zoom,
+          y: rect.height / 2 - teacherView.centerY * teacherView.zoom,
+          zoom: teacherView.zoom,
+        });
+      },
     );
 
     viewControlChannel.current = channel;
@@ -3508,6 +3522,31 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       channel.close();
     };
   }, [boardSummary.id, authUser.id, authUser.name]);
+
+  useEffect(() => {
+    followTeacherRef.current = followTeacher;
+  }, [followTeacher]);
+
+  useEffect(() => {
+    if (boardSummary.role !== "owner") return;
+    if (teacherViewBroadcastTimer.current) clearTimeout(teacherViewBroadcastTimer.current);
+
+    teacherViewBroadcastTimer.current = setTimeout(() => {
+      teacherViewBroadcastTimer.current = null;
+      const rect = board.current?.getBoundingClientRect();
+      if (!rect) return;
+      const centerX = (rect.width / 2 - view.x) / view.zoom;
+      const centerY = (rect.height / 2 - view.y) / view.zoom;
+      viewControlChannel.current?.sendTeacherView(centerX, centerY, view.zoom);
+    }, 90);
+
+    return () => {
+      if (teacherViewBroadcastTimer.current) {
+        clearTimeout(teacherViewBroadcastTimer.current);
+        teacherViewBroadcastTimer.current = null;
+      }
+    };
+  }, [boardSummary.role, view.x, view.y, view.zoom]);
 
   useEffect(() => {
     const online = new Set(presenceUsers.map((user) => user.userId));
@@ -3651,6 +3690,21 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
               </div>}
             </div>
           </details>}
+          {boardSummary.role !== "owner" && isRemoteBackendEnabled() && <button
+            type="button"
+            className={`lesson-button follow-teacher-button ${followTeacher ? "active" : ""}`}
+            title={followTeacher ? "Перестать автоматически следовать за экраном преподавателя" : "Автоматически следовать за экраном преподавателя"}
+            onClick={() => {
+              setFollowTeacher((current) => {
+                const next = !current;
+                followTeacherRef.current = next;
+                setNotice(next ? "Следование за преподавателем включено" : "Следование за преподавателем выключено");
+                return next;
+              });
+            }}
+          >
+            {followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
+          </button>}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>

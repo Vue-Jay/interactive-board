@@ -3976,3 +3976,18 @@ button {
   white-space:nowrap;
 }
 .presence-gather-button:hover { background:#4749b7; }
+
+
+/* v30 · follow teacher */
+.follow-teacher-button {
+  max-width:190px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.follow-teacher-button.active {
+  background:#5355c9;
+  color:#fff;
+  border-color:#5355c9;
+  box-shadow:0 0 0 2px rgba(83,85,201,.12);
+}
