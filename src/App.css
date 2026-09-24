@@ -4261,3 +4261,25 @@ button {
   .connector-endpoint{width:20px!important;height:20px!important}
   button{touch-action:manipulation}
 }
+
+/* v62 · mobile PWA */
+.install-app-button{height:36px;padding:0 11px;border-radius:9px;background:#f0f0ff;color:#4d4fc2;font-weight:700;cursor:pointer}
+.mobile-quick-tools{display:none}
+@media(max-width:900px){
+  .mobile-tools-toggle{left:10px;bottom:62px}
+  .mobile-quick-tools{display:flex;position:absolute;z-index:80;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);gap:4px;padding:5px;border:1px solid #dfe0e7;border-radius:15px;background:rgba(255,255,255,.96);box-shadow:0 6px 22px rgba(26,28,40,.16);backdrop-filter:blur(10px)}
+  .mobile-quick-tools button{width:42px;height:42px;display:grid;place-items:center;border-radius:11px;background:transparent;color:#555966}
+  .mobile-quick-tools button.active{background:#ededff;color:#5052c8}
+  .zoom-controls{bottom:64px}
+  .notice{top:auto;bottom:118px;right:8px;max-width:calc(100vw - 16px)}
+  .workspace{padding-bottom:env(safe-area-inset-bottom)}
+}
+@media(max-width:620px){
+  .install-app-button{height:32px;font-size:11px;padding:0 8px}
+  .topbar-right .presence-menu,.topbar-right .save-status{flex-shrink:0}
+}
+@media(display-mode:standalone){
+  .app{height:100dvh}
+  .topbar{padding-top:env(safe-area-inset-top)}
+  .mobile-quick-tools{bottom:max(10px,env(safe-area-inset-bottom))}
+}

@@ -1129,7 +1129,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const touchPoints = useRef(new Map<number, Point>());
   const pinchState = useRef<{ distance:number; center:Point; view:View } | null>(null);
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
+  const [installPrompt,setInstallPrompt]=useState<Event|null>(null);
+  const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)").matches===true);
   const gesture = useRef<Gesture | null>(null);
+  useEffect(()=>{const ready=(e:Event)=>{e.preventDefault();setInstallPrompt(e)};const installed=()=>{setInstallPrompt(null);setIsStandalone(true)};window.addEventListener("beforeinstallprompt",ready);window.addEventListener("appinstalled",installed);return()=>{window.removeEventListener("beforeinstallprompt",ready);window.removeEventListener("appinstalled",installed)}},[]);
+  const installApp=async()=>{const p=installPrompt as (Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>})|null;if(!p)return;await p.prompt();await p.userChoice;setInstallPrompt(null)};
   const clipboard = useRef<Item[]>([]);
   const history = useRef<Item[][]>([initial.data.items]);
   const index = useRef(0);
@@ -3925,7 +3929,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             {realtimeStatus === "online" ? "Онлайн" : realtimeStatus === "reconnecting" ? "Переподключение..." : "Офлайн"}
           </span>}
         </div>
-        <div className="topbar-right">
+        <div className="topbar-right">{installPrompt&&!isStandalone&&<button type="button" className="install-app-button" onClick={()=>void installApp()} title="Установить OnlineRepetitor на устройство">Установить</button>}
           {isRemoteBackendEnabled() && <details className="presence-menu">
             <summary title="Пользователи, которые сейчас находятся на доске">
               <span className="presence-live-dot" aria-hidden="true"/>
@@ -4745,6 +4749,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             ))}
           </div>
         )}
+        <nav className="mobile-quick-tools" aria-label="Быстрые инструменты">
+          {(["select","hand","pen","eraser","sticky"] as Tool[]).map(id=><button key={id} type="button" className={tool===id?"active":""} aria-label={tools.find(t=>t.id===id)?.label??id} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={id} size={20}/></button>)}
+        </nav>
         <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button><aside className={`toolbar ${mobileToolsOpen?"mobile-open":""}`} aria-label="Инструменты">
           {tools.map((t) => (
             <div className="tool-wrap" key={t.id}>

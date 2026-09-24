@@ -1,0 +1,14 @@
+{
+  "name": "OnlineRepetitor — интерактивная доска",
+  "short_name": "OnlineRepetitor",
+  "description": "Интерактивная доска для онлайн-занятий, совместной работы и учебных материалов.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#5355c9",
+  "icons": [
+    {"src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
