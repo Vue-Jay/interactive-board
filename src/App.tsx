@@ -661,7 +661,7 @@ const FORMULA_SYMBOLS: Record<string, string> = {
 };
 const FORMULA_FUNCTIONS = new Set(["sin", "cos", "tan", "cot", "log", "ln", "lim", "max", "min", "exp", "arcsin", "arccos", "arctan"]);
 
-type FormulaPaletteTab = "basic" | "greek" | "relations" | "functions" | "templates";
+type FormulaPaletteTab = "basic" | "greek" | "relations" | "functions" | "geometry" | "templates";
 type FormulaPaletteItem = { label: string; snippet: string; title?: string };
 const FORMULA_PALETTES: Record<FormulaPaletteTab, FormulaPaletteItem[]> = {
   basic: [
@@ -672,7 +672,7 @@ const FORMULA_PALETTES: Record<FormulaPaletteTab, FormulaPaletteItem[]> = {
     { label: "xᵢ", snippet: "x_{⟦i⟧}", title: "Нижний индекс" },
     { label: "±", snippet: "\\pm " }, { label: "×", snippet: "\\times " }, { label: "·", snippet: "\\cdot " },
     { label: "∞", snippet: "\\infty " }, { label: "→", snippet: "\\to " },
-    { label: "⃗a", snippet: "\\vec{⟦a⟧}", title: "Вектор" }, { label: "ā", snippet: "\\overline{⟦a⟧}", title: "Черта сверху" },
+    { label: "⃗a", snippet: "\\vec{⟦a⟧}", title: "Вектор" }, { label: "ā", snippet: "\\overline{⟦a⟧}", title: "Черта сверху" }, { label: "|x|", snippet: "\\abs{⟦x⟧}", title: "Модуль" }, { label: "(n k)", snippet: "\\binom{⟦n⟧}{k}", title: "Биномиальный коэффициент" },
   ],
   greek: [
     "alpha","beta","gamma","delta","epsilon","theta","lambda","mu","pi","rho","sigma","phi","omega","Delta","Sigma","Omega",
@@ -687,6 +687,12 @@ const FORMULA_PALETTES: Record<FormulaPaletteTab, FormulaPaletteItem[]> = {
     { label: "ln", snippet: "\\ln(⟦x⟧)" }, { label: "log", snippet: "\\log_{a}(⟦x⟧)" },
     { label: "Σ", snippet: "\\sum_{i=1}^{n} ⟦a_i⟧" }, { label: "∫", snippet: "\\int_{a}^{b} ⟦f(x)⟧ \\, dx" },
     { label: "lim", snippet: "\\lim_{x\\to a} ⟦f(x)⟧" }, { label: "d/dx", snippet: "\\frac{d}{dx}⟦f(x)⟧" }, { label: "∂", snippet: "\\frac{\\partial ⟦f⟧}{\\partial x}" },
+  ],
+  geometry: [
+    { label: "∠", snippet: "\\angle " }, { label: "△", snippet: "\\triangle " }, { label: "°", snippet: "^{\\circ}" },
+    { label: "∥", snippet: "\\parallel " }, { label: "⟂", snippet: "\\perp " },
+    { label: "AB⃗", snippet: "\\vec{⟦AB⟧}" }, { label: "|AB|", snippet: "\\abs{⟦AB⟧}" },
+    { label: "AB̅", snippet: "\\overline{⟦AB⟧}" }, { label: "πr²", snippet: "S = \\pi r^2" },
   ],
   templates: [
     { label: "Пифагор", snippet: "a^2 + b^2 = c^2" },
@@ -760,6 +766,8 @@ function FormulaView({ text, fontSize = 28, color = "#20242c" }: { text: string;
     if (name === "text") return <span key={key("text")} className="formula-upright">{parseGroup()}</span>;
     if (name === "vec") return <span key={key("vec")} className="formula-vector">{parseGroup()}</span>;
     if (name === "overline") return <span key={key("bar")} className="formula-overline">{parseGroup()}</span>;
+    if (name === "abs") return <span key={key("abs")} className="formula-absolute">|{parseGroup()}|</span>;
+    if (name === "binom") { const top = parseGroup(), bottom = parseGroup(); return <span key={key("binom")} className="formula-binom"><span>(</span><span className="formula-binom-stack"><span>{top}</span><span>{bottom}</span></span><span>)</span></span>; }
     if (name === "left" || name === "right") return "";
     if (name === ",") return <span key={key("space")} className="formula-thin-space" />;
     if (name === ";") return <span key={key("space")} className="formula-med-space" />;
@@ -1033,6 +1041,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [formulaEditorId, setFormulaEditorId] = useState<string | null>(null);
   const [formulaDraft, setFormulaDraft] = useState<{ text: string; fontSize: number; color: string } | null>(null);
   const [formulaPaletteTab, setFormulaPaletteTab] = useState<FormulaPaletteTab>("basic");
+  const [formulaHistory, setFormulaHistory] = useState<string[]>(() => { try { const v=JSON.parse(localStorage.getItem("onlinerepetitor.formula-history.v54")||"[]"); return Array.isArray(v)?v.slice(0,12):[] } catch { return [] } });
   const formulaInput = useRef<HTMLTextAreaElement>(null);
   const [frameNotesEditorId, setFrameNotesEditorId] = useState<string | null>(null);
   const [frameNotesDraft, setFrameNotesDraft] = useState("");
@@ -2860,6 +2869,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     if (!formulaEditorId || !formulaDraft) { closeFormulaEditor(); return; }
     const textValue = formulaDraft.text.slice(0, 10000);
     const fontSize = Math.max(12, Math.min(96, Math.round(formulaDraft.fontSize)));
+    if (textValue.trim()) { const history=[textValue,...formulaHistory.filter((value)=>value!==textValue)].slice(0,12); setFormulaHistory(history); localStorage.setItem("onlinerepetitor.formula-history.v54",JSON.stringify(history)); }
     commit(itemsRef.current.map((item) => item.id === formulaEditorId ? {
       ...item,
       text: textValue,
@@ -4450,6 +4460,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                       </button>
                     ))}
                   </div>
+                  {formulaHistory.length > 0 && <div className="formula-history"><div><strong>Недавние формулы</strong><button onClick={()=>{setFormulaHistory([]);localStorage.removeItem("onlinerepetitor.formula-history.v54")}}>Очистить</button></div><div>{formulaHistory.map((value,index)=><button key={index} title={value} onClick={()=>insertFormulaSnippet(value,true)}><FormulaView text={value} fontSize={17}/></button>)}</div></div>}
                   <div className="formula-help">
                     <strong>Можно вводить с клавиатуры</strong>
                     <code>x^2</code><code>x_1</code><code>\\frac&#123;a&#125;&#123;b&#125;</code><code>\\sqrt&#123;x&#125;</code>
