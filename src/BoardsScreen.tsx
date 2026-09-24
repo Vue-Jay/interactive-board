@@ -14,7 +14,7 @@ import { exportWorkspace, importWorkspace, validateWorkspaceBackup, workspaceFil
 
 export default function BoardsScreen({user,onOpenBoard,onLogout}:Props){
  const [notificationUnreadCount,setNotificationUnreadCount]=useState(0);
- useEffect(()=>{void listNotifications().then(x=>setNotificationUnreadCount(x.filter(v=>!v.readAt).length)).catch(()=>{})},[user.id]);
+ useEffect(()=>{const refresh=()=>void listNotifications().then(x=>setNotificationUnreadCount(x.filter(v=>!v.readAt).length)).catch(()=>{});refresh();const timer=window.setInterval(refresh,60000);window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);return()=>{window.clearInterval(timer);window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh)}},[user.id]);
  const [boards,setBoards]=useState<BoardSummary[]>([]); const [loading,setLoading]=useState(true); const [query,setQuery]=useState(""); const [editingId,setEditingId]=useState<string|null>(null); const [draftTitle,setDraftTitle]=useState("");
  const [filter,setFilter]=useState<BoardFilter>("all"); const [sort,setSort]=useState<BoardSort>("recent"); const [trashOpen,setTrashOpen]=useState(false); const [trash,setTrash]=useState<BoardSummary[]>([]);
  const [manage,setManage]=useState<BoardSummary|null>(null); const [notice,setNotice]=useState(""); const [busy,setBusy]=useState(false);
