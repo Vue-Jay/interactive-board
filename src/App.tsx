@@ -986,6 +986,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
   const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
   const [lessonResult,setLessonResult]=useState(""),[lessonHomework,setLessonHomework]=useState(""),[lessonClock,setLessonClock]=useState(Date.now());
+  const [lessonPanelOpen,setLessonPanelOpen]=useState(false);
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
@@ -3739,6 +3740,20 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
       {lessonOpen && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Начать урок</h2><p>Текущая доска станет рабочим пространством занятия.</p></div><button onClick={()=>setLessonOpen(false)}>×</button></div><label><span>Ученик</span><select value={lessonStudentId} onChange={e=>setLessonStudentId(e.target.value)}><option value="">Выберите</option>{lessonStudents.map(u=><option key={u.userId} value={u.userId}>{u.name}</option>)}</select></label><label><span>Тема</span><input value={lessonTopic} onChange={e=>setLessonTopic(e.target.value)} placeholder="Тема занятия"/></label><div className="session-actions"><button className="students-primary" onClick={()=>void beginLiveLesson()}>Начать и запустить таймер</button><button className="boards-secondary" onClick={()=>setLessonOpen(false)}>Отмена</button></div></section></div>}
+      {lessonPanelOpen && liveLesson && <aside className="lesson-control-panel">
+        <div className="lesson-control-head"><div><span className="live-lesson-dot"/><div><b>Идёт урок</b><small>{lessonTime}</small></div></div><button onClick={()=>setLessonPanelOpen(false)}>×</button></div>
+        <div className="lesson-control-student"><span className="presence-avatar">{liveLesson.studentName.charAt(0).toUpperCase()}</span><div><strong>{liveLesson.studentName}</strong><small>{liveLesson.topic||"Тема не указана"}</small></div></div>
+        <div className="lesson-control-grid">
+          <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
+          <button className={guidedFollow?"active":""} onClick={()=>{const next=!guidedFollow;guidedFollowRef.current=next;setGuidedFollow(next);viewControlChannel.current?.sendGuidedFollow(next);if(next){const rect=board.current?.getBoundingClientRect();if(rect){const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom)}}}}>↝<span>{guidedFollow?"Ведение включено":"Вести экран"}</span></button>
+          <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
+          <button onClick={()=>{setPresentationTimerMode("elapsed");setPresentationTimerRunning(v=>!v)}}>◷<span>{presentationTimerRunning?"Пауза таймера":"Таймер"}</span></button>
+          <button onClick={()=>{setPresentationLaser(v=>!v);setPresentationSpotlight(false)}}>•<span>Лазер</span></button>
+          <button onClick={()=>{setPresentationSpotlight(v=>!v);setPresentationLaser(false)}}>◉<span>Прожектор</span></button>
+        </div>
+        <div className="lesson-control-online"><strong>На доске сейчас</strong>{presenceUsers.map(u=><div key={u.userId}><span className="presence-avatar">{u.name.charAt(0).toUpperCase()}</span><span><b>{u.name}{u.userId===authUser.id?" · Вы":""}</b><small>{BOARD_ROLE_LABELS[u.role]}</small></span>{u.userId!==authUser.id&&<button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(u.userId,center.x,center.y,view.zoom)}}>Ко мне</button>}</div>)}</div>
+        <button className="lesson-control-finish" onClick={()=>{setLessonPanelOpen(false);setLessonFinishOpen(true)}}>Завершить урок и записать результат</button>
+      </aside>}
       {lessonFinishOpen && liveLesson && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Завершить урок</h2><p>{liveLesson.studentName} · {lessonTime}</p></div><button onClick={()=>setLessonFinishOpen(false)}>×</button></div><label><span>Итог</span><textarea rows={4} value={lessonResult} onChange={e=>setLessonResult(e.target.value)}/></label><label><span>Домашнее задание</span><textarea rows={4} value={lessonHomework} onChange={e=>setLessonHomework(e.target.value)}/></label><div className="session-actions"><button className="students-primary" onClick={()=>void completeLiveLesson()}>Завершить и сохранить</button><button className="boards-secondary" onClick={()=>setLessonFinishOpen(false)}>Продолжить</button></div></section></div>}
       {remoteConflict && <div className="remote-conflict remote-conflict-v34" role="alert">
         <div className="remote-conflict-copy">
@@ -3902,7 +3917,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           >
             {guidedFollow ? "Преподаватель ведёт экран" : followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
           </button>}
-          {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
+          {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
           <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
             <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
