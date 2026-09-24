@@ -2,7 +2,7 @@ import { STORAGE_KEY } from "./boardModel";
 import { getUserByEmail, getUserById, type AuthUser, type BoardRole } from "./authStore";
 import { claimRemoteInvitations, isRemoteBackendEnabled, remoteRequest } from "./backend";
 
-export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string};
+export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null};
 export type BoardMember={boardId:string;userId:string;role:Exclude<BoardRole,"owner">;addedAt:string};
 export type BoardInvitation={id:string;boardId:string;email:string;role:Exclude<BoardRole,"owner">;createdAt:string};
 export type BoardAccessMember=BoardMember&{user:AuthUser|null};
@@ -16,13 +16,13 @@ export const boardStorageKey=(id:string)=>`${STORAGE_KEY}.board.${id}`;
 const localRole=(u:string,b:string):BoardRole|null=>{const x=boards().find(v=>v.id===b);if(!x)return null;if(x.ownerId===u)return"owner";return members().find(m=>m.boardId===b&&m.userId===u)?.role??null};
 const claimLocal=(user:AuthUser)=>{const matched=invites().filter(i=>norm(i.email)===norm(user.email));if(!matched.length)return;const next=members();for(const i of matched)if(!next.some(m=>m.boardId===i.boardId&&m.userId===user.id))next.push({boardId:i.boardId,userId:user.id,role:i.role,addedAt:new Date().toISOString()});write(MEMBERS_KEY,next);write(INVITES_KEY,invites().filter(i=>!matched.some(x=>x.id===i.id)))};
 
-const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at});
+const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null});
 
 export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
  if(isRemoteBackendEnabled()){
    await claimRemoteInvitations();
    const [bs,ms]=await Promise.all([
-     remoteRequest<any[]>("/rest/v1/boards?select=id,title,owner_id,created_at,updated_at&order=updated_at.desc"),
+     remoteRequest<any[]>("/rest/v1/boards?deleted_at=is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&order=updated_at.desc"),
      remoteRequest<any[]>(`/rest/v1/board_members?select=board_id,role&user_id=eq.${encodeURIComponent(user.id)}`),
    ]);
    const roleMap=new Map(ms.map(m=>[m.board_id,m.role as BoardRole]));
@@ -35,7 +35,7 @@ export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoa
 // Resolve deep links through RLS, never fall back to a cached inaccessible board.
 export const getBoardForUser=async(user:AuthUser,id:string):Promise<BoardSummary|null>=>{
  if(!isRemoteBackendEnabled())return (await getUserBoards(user)).find(b=>b.id===id)??null;
- const rows=await remoteRequest<any[]>(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}&select=id,title,owner_id,created_at,updated_at&limit=1`);
+ const rows=await remoteRequest<any[]>(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}&deleted_at=is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&limit=1`);
  if(!rows[0])return null;
  if(rows[0].owner_id===user.id)return rowToBoard(rows[0],"owner");
  const members=await remoteRequest<any[]>(`/rest/v1/board_members?board_id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`);
@@ -51,7 +51,7 @@ export const createBoard=async(user:AuthUser,title="Новая доска",migra
 };
 export const renameBoard=async(u:string,id:string,title:string)=>{const clean=title.trim();if(!clean)return null;if(isRemoteBackendEnabled()){const rows=await remoteRequest<any[]>(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}&select=id,title,owner_id,created_at,updated_at`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({title:clean})});return rows[0]?rowToBoard(rows[0],"owner"):null}if(localRole(u,id)!=="owner")return null;let out:BoardSummary|null=null;write(BOARDS_KEY,boards().map(b=>b.id===id?(out={...b,title:clean,updatedAt:new Date().toISOString()}):b));return out};
 export const touchBoard=async(u:string,id:string,title?:string)=>{if(isRemoteBackendEnabled()){const body: Record<string, unknown> = { updated_at: new Date().toISOString() };if(title?.trim())body.title=title.trim();const rows=await remoteRequest<any[]>(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}&select=id,title,owner_id,created_at,updated_at`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(body)});if(!rows[0])return null;const role=rows[0].owner_id===u?"owner":(await remoteRequest<any[]>(`/rest/v1/board_members?select=role&board_id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(u)}&limit=1`))[0]?.role||"viewer";return rowToBoard(rows[0],role)}const r=localRole(u,id);if(r!=="owner"&&r!=="editor")return null;write(BOARDS_KEY,boards().map(b=>b.id===id?({...b,title:title?.trim()||b.title,updatedAt:new Date().toISOString()}):b));const updated = boards().find(b=>b.id===id);return updated?{...updated,role:r}:null};
-export const deleteBoard=async(u:string,id:string)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/boards?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});return true}if(localRole(u,id)!=="owner")return false;write(BOARDS_KEY,boards().filter(b=>b.id!==id));write(MEMBERS_KEY,members().filter(m=>m.boardId!==id));write(INVITES_KEY,invites().filter(i=>i.boardId!==id));[boardStorageKey(id),`${boardStorageKey(id)}.before-import`,`${boardStorageKey(id)}.damaged-backup`].forEach(k=>localStorage.removeItem(k));return true};
+export const deleteBoard=async(u:string,id:string)=>{if(isRemoteBackendEnabled()){await remoteRequest("/rest/v1/rpc/trash_board",{method:"POST",body:JSON.stringify({p_board_id:id})});return true}if(localRole(u,id)!=="owner")return false;write(BOARDS_KEY,boards().filter(b=>b.id!==id));write(MEMBERS_KEY,members().filter(m=>m.boardId!==id));write(INVITES_KEY,invites().filter(i=>i.boardId!==id));[boardStorageKey(id),`${boardStorageKey(id)}.before-import`,`${boardStorageKey(id)}.damaged-backup`].forEach(k=>localStorage.removeItem(k));return true};
 
 export const inviteToBoard=async(ownerId:string,boardId:string,email:string,role:Exclude<BoardRole,"owner">)=>{
  const e=norm(email);if(!/^\S+@\S+\.\S+$/.test(e))throw new Error("Введите корректный email");
@@ -65,3 +65,11 @@ export const getBoardAccess=async(ownerId:string,boardId:string):Promise<{member
 export const changeMemberRole=async(o:string,b:string,u:string,role:Exclude<BoardRole,"owner">)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/board_members?board_id=eq.${encodeURIComponent(b)}&user_id=eq.${encodeURIComponent(u)}`,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({role})});return true}if(localRole(o,b)!=="owner")return false;write(MEMBERS_KEY,members().map(m=>m.boardId===b&&m.userId===u?{...m,role}:m));return true};
 export const removeMember=async(o:string,b:string,u:string)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/board_members?board_id=eq.${encodeURIComponent(b)}&user_id=eq.${encodeURIComponent(u)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});return true}if(localRole(o,b)!=="owner")return false;write(MEMBERS_KEY,members().filter(m=>!(m.boardId===b&&m.userId===u)));return true};
 export const revokeInvitation=async(o:string,b:string,id:string)=>{if(isRemoteBackendEnabled()){await remoteRequest(`/rest/v1/board_invites?id=eq.${encodeURIComponent(id)}&board_id=eq.${encodeURIComponent(b)}`,{method:"DELETE",headers:{Prefer:"return=minimal"}});return true}if(localRole(o,b)!=="owner")return false;write(INVITES_KEY,invites().filter(i=>!(i.boardId===b&&i.id===id)));return true};
+
+export const getTrashedBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
+ if(!isRemoteBackendEnabled())return[];
+ const rows=await remoteRequest<any[]>(`/rest/v1/boards?owner_id=eq.${encodeURIComponent(user.id)}&deleted_at=not.is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&order=deleted_at.desc`);
+ return rows.map(row=>rowToBoard(row,"owner"));
+};
+export const restoreBoard=async(id:string)=>{await remoteRequest("/rest/v1/rpc/restore_board",{method:"POST",body:JSON.stringify({p_board_id:id})});return true};
+export const deleteBoardForever=async(id:string)=>{await remoteRequest("/rest/v1/rpc/delete_board_forever",{method:"POST",body:JSON.stringify({p_board_id:id})});return true};

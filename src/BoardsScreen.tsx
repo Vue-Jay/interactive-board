@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BOARD_ROLE_LABELS, isRemoteBackendEnabled, type AuthUser, type BoardRole } from "./authStore";
-import { createBoard, deleteBoard, ensureUserBoards, getUserBoards, renameBoard, getBoardAccess, changeMemberRole, removeMember, type BoardAccessMember, type BoardInvitation, type BoardSummary } from "./boardStore";
+import { createBoard, deleteBoard, deleteBoardForever, ensureUserBoards, getTrashedBoards, getUserBoards, restoreBoard, renameBoard, getBoardAccess, changeMemberRole, removeMember, type BoardAccessMember, type BoardInvitation, type BoardSummary } from "./boardStore";
 import { boardShareUrl, clearPendingShareToken, createBoardShareLink, listBoardShareLinks, pendingShareToken, redeemBoardShareLink, revokeBoardShareLink, type BoardShareLink, type ShareRole } from "./shareLinks";
 
 type Props={user:AuthUser;onOpenBoard:(b:BoardSummary)=>void;onLogout:()=>void};
@@ -14,7 +14,7 @@ export default function BoardsScreen({user,onOpenBoard,onLogout}:Props){
  const [notificationUnreadCount,setNotificationUnreadCount]=useState(0);
  useEffect(()=>{void listNotifications().then(x=>setNotificationUnreadCount(x.filter(v=>!v.readAt).length)).catch(()=>{})},[user.id]);
  const [boards,setBoards]=useState<BoardSummary[]>([]); const [loading,setLoading]=useState(true); const [query,setQuery]=useState(""); const [editingId,setEditingId]=useState<string|null>(null); const [draftTitle,setDraftTitle]=useState("");
- const [filter,setFilter]=useState<BoardFilter>("all"); const [sort,setSort]=useState<BoardSort>("recent");
+ const [filter,setFilter]=useState<BoardFilter>("all"); const [sort,setSort]=useState<BoardSort>("recent"); const [trashOpen,setTrashOpen]=useState(false); const [trash,setTrash]=useState<BoardSummary[]>([]);
  const [manage,setManage]=useState<BoardSummary|null>(null); const [notice,setNotice]=useState(""); const [busy,setBusy]=useState(false);
  const [access,setAccess]=useState<{members:BoardAccessMember[];invites:BoardInvitation[]}>({members:[],invites:[]});
  const [shareLinks,setShareLinks]=useState<BoardShareLink[]>([]); const [createdUrl,setCreatedUrl]=useState("");
@@ -35,6 +35,7 @@ export default function BoardsScreen({user,onOpenBoard,onLogout}:Props){
  },[boards,query,filter,sort]);
 
  const refresh=async()=>setBoards(await getUserBoards(user));
+ const loadTrash=async()=>{if(!isRemoteBackendEnabled()){setTrash([]);return}setTrash(await getTrashedBoards(user))};
  const loadAccess=async(board=manage)=>{if(!board)return;setAccess(await getBoardAccess(user.id,board.id))};
  const loadLinks=async(board=manage)=>{if(!board||!isRemoteBackendEnabled()){setShareLinks([]);return}setShareLinks(await listBoardShareLinks(board.id))};
 
@@ -103,14 +104,14 @@ export default function BoardsScreen({user,onOpenBoard,onLogout}:Props){
      <option value="name">По названию</option>
      <option value="oldest">Сначала давние</option>
    </select>
-   <span>{loading?"Загрузка…":`${visible.length} из ${boards.length}`}</span>
+   <span>{loading?"Загрузка…":`${visible.length} из ${boards.length}`}</span><button className="boards-secondary trash-open-button" disabled={!isRemoteBackendEnabled()} onClick={()=>{setTrashOpen(true);void loadTrash()}}>Корзина</button>
  </div>
 
  {notice&&<div className="access-notice" style={{marginBottom:12}}>{notice}</div>}
 
  {!loading&&visible.length===0
    ? <div className="boards-empty"><strong>{boards.length?"Ничего не найдено":"Пока нет досок"}</strong><span>{boards.length?"Попробуйте изменить поиск или фильтр.":"Создайте первую доску и начните занятие."}</span></div>
-   : <div className="boards-grid">{visible.map(b=><article className="board-card" key={b.id}><button className="board-card-preview" onClick={()=>onOpenBoard(b)}><span className="board-card-grid"/><span className="board-card-letter">OR</span></button><div className="board-card-body">{editingId===b.id?<input className="board-card-rename" value={draftTitle} onChange={e=>setDraftTitle(e.target.value)} onBlur={()=>void saveRename(b)} onKeyDown={e=>{if(e.key==="Enter")void saveRename(b);if(e.key==="Escape")setEditingId(null)}} autoFocus/>:<button className="board-card-title" onClick={()=>onOpenBoard(b)}>{b.title}</button>}<div className="board-card-meta"><span>{BOARD_ROLE_LABELS[b.role]}</span><span>Изменено {fmt(b.updatedAt)}</span></div><div className="board-card-actions">{b.role==="owner"&&<><button onClick={()=>{setEditingId(b.id);setDraftTitle(b.title)}}>Переименовать</button><button onClick={()=>{setManage(b);setNotice("");setCreatedUrl("")}}>Поделиться</button><button className="danger" onClick={async()=>{if(confirm(`Удалить доску «${b.title}»?`)){await deleteBoard(user.id,b.id);await refresh()}}}>Удалить</button></>} {b.role!=="owner"&&<button onClick={()=>onOpenBoard(b)}>Открыть</button>}</div></div></article>)}</div>}
+   : <div className="boards-grid">{visible.map(b=><article className="board-card" key={b.id}><button className="board-card-preview" onClick={()=>onOpenBoard(b)}><span className="board-card-grid"/><span className="board-card-letter">OR</span></button><div className="board-card-body">{editingId===b.id?<input className="board-card-rename" value={draftTitle} onChange={e=>setDraftTitle(e.target.value)} onBlur={()=>void saveRename(b)} onKeyDown={e=>{if(e.key==="Enter")void saveRename(b);if(e.key==="Escape")setEditingId(null)}} autoFocus/>:<button className="board-card-title" onClick={()=>onOpenBoard(b)}>{b.title}</button>}<div className="board-card-meta"><span>{BOARD_ROLE_LABELS[b.role]}</span><span>Изменено {fmt(b.updatedAt)}</span></div><div className="board-card-actions">{b.role==="owner"&&<><button onClick={()=>{setEditingId(b.id);setDraftTitle(b.title)}}>Переименовать</button><button onClick={()=>{setManage(b);setNotice("");setCreatedUrl("")}}>Поделиться</button><button className="danger" onClick={async()=>{if(confirm(`Переместить доску «${b.title}» в корзину? Её можно будет восстановить.`)){await deleteBoard(user.id,b.id);setNotice("Доска перемещена в корзину");await refresh()}}}>Удалить</button></>} {b.role!=="owner"&&<button onClick={()=>onOpenBoard(b)}>Открыть</button>}</div></div></article>)}</div>}
  </section>
 
  {manage&&<div className="access-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setManage(null)}}><section className="access-modal"><div className="access-head"><div><h2>Поделиться доской</h2><p>{manage.title}</p></div><button onClick={()=>setManage(null)}>×</button></div>
@@ -134,4 +135,5 @@ export default function BoardsScreen({user,onOpenBoard,onLogout}:Props){
    <div className="access-person"><div><strong>{user.name}</strong><span>{user.email}</span></div><b>Владелец</b></div>
    {access.members.map(m=><div className="access-person" key={m.userId}><div><strong>{m.user?.name||"Пользователь"}</strong><span>{m.user?.email||m.userId}</span></div><select value={m.role} onChange={async e=>{await changeMemberRole(user.id,manage.id,m.userId,e.target.value as Exclude<BoardRole,"owner">);await loadAccess(manage)}}><option value="editor">Редактор</option><option value="viewer">Просмотр</option></select><button className="danger" onClick={async()=>{await removeMember(user.id,manage.id,m.userId);await loadAccess(manage)}}>Удалить</button></div>)}
  </div></section></div>}
+ {trashOpen&&<div className="access-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setTrashOpen(false)}}><section className="access-modal trash-modal"><div className="access-head"><div><h2>Корзина</h2><p>Удалённые доски можно восстановить или удалить окончательно.</p></div><button onClick={()=>setTrashOpen(false)}>×</button></div>{trash.length===0?<div className="boards-empty trash-empty"><strong>Корзина пуста</strong><span>Удалённые доски появятся здесь.</span></div>:<div className="trash-list">{trash.map(board=><div className="trash-row" key={board.id}><div><strong>{board.title}</strong><span>Удалена {board.deletedAt?fmt(board.deletedAt):"недавно"}</span></div><div><button disabled={busy} onClick={async()=>{setBusy(true);try{await restoreBoard(board.id);setNotice(`Доска «${board.title}» восстановлена`);await Promise.all([refresh(),loadTrash()])}catch(e){setNotice(e instanceof Error?e.message:"Не удалось восстановить доску")}finally{setBusy(false)}}}>Восстановить</button><button className="danger" disabled={busy} onClick={async()=>{if(!confirm(`Удалить «${board.title}» навсегда? Это действие нельзя отменить.`))return;setBusy(true);try{await deleteBoardForever(board.id);setNotice("Доска удалена окончательно");await loadTrash()}catch(e){setNotice(e instanceof Error?e.message:"Не удалось удалить доску")}finally{setBusy(false)}}}>Удалить навсегда</button></div></div>)}</div>}<div className="trash-warning">Окончательное удаление удаляет саму доску и связанные серверные данные. Восстановление после этого невозможно.</div></section></div>}
  </main>}
