@@ -4760,3 +4760,51 @@ option{background:#fff;color:#343741}
   .backup-menu{grid-column:1/-1!important}
   .boards-grid{grid-template-columns:1fr!important}
 }
+
+/* v107 · topbar spacing + board home button */
+.topbar-left{display:flex!important;align-items:center!important;gap:10px!important;min-width:0!important;overflow:visible!important}
+.board-home-button{
+  flex:0 0 auto!important;
+  min-width:96px!important;
+  height:38px!important;
+  padding:0 16px!important;
+  justify-content:center!important;
+  font-size:12px!important;
+  font-weight:750!important;
+}
+.board-title{
+  flex:0 1 250px!important;
+  min-width:120px!important;
+  max-width:250px!important;
+}
+.save-status,.realtime-status{
+  flex:0 0 auto!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  min-height:28px!important;
+  padding:0 3px!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  line-height:1.25!important;
+}
+.save-status{min-width:max-content!important}
+.realtime-status{min-width:max-content!important}
+@media(max-width:1150px){
+  .topbar-left{gap:7px!important}
+  .board-home-button{min-width:88px!important;padding:0 12px!important}
+  .board-title{flex-basis:190px!important;max-width:190px!important}
+  .save-status{display:inline-flex!important}
+}
+@media(max-width:900px){
+  .board-home-button{min-width:82px!important;height:36px!important;padding:0 10px!important}
+  .board-title{flex:1 1 150px!important;min-width:80px!important;max-width:210px!important}
+  .save-status{font-size:10px!important}
+  .realtime-status{font-size:10px!important}
+}
+@media(max-width:620px){
+  .topbar-left{gap:5px!important}
+  .board-home-button{min-width:76px!important;padding:0 8px!important}
+  .board-title{max-width:150px!important}
+  .save-status{display:none!important}
+}

@@ -1175,6 +1175,29 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [desktopToolsExpanded,setDesktopToolsExpanded]=useState(false);
   const [isCoarsePointer,setIsCoarsePointer]=useState(()=>window.matchMedia?.("(pointer: coarse)").matches===true);
   useEffect(()=>{const mq=window.matchMedia?.("(pointer: coarse)");if(!mq)return;const sync=()=>setIsCoarsePointer(mq.matches);sync();mq.addEventListener?.("change",sync);return()=>mq.removeEventListener?.("change",sync)},[]);
+  useEffect(()=>{
+    if(!isCoarsePointer)return;
+    let cancelled=false;
+    const lockLandscape=async()=>{
+      try{
+        const orientation=screen.orientation as ScreenOrientation & {lock?:(orientation:"landscape")=>Promise<void>};
+        if(orientation?.lock)await orientation.lock("landscape");
+      }catch{/* Browsers may allow orientation lock only in standalone/fullscreen mode. */}
+    };
+    const enterAndLock=async()=>{
+      try{
+        if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
+      }catch{/* Fullscreen may require a user gesture; PWA can still lock directly. */}
+      if(!cancelled)await lockLandscape();
+    };
+    if(window.matchMedia?.("(display-mode: standalone)").matches)void lockLandscape();
+    else {
+      const once=()=>{void enterAndLock();window.removeEventListener("pointerdown",once)};
+      window.addEventListener("pointerdown",once,{once:true});
+      return()=>{cancelled=true;window.removeEventListener("pointerdown",once)};
+    }
+    return()=>{cancelled=true};
+  },[isCoarsePointer]);
   const [installPrompt,setInstallPrompt]=useState<Event|null>(null);
   const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)").matches===true);
   const [online,setOnline]=useState(()=>navigator.onLine);
@@ -3989,9 +4012,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       {publicPresentation&&<div className="public-presentation-badge">Публичная презентация · ← → для навигации · F — полный экран</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
         <div className="topbar-left">
-          <div className="logo-mark">B</div>
           <button
-            className="back-to-boards"
+            className="back-to-boards board-home-button"
             type="button"
             onClick={() => {
               finishEdit();
