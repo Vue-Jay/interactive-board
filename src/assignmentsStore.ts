@@ -1,6 +1,12 @@
 import { isRemoteBackendEnabled, remoteRequest } from "./backend";
 
 export type AssignmentStatus="assigned"|"submitted"|"reviewed";
+export const isAssignmentOverdue=(a:Assignment,now=Date.now())=>a.status==="assigned"&&!!a.dueAt&&Date.parse(a.dueAt)<now;
+export const assignmentUrgency=(a:Assignment,now=Date.now())=>{
+ if(a.status!=="assigned"||!a.dueAt)return "normal" as const;
+ const left=Date.parse(a.dueAt)-now;
+ return left<0?"overdue" as const:left<=24*60*60*1000?"soon" as const:"normal" as const;
+};
 export type Assignment={
  id:string;teacherId:string;studentId:string;boardId:string;boardTitle:string;title:string;description:string;
  dueAt:string|null;createdAt:string;status:AssignmentStatus;submissionText:string;submittedAt:string|null;

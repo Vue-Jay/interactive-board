@@ -4360,3 +4360,18 @@ button {
 
 /* v92 · lesson flow finish */
 .lesson-control-status{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.lesson-control-status span{padding:7px;border-radius:9px;background:#f5f5f8;text-align:center;font-size:9px;color:#737684}.lesson-control-status b{display:block;color:#343642;font-size:11px;margin-bottom:2px}.lesson-control-grid button.active-tool{background:#ecebff;border-color:#c8c6fa;color:#4d4fb2}.schedule-event.is-next{box-shadow:0 0 0 2px rgba(83,85,201,.2)}.schedule-event.is-live{border-color:#e04d62;background:#fff1f3}.schedule-event.is-live:after{content:"Сейчас";font-size:7px;font-weight:900;color:#c83c51;text-transform:uppercase}.schedule-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}.schedule-summary article{padding:10px 12px;border:1px solid #e2e3e9;border-radius:11px;background:#fff}.schedule-summary b{display:block;font-size:18px}.schedule-summary span{font-size:9px;color:#7d808c}.schedule-side .next-card{border-radius:10px;padding:10px;background:#f3f2ff;border:1px solid #ddddf7}.schedule-side .next-card time{font-size:9px}.schedule-side .next-card button{margin-top:5px;padding:6px 8px;border-radius:7px;background:#5558c4;color:#fff}.schedule-side .schedule-past{opacity:.58}.schedule-view-toggle{display:flex;gap:4px}.schedule-view-toggle button.active{background:#5558c4;color:#fff;border-color:#5558c4}@media(max-width:700px){.schedule-summary{grid-template-columns:1fr 1fr}.lesson-control-status{grid-template-columns:1fr}}
+
+/* v93 · assignments/homework/notifications finish */
+.assignment-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}
+.assignment-overview article{padding:11px 13px;border:1px solid #e3e4eb;border-radius:11px;background:#fff}
+.assignment-overview b{display:block;font-size:20px}.assignment-overview span{font-size:9px;color:#7d808d}
+.assignment-overview article.danger{background:#fff4f3;border-color:#f0d4d0}.assignment-overview article.danger b{color:#a9443a}
+.assignment-overview article.warning{background:#fff9e9;border-color:#eadfb8}.assignment-overview article.warning b{color:#8b6a13}
+.assignment-controls{display:grid;grid-template-columns:minmax(220px,1fr) 180px;gap:8px;margin:10px 0}
+.assignment-controls input,.assignment-controls select{border:1px solid #dedfe7;border-radius:9px;background:#fff;padding:9px 10px;font:inherit}
+.assignment-card.urgency-overdue{border-color:#e9c5c1;background:#fffafa}.assignment-card.urgency-overdue:before{background:#c94e43}
+.assignment-card.urgency-soon{border-color:#e7dbb5}.assignment-card.urgency-soon:before{background:#d49c24}
+.notification-kind-filter{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 12px}
+.notification-kind-filter button{border:1px solid #e0e1e8;border-radius:999px;background:#fff;padding:6px 10px;font-size:10px;cursor:pointer}
+.notification-kind-filter button.active{background:#5558c4;color:#fff;border-color:#5558c4}
+@media(max-width:700px){.assignment-overview{grid-template-columns:1fr 1fr}.assignment-controls{grid-template-columns:1fr}.assignment-stats{grid-template-columns:repeat(2,1fr)}}
