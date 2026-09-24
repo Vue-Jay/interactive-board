@@ -51,6 +51,7 @@ import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
 import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
+import { safeBackupName, validatePortableBundle, type PortableBoardBundle } from "./backupStore";
 
 type Tool =
   | "select"
@@ -1420,18 +1421,21 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           data: await blobToDataUrl(blob),
         });
       }
-      const bundle = {
-        format: "interactive-board-bundle",
-        version: 1,
+      const bundle: PortableBoardBundle = {
+        format: "onlinerepetitor-board",
+        version: 2,
+        app: "OnlineRepetitor",
+        exportedAt: new Date().toISOString(),
         document: data,
-        assets,
+        assets: assets.map(asset=>({ ...asset, size: Math.round((asset.data.length * 3) / 4) })),
       };
+      validatePortableBundle(bundle);
       const url = URL.createObjectURL(
-        new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }),
+        new Blob([JSON.stringify(bundle)], { type: "application/json" }),
       );
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(title || "board").replace(/[\/:*?"<>|]+/g, "_").slice(0, 80)}.board.json`;
+      a.download = safeBackupName(title); 
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setNotice(assets.length ? `Копия скачана вместе с вложениями: ${assets.length}` : "Копия доски скачана");
@@ -1480,7 +1484,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       let bundledAssets: { id: string; data: string }[] = [];
       try {
         const parsed = JSON.parse(raw);
-        if (parsed?.format === "interactive-board-bundle" && parsed?.document) {
+        if (parsed?.format === "onlinerepetitor-board") {
+          const bundle = validatePortableBundle(parsed);
+          data = parseDocument(JSON.stringify(bundle.document));
+          bundledAssets = bundle.assets;
+        } else if (parsed?.format === "interactive-board-bundle" && parsed?.document) {
           data = parseDocument(JSON.stringify(parsed.document));
           bundledAssets = Array.isArray(parsed.assets)
             ? parsed.assets.filter((a: unknown): a is { id: string; data: string } =>
@@ -3968,7 +3976,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       {studyOpen&&<div className="access-backdrop study-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setStudyOpen(false)}}><section className="access-modal study-modal" role="dialog" aria-modal="true" aria-label="Учебный режим"><div className="access-head"><div><h2>Учебный режим</h2><p>Пройдите мини-тесты и повторите карточки прямо на текущей доске</p></div><button onClick={()=>setStudyOpen(false)} aria-label="Закрыть">×</button></div><div className="study-tabs"><button className={studyTab==="quiz"?"active":""} onClick={()=>setStudyTab("quiz")}>Мини-тесты <b>{quizItems.length}</b></button><button className={studyTab==="flashcards"?"active":""} onClick={()=>setStudyTab("flashcards")}>Карточки <b>{flashcardItems.length}</b></button></div>{studyTab==="quiz"?<div className="study-quiz"><div className="study-summary"><article><b>{quizItems.length}</b><span>вопросов</span></article><article><b>{answeredQuizItems.length}</b><span>отвечено</span></article><article><b>{checkedQuizItems.length?`${correctQuizItems.length}/${checkedQuizItems.length}`:"—"}</b><span>результат</span></article><article><b>{checkedQuizItems.length?`${Math.round(correctQuizItems.length/checkedQuizItems.length*100)}%`:"—"}</b><span>точность</span></article></div>{quizItems.length===0?<div className="history-empty">На доске пока нет мини-тестов.</div>:<div className="study-question-list">{quizItems.map((item,index)=><article key={item.id} className={`study-question ${item.quizRevealed?"checked":""}`}><div><span>Вопрос {index+1}</span><strong>{item.text||"Вопрос"}</strong><small>{item.quizSelected==null?"Нет ответа":item.quizRevealed?(item.quizSelected===item.quizCorrect?"✓ Верно":"× Ошибка"):`Выбран ${String.fromCharCode(65+(item.quizSelected??0))}`}</small></div><button onClick={()=>{setStudyOpen(false);setSelected([item.id]);setView(v=>({...v,x:-(item.x+item.width/2)*v.zoom+window.innerWidth/2,y:-(item.y+item.height/2)*v.zoom+window.innerHeight/2}))}}>Показать</button></article>)}</div>}<div className="study-actions"><button className="primary" disabled={!answeredQuizItems.length} onClick={checkQuizResults}>Проверить ответы</button><button className="secondary" disabled={!answeredQuizItems.length&&!checkedQuizItems.length} onClick={resetAllQuizAnswers}>Пройти заново</button></div></div>:<div className="study-flashcards"><div className="study-summary"><article><b>{flashcardItems.length}</b><span>карточек</span></article><article><b>{knownFlashcards}</b><span>знаю</span></article><article><b>{againFlashcards}</b><span>повторить</span></article><article><b>{flashcardItems.length?`${Math.round(knownFlashcards/flashcardItems.length*100)}%`:"—"}</b><span>освоено</span></article></div>{currentStudyCard?<div className="study-card-stage"><div className="study-card-counter">{Math.min(studyCardIndex+1,flashcardItems.length)} / {flashcardItems.length}</div><div className="study-card-wrap"><FlashcardView item={currentStudyCard} onFlip={()=>flipFlashcard(currentStudyCard)}/></div><div className="study-card-grade"><button className="again" onClick={()=>markStudyCard("again")}>Повторить</button><button className="known" onClick={()=>markStudyCard("known")}>Знаю</button></div><div className="study-card-nav"><button onClick={()=>setStudyCardIndex(i=>(i-1+flashcardItems.length)%flashcardItems.length)}>← Предыдущая</button><button onClick={()=>setStudyCardIndex(i=>(i+1)%flashcardItems.length)}>Следующая →</button></div></div>:<div className="history-empty">На доске пока нет карточек.</div>}<div className="study-actions"><button className="secondary" disabled={!knownFlashcards&&!againFlashcards} onClick={resetFlashcardProgress}>Сбросить прогресс</button></div></div>}</section></div>}
       {discussionOpen&&<div className="access-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!discussionBusy)setDiscussionOpen(false)}}><section className="access-modal discussions-modal" role="dialog" aria-modal="true" aria-label="Обсуждения доски"><div className="access-head"><div><h2>Обсуждения</h2><p>Ответы, @упоминания и статусы синхронизируются между участниками в реальном времени</p></div><button disabled={discussionBusy} onClick={()=>setDiscussionOpen(false)} aria-label="Закрыть">×</button></div>{discussionError&&<div className="access-notice">{discussionError}</div>}<div className="discussions-list">{discussionBusy&&discussionRows.length===0&&<div className="history-empty">Загружаем…</div>}{!discussionBusy&&discussionRows.length===0&&<div className="history-empty">Обсуждений пока нет. Начните первое ниже.</div>}{discussionRows.filter(x=>!x.parent_id).map(row=>{const focused=discussionFocusId===row.id||discussionRows.some(x=>x.id===discussionFocusId&&x.parent_id===row.id);return <div id={`discussion-${row.id}`} className={`discussion-thread ${row.resolved?"resolved":""} ${focused?"focused":""}`} key={row.id}><article className="discussion-card"><div className="discussion-meta"><strong>{row.author_name}</strong><span>{new Date(row.created_at).toLocaleString("ru-RU")}{row.resolved?" · решено":""}</span></div><div className="discussion-body">{row.body}</div><div className="discussion-actions"><button onClick={()=>setDiscussionReplyTo(row.id)}>Ответить</button>{canEdit&&<button disabled={discussionBusy} onClick={()=>void toggleDiscussionResolved(row)}>{row.resolved?"Открыть снова":"Решено"}</button>}</div></article>{discussionRows.filter(x=>x.parent_id===row.id).map(reply=><article className={`discussion-card discussion-reply ${discussionFocusId===reply.id?"focused-reply":""}`} key={reply.id}><div className="discussion-meta"><strong>{reply.author_name}</strong><span>{new Date(reply.created_at).toLocaleString("ru-RU")}</span></div><div className="discussion-body">{reply.body}</div></article>)}</div>})}</div><div className="discussion-compose">{discussionReplyTo&&<div className="discussion-replying">Ответ на комментарий <button onClick={()=>setDiscussionReplyTo(null)}>отменить</button></div>}{discussionParticipants.length>0&&<div className="discussion-mentions"><span>Упомянуть:</span>{discussionParticipants.filter(x=>x.user_id!==authUser.id).slice(0,12).map(person=><button type="button" key={person.user_id} onClick={()=>insertDiscussionMention(person)}>@{person.display_name}</button>)}</div>}<textarea value={discussionDraft} onChange={e=>setDiscussionDraft(e.target.value)} maxLength={4000} placeholder={discussionReplyTo?"Напишите ответ…":"Новый комментарий…"} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();void sendDiscussion()}}}/><button disabled={discussionBusy||!discussionDraft.trim()} onClick={()=>void sendDiscussion()}>Отправить</button><small>Ctrl+Enter · @упоминание можно вставить кнопкой выше · до 4000 символов</small></div></section></div>}
       {historyOpen&&<div className="access-backdrop history-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!historyBusy)setHistoryOpen(false)}}><section className="access-modal history-modal" role="dialog" aria-modal="true" aria-label="История версий"><div className="access-head"><div><h2>История изменений</h2><p>Кто и что менял между серверными сохранениями</p></div><button disabled={historyBusy} onClick={()=>setHistoryOpen(false)} aria-label="Закрыть">×</button></div>{historyBusy&&<div className="history-empty">Загружаем…</div>}{historyError&&<div className="access-notice">{historyError}</div>}{!historyBusy&&!historyError&&historyRows.length===0&&<div className="history-empty">История пока пуста. Изменения появятся после серверного сохранения доски.</div>}<div className="history-list">{historyRows.map((entry,index)=>{const changes=entry.added_count+entry.removed_count+entry.changed_count;return <div className="history-row history-rich-row" key={entry.id}><div className="history-main"><div className="history-title-line"><strong>{index===0?"Текущая сохранённая":`Версия №${entry.version}`}</strong><span className="history-author">{entry.saved_by_name||"Участник"}</span></div><span>{new Date(entry.saved_at).toLocaleString("ru-RU")} · объектов: {entry.item_count}</span><div className="history-delta" aria-label="Изменения версии">{entry.added_count>0&&<b className="history-added">+{entry.added_count} добавлено</b>}{entry.changed_count>0&&<b className="history-changed">~{entry.changed_count} изменено</b>}{entry.removed_count>0&&<b className="history-removed">−{entry.removed_count} удалено</b>}{changes===0&&<b className="history-unchanged">Без изменений объектов</b>}</div></div>{canEdit&&<button disabled={historyBusy||index===0} onClick={()=>void restoreHistoryVersion(entry)}>{index===0?"Текущая":"Восстановить"}</button>}</div>})}</div><p className="share-note">Хранятся последние 100 серверных снимков. Сводка сравнивает объекты с предыдущей версией. Восстановление создаёт новое состояние и не удаляет историю.</p></section></div>}
-      {!canEdit && <div className="viewer-banner">Только просмотр</div>}
+      {!canEdit && !publicPresentation && <div className="viewer-banner">Только просмотр</div>}
+      {publicPresentation&&<div className="public-presentation-badge">Публичная презентация · ← → для навигации · F — полный экран</div>}
       {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
         <div className="topbar-left">
           <div className="logo-mark">B</div>
@@ -3997,7 +4006,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             maxLength={300}
             readOnly={!canEdit}
           />
-          <span className="save-status">{saveStatus}</span>
+          <span className="save-status">{saveStatus}</span>{authUser.isGuest&&<span className="guest-session-badge" title="Временная гостевая сессия">Гость · {authUser.name}</span>}
           {isRemoteBackendEnabled() && <span className={`realtime-status ${realtimeStatus}`} role="status">
             {realtimeStatus === "online" ? "Онлайн" : realtimeStatus === "reconnecting" ? "Переподключение..." : "Офлайн"}
           </span>}
@@ -4150,7 +4159,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           <input
             ref={fileInput}
             type="file"
-            accept=".json,application/json"
+            accept=".orboard,.json,application/json"
             hidden
             aria-label="Файл резервной копии"
             onChange={(e) => {
