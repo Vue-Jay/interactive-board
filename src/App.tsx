@@ -1089,6 +1089,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const pendingRemote = useRef<RemoteBoardDocument | null>(null);
   const lastAttempt = useRef<{ version: number; fingerprint: string } | null>(null);
   const [remoteConflict, setRemoteConflict] = useState<RemoteBoardDocument | null>(null);
+  const [conflictLocalBackup, setConflictLocalBackup] = useState<DocumentData | null>(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
+  const [conflictDetailsOpen, setConflictDetailsOpen] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("reconnecting");
   const receiveRemote = useRef<(row: RemoteBoardDocument) => void>(() => {});
   const boardMounted = useRef(true);
@@ -3433,6 +3436,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     pendingRemote.current = null;
     queuedRemoteSnapshot.current = null;
     setRemoteConflict(null);
+    setConflictBusy(false);
     setTableEditorId(null); setChecklistEditorId(null); setQuizEditorId(null);
     setFlashcardEditorId(null); setFormulaEditorId(null); setFrameNotesEditorId(null);
     applyDocument(data, true);
@@ -3461,7 +3465,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         pendingRemote.current = { ...row, document: data };
         setRemoteConflict(pendingRemote.current);
         snapshot.current = currentDocument();
-        try { localStorage.setItem(storageKey, JSON.stringify(snapshot.current)); } catch { /* keep edits in memory */ }
+        setConflictLocalBackup(parseDocument(JSON.stringify(snapshot.current)));
+        setConflictDetailsOpen(false);
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(snapshot.current));
+          localStorage.setItem(`${storageKey}.conflict-backup`, JSON.stringify(snapshot.current));
+        } catch { /* keep edits in memory */ }
         queuedRemoteSnapshot.current = null;
         if (saveTimer.current) clearTimeout(saveTimer.current);
         setSaveStatus("Есть новая серверная версия · выберите действие");
@@ -3640,25 +3649,105 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     return () => window.clearInterval(timer);
   }, []);
 
-  const keepLocalChanges = () => {
+  const keepLocalChanges = async () => {
+    const row = pendingRemote.current;
+    if (!row || conflictBusy) return;
+    const local = parseDocument(JSON.stringify(conflictLocalBackup ?? currentDocument()));
+    setConflictBusy(true);
+    try {
+      await ensureBoardAssets(boardSummary.id, local);
+      const result = await saveRemoteBoardDocument(boardSummary.id, local, row.version);
+      if (result.conflict) {
+        const newer = {
+          board_id: boardSummary.id,
+          version: result.version,
+          document: result.document,
+          updated_at: result.updated_at ?? "",
+        };
+        pendingRemote.current = newer;
+        setRemoteConflict(newer);
+        setSaveStatus("Сервер снова изменился · ваши данные сохранены в резервной копии");
+        return;
+      }
+      remoteVersion.current = result.version;
+      acknowledgedDocument.current = documentFingerprint(local);
+      pendingRemote.current = null;
+      setRemoteConflict(null);
+      setConflictLocalBackup(null);
+      try { localStorage.removeItem(`${storageKey}.conflict-backup`); } catch {}
+      setSaveStatus("Ваши изменения сохранены поверх предыдущей серверной версии");
+      setNotice("Конфликт разрешён: сохранена ваша версия");
+    } catch {
+      setSaveStatus("Не удалось разрешить конфликт · резервная копия сохранена локально");
+      setNotice("Сервер недоступен. Ваши изменения не потеряны.");
+    } finally {
+      setConflictBusy(false);
+    }
+  };
+
+  const applyServerKeepingBackup = () => {
     const row = pendingRemote.current;
     if (!row) return;
-    // Explicit consent to replace this version, still protected against a later save.
-    remoteVersion.current = row.version;
-    acknowledgedDocument.current = documentFingerprint(parseDocument(JSON.stringify(row.document)));
-    pendingRemote.current = null;
-    setRemoteConflict(null);
-    snapshot.current = currentDocument();
-    flushSave();
+    if (!conflictLocalBackup) setConflictLocalBackup(parseDocument(JSON.stringify(currentDocument())));
+    applyServerDocument(row);
+    setNotice("Серверная версия применена. Ваш вариант можно восстановить.");
+  };
+
+  const restoreConflictBackup = () => {
+    if (!conflictLocalBackup) return;
+    const restored = parseDocument(JSON.stringify(conflictLocalBackup));
+    applyDocument(restored, true);
+    snapshot.current = restored;
+    try { localStorage.setItem(storageKey, JSON.stringify(restored)); } catch {}
+    setSaveStatus("Восстановлена локальная копия · сохраните её на сервер");
+    setNotice("Ваш вариант восстановлен");
+  };
+
+  const discardConflictBackup = () => {
+    setConflictLocalBackup(null);
+    try { localStorage.removeItem(`${storageKey}.conflict-backup`); } catch {}
+    setNotice("Резервная копия конфликта удалена");
+  };
+
+  const exportConflictBackup = () => {
+    if (!conflictLocalBackup) return;
+    const blob = new Blob([JSON.stringify(conflictLocalBackup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `onlinerepetitor-conflict-${boardSummary.id}.json`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice("Резервная копия скачана");
   };
 
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""}`}>
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
-      {remoteConflict && <div className="remote-conflict" role="alert">
-        <span>На сервере появилась более новая версия. У вас есть несохранённые изменения.</span>
-        <button onClick={() => applyServerDocument(remoteConflict)}>Применить серверную</button>
-        <button onClick={keepLocalChanges} title="Сохранить свои изменения вместо этой серверной версии">Оставить мои изменения</button>
+      {remoteConflict && <div className="remote-conflict remote-conflict-v34" role="alert">
+        <div className="remote-conflict-copy">
+          <b>Обнаружены параллельные изменения</b>
+          <span>Серверная версия: v{remoteConflict.version}. Ваш текущий вариант сохранён в локальной резервной копии.</span>
+          {conflictDetailsOpen && <small>
+            Ничего не будет перезаписано молча. «Серверная версия» оставит ваш вариант для восстановления,
+            а «Сохранить мою» повторно проверит номер серверной версии перед записью.
+          </small>}
+        </div>
+        <div className="remote-conflict-actions">
+          <button disabled={conflictBusy} onClick={applyServerKeepingBackup}>Серверная версия</button>
+          <button disabled={conflictBusy} onClick={() => void keepLocalChanges()} title="Сохранить ваш вариант только если серверная версия всё ещё та же">
+            {conflictBusy ? "Проверяю…" : "Сохранить мою"}
+          </button>
+          <button className="secondary" onClick={() => setConflictDetailsOpen((value) => !value)}>
+            {conflictDetailsOpen ? "Скрыть" : "Подробнее"}
+          </button>
+        </div>
+      </div>}
+      {!remoteConflict && conflictLocalBackup && <div className="conflict-backup-bar">
+        <span>Есть резервная копия ваших изменений после конфликта.</span>
+        <button onClick={restoreConflictBackup}>Восстановить</button>
+        <button onClick={exportConflictBackup}>Скачать JSON</button>
+        <button className="secondary" onClick={discardConflictBackup}>Удалить копию</button>
       </div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
       <header className="topbar">
