@@ -203,3 +203,9 @@ export const saveRemoteBoardDocument = async (
     }),
   });
 };
+
+export const remoteStorageRequest=async(bucket:string,path:string,blob?:Blob|null,method?:string):Promise<Blob|null>=>{
+ const session=await getRemoteSession();if(!session)throw new Error("Сессия истекла. Войдите снова.");
+ const verb=method||(blob?"POST":"GET");const response=await fetch(`${url}/storage/v1/object/${verb==="GET"?"authenticated/":""}${bucket}/${path}`,{method:verb,headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,...(blob?{"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"}:{})},...(blob?{body:blob}:{})});
+ if(!response.ok)throw new Error(await errorMessage(response));return verb==="GET"?response.blob():null;
+};
