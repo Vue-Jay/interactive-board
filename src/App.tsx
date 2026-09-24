@@ -1868,8 +1868,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         height,
         text: "",
         ...(tool === "shape" ? { shapeType, color: "#6064d4" } : {}),
-        ...(tool === "sticky" ? { color: "#fff3a6", fontSize: 20 } : {}),
-        ...(tool === "text" ? { fontSize: 20 } : {}),
+        ...(tool === "sticky" ? { color: "#fff3a6", fontSize: 20, textAlign: "left" as const, fontWeight: "normal" as const, fontStyle: "normal" as const, textDecoration: "none" as const } : {}),
+        ...(tool === "text" ? { fontSize: 20, textAlign: "left" as const, fontWeight: "normal" as const, fontStyle: "normal" as const, textDecoration: "none" as const } : {}),
       };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
@@ -3253,6 +3253,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const max = singleSelected.kind === "table" || singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 32 : singleSelected.kind === "flashcard" || singleSelected.kind === "cover" ? 48 : 96;
     const nextSize = Math.max(min, Math.min(max, (singleSelected.fontSize ?? fallback) + delta));
     commit(itemsRef.current.map((item) => item.id === singleSelected.id ? { ...item, fontSize: nextSize } : item));
+  };
+
+  const setSelectedTextStyle = (patch: Partial<Pick<Item, "textAlign" | "fontWeight" | "fontStyle" | "textDecoration">>) => {
+    if (!singleSelected || selectionLocked || (singleSelected.kind !== "text" && singleSelected.kind !== "sticky")) return;
+    commit(itemsRef.current.map((item) => item.id === singleSelected.id ? { ...item, ...patch } : item));
   };
 
   const setSelectedConnectorStyle = (style: ConnectorStyle) => {
@@ -4831,7 +4836,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                       key={item.id}
                       aria-label="Текст объекта"
                       className={item.kind === "frame" ? "text-editor frame-editor" : item.kind === "comment" ? "text-editor comment-editor" : item.kind === "cover" ? "text-editor cover-editor" : "text-editor"}
-                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? (item.kind === "cover" ? 17 : 20) }}
+                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? (item.kind === "cover" ? 17 : 20), ...(item.kind === "text" || item.kind === "sticky" ? { textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" } : {}) }}
                       value={draft}
                       placeholder="Введите текст…"
                       onChange={(e) => {
@@ -4858,7 +4863,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                       }}
                     />
                   ) : item.kind === "frame" || item.kind === "comment" ? null : (
-                    <div className="text-display" style={{ fontSize: item.fontSize ?? 20 }}>
+                    <div className="text-display" style={{ fontSize: item.fontSize ?? 20, textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" }}>
                       {item.text || (
                         <span className="text-placeholder">
                           Двойной щелчок — ввод текста
@@ -5080,6 +5085,17 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   <button onClick={() => changeFontSize(-2)} aria-label="Уменьшить размер">A−</button>
                   <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20)}</span>
                   <button onClick={() => changeFontSize(2)} aria-label="Увеличить размер">A+</button>
+                </span>
+              )}
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky") && !selectionLocked && (
+                <span className="text-format-controls" title="Форматирование текста">
+                  <button className={singleSelected.fontWeight === "bold" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontWeight: singleSelected.fontWeight === "bold" ? "normal" : "bold" })} title="Полужирный"><b>B</b></button>
+                  <button className={singleSelected.fontStyle === "italic" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontStyle: singleSelected.fontStyle === "italic" ? "normal" : "italic" })} title="Курсив"><i>I</i></button>
+                  <button className={singleSelected.textDecoration === "underline" ? "active" : ""} onClick={() => setSelectedTextStyle({ textDecoration: singleSelected.textDecoration === "underline" ? "none" : "underline" })} title="Подчёркивание"><u>U</u></button>
+                  <span className="connector-control-separator" />
+                  <button className={(singleSelected.textAlign ?? "left") === "left" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "left" })} title="По левому краю">≡</button>
+                  <button className={singleSelected.textAlign === "center" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "center" })} title="По центру">≣</button>
+                  <button className={singleSelected.textAlign === "right" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "right" })} title="По правому краю">≡</button>
                 </span>
               )}
               {singleSelected?.kind === "connector" && !selectionLocked && (

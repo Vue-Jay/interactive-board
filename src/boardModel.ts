@@ -16,6 +16,10 @@ export type Item = {
   color?: string;
   weight?: number;
   fontSize?: number;
+  textAlign?: "left" | "center" | "right";
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline";
   shapeType?: ShapeType;
   assetId?: string;
   name?: string;
@@ -88,6 +92,12 @@ export function parseDocument(raw: string): DocumentData {
       if (i.connectorEndBinding != null && !binding(i.connectorEndBinding)) throw new Error("Повреждена привязка конца соединительной линии");
       if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет соединительной линии");
       if (i.weight != null && (!finite(i.weight) || i.weight <= 0 || i.weight > 32)) throw new Error("Повреждена толщина соединительной линии");
+    }
+    if (i.kind === "text" || i.kind === "sticky") {
+      if (i.textAlign != null && !["left","center","right"].includes(i.textAlign)) throw new Error("Повреждено выравнивание текста");
+      if (i.fontWeight != null && !["normal","bold"].includes(i.fontWeight)) throw new Error("Повреждена насыщенность текста");
+      if (i.fontStyle != null && !["normal","italic"].includes(i.fontStyle)) throw new Error("Повреждено начертание текста");
+      if (i.textDecoration != null && !["none","underline"].includes(i.textDecoration)) throw new Error("Повреждено подчёркивание текста");
     }
     if (i.kind === "table") {
       if (!finite(i.tableRows) || !finite(i.tableCols) || i.tableRows < 1 || i.tableRows > 20 || i.tableCols < 1 || i.tableCols > 12) throw new Error("Повреждён размер таблицы");
