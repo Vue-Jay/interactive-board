@@ -4292,3 +4292,6 @@ button {
 
 /* v65 · guest access */
 .auth-or{display:flex;align-items:center;gap:10px;color:#9a9daa;font-size:12px}.auth-or:before,.auth-or:after{content:"";height:1px;background:#e3e4e9;flex:1}.auth-guest{width:100%;min-height:42px;border:1px solid #cfd0f1;border-radius:10px;background:#f4f4ff;color:#4e50bd;font-weight:700;cursor:pointer}.auth-guest:hover{background:#ebebff}.auth-guest:disabled{opacity:.55;cursor:default}.auth-guest-note{margin:0;text-align:center;color:#888b96;font-size:11px;line-height:1.4}
+
+/* v67 · share password */
+.share-password-card{width:min(420px,calc(100vw - 32px));gap:12px}.share-password-card input{width:100%;min-height:42px;box-sizing:border-box;border:1px solid #d9dbe5;border-radius:10px;padding:9px 11px;font:inherit}.share-password-actions{display:flex;gap:8px;flex-wrap:wrap}.share-password-actions button{min-height:38px}

@@ -5571,6 +5571,8 @@ export default function App() {
   }, []);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardLoadError, setBoardLoadError] = useState("");
+  const [sharePassword, setSharePassword] = useState("");
+  const [sharePasswordRequired, setSharePasswordRequired] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState<number | null>(null);
   const [boardMountKey, setBoardMountKey] = useState(0);
 
@@ -5646,6 +5648,7 @@ export default function App() {
     let alive = true;
     setActiveBoard(null);
     setBoardLoadError("");
+    setSharePasswordRequired(false);
     if (route.kind === "home") { setBoardLoading(false); return; }
     setBoardLoading(true);
     void (async () => {
@@ -5653,7 +5656,7 @@ export default function App() {
         if (route.kind === "invalid") throw new Error("Ссылка недействительна");
         if (route.kind === "join") {
           rememberShareToken(route.token);
-          const redeemed = await redeemShareLink(route.token);
+          const redeemed = await redeemShareLink(route.token, sharePassword || undefined);
           if (!alive) return;
           clearPendingShare();
           navigate(`/board/${redeemed.board_id}`, true);
@@ -5666,13 +5669,20 @@ export default function App() {
       } catch (error) {
         if (!alive) return;
         setBoardLoading(false);
-        setBoardLoadError(route.kind === "join"
-          ? "Не удалось принять ссылку. Возможно, она отозвана, истекла или сервер недоступен."
-          : error instanceof Error ? error.message : "Не удалось открыть доску");
+        const message=error instanceof Error ? error.message : "Не удалось открыть доску";
+        if(route.kind==="join" && /парол/i.test(message)){
+          setSharePasswordRequired(true);
+          setBoardLoadError("");
+        }else{
+          setSharePasswordRequired(false);
+          setBoardLoadError(route.kind === "join"
+            ? message || "Не удалось принять ссылку. Возможно, она отозвана, истекла или сервер недоступен."
+            : message);
+        }
       }
     })();
     return () => { alive = false; };
-  }, [route, authReady, authUser, navigate, openBoard]);
+  }, [route, authReady, authUser, navigate, openBoard, sharePassword]);
 
   if (!authReady) {
     return <main className="auth-shell"><section className="auth-card"><div className="auth-brand-row"><div className="auth-logo">B</div><div><div className="auth-brand">Учебная доска</div><div className="auth-subtitle">Проверяем сессию…</div></div></div></section></main>;
@@ -5700,6 +5710,7 @@ export default function App() {
           : section==="profile"
           ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
+        {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" autoFocus value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
       </>

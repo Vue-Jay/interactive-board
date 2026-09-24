@@ -50,7 +50,7 @@ export default function ShareDialog({ board, user, onClose }: { board: BoardSumm
         <h3>Активные ссылки</h3>
         {links.filter(l => !l.revoked_at && (!l.expires_at || Date.parse(l.expires_at) > Date.now())).map(link => <div className="access-person" key={link.id}>
           <div><strong>{BOARD_ROLE_LABELS[link.role]}</strong><span>{new Date(link.created_at).toLocaleString("ru-RU")}{link.expires_at?` · до ${new Date(link.expires_at).toLocaleString("ru-RU")}`:" · бессрочно"}{link.max_uses?` · входов ${link.use_count}/${link.max_uses}`:` · входов ${link.use_count}`}{link.protected?" · 🔒 пароль":""}</span></div>
-          <button disabled={busy} onClick={() => void run(async () => { await revokeShareLink(link.id); if (created?.id === link.id) setCreated(null); await reload(); })}>Отозвать ссылку</button>
+          <button disabled={busy} onClick={() => void run(async () => { await revokeShareLink(link.id); setLinks(current=>current.filter(item=>item.id!==link.id)); if (created?.id === link.id) setCreated(null); setNotice("Ссылка отозвана"); await reload(); })}>Отозвать ссылку</button>
         </div>)}
         <p className="share-note">Отзыв запрещает новые входы по ссылке. Для удаления уже выданного доступа удалите участника ниже.</p>
       </> : <p>В локальном режиме приглашения работают только между аккаунтами в этом браузере. Ссылки требуют Supabase.</p>}
