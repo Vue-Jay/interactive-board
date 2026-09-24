@@ -6,7 +6,7 @@ export type ConnectorRouting = "straight" | "elbow";
 export type ConnectorBinding = { itemId: string; nx: number; ny: number };
 export type Item = {
   id: string;
-  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "checklist" | "quiz" | "flashcard" | "cover";
+  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "graph" | "checklist" | "quiz" | "flashcard" | "cover";
   x: number;
   y: number;
   width: number;
@@ -42,6 +42,10 @@ export type Item = {
   tableAlign?: "left" | "center" | "right";
   tableStripe?: boolean;
   tableCompact?: boolean;
+  graphType?: "linear" | "quadratic" | "sin" | "cos";
+  graphA?: number; graphB?: number; graphC?: number;
+  graphXMin?: number; graphXMax?: number; graphYMin?: number; graphYMax?: number;
+  graphGrid?: boolean;
   resolved?: boolean;
   commentTargetId?: string;
   presentationOrder?: number;
@@ -70,7 +74,7 @@ const binding = (v: unknown): v is ConnectorBinding => !!v && typeof v === "obje
 export function parseDocument(raw: string): DocumentData {
   if (raw.length > 10 * 1024 * 1024) throw new Error("Файл слишком большой");
   const d = JSON.parse(raw);
-  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","checklist","quiz","flashcard","cover"];
+  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover"];
   if (!d || d.version !== 1 || typeof d.title !== "string" || d.title.length > 10000 || !point(d.view) || !finite(d.view.zoom) || d.view.zoom < .1 || d.view.zoom > 8 || !Array.isArray(d.items) || d.items.length > 10000) throw new Error("Неверный формат доски");
   const ids = new Set<string>();
   let pointCount = 0;
@@ -101,6 +105,12 @@ export function parseDocument(raw: string): DocumentData {
       if (i.fontWeight != null && !["normal","bold"].includes(i.fontWeight)) throw new Error("Повреждена насыщенность текста");
       if (i.fontStyle != null && !["normal","italic"].includes(i.fontStyle)) throw new Error("Повреждено начертание текста");
       if (i.textDecoration != null && !["none","underline"].includes(i.textDecoration)) throw new Error("Повреждено подчёркивание текста");
+    }
+    if (i.kind === "graph") {
+      if (i.graphType != null && !["linear","quadratic","sin","cos"].includes(i.graphType)) throw new Error("Повреждён тип графика");
+      for (const value of [i.graphA,i.graphB,i.graphC,i.graphXMin,i.graphXMax,i.graphYMin,i.graphYMax]) if (value != null && !finite(value)) throw new Error("Повреждены параметры графика");
+      if (i.graphGrid != null && typeof i.graphGrid !== "boolean") throw new Error("Повреждена сетка графика");
+      if ((i.graphXMin ?? -10) >= (i.graphXMax ?? 10) || (i.graphYMin ?? -10) >= (i.graphYMax ?? 10)) throw new Error("Повреждён диапазон графика");
     }
     if (i.kind === "table") {
       if (!finite(i.tableRows) || !finite(i.tableCols) || i.tableRows < 1 || i.tableRows > 20 || i.tableCols < 1 || i.tableCols > 12) throw new Error("Повреждён размер таблицы");

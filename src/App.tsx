@@ -60,6 +60,7 @@ type Tool =
   | "comment"
   | "table"
   | "formula"
+  | "graph"
   | "checklist"
   | "quiz"
   | "flashcard"
@@ -91,6 +92,7 @@ const iconBody = (name: IconName) => {
     case "comment": return <><path d="M5 5h14v10H9l-4 4V5Z"/><path d="M8 9h8M8 12h5"/></>;
     case "table": return <><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4 10h16M4 14.5h16M10 5v14M15 5v14"/></>;
     case "formula": return <><path d="M5 7h7l-5 10h7"/><path d="M16 8c1.8 0 3 1.2 3 3s-1.2 3-3 3M18.5 7.5l1.5-1.5"/></>;
+    case "graph": return <><path d="M4 19V5M4 12h16"/><path d="M6 16c3-1 4-8 7-8s3 5 7 3"/></>;
     case "checklist": return <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m7 9 1.5 1.5L11 8M13.5 9H17M7 14l1.5 1.5L11 13M13.5 14H17"/></>;
     case "quiz": return <><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9.2 9.1a2.9 2.9 0 1 1 4.7 2.3c-1.1.8-1.9 1.3-1.9 2.6"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></>;
     case "flashcard": return <><rect x="5" y="4" width="14" height="16" rx="2.5"/><path d="M8 8h8M8 12h5"/><path d="m15 16 2 2 3-4"/></>;
@@ -271,6 +273,7 @@ const tools: { id: Tool; icon: IconName; label: string; dividerAfter?: boolean }
   { id: "shape", icon: "shape", label: "Фигуры · R / К" },
   { id: "table", icon: "table", label: "Таблица · B / И" },
   { id: "formula", icon: "formula", label: "Формула · X / Ч" },
+  { id: "graph", icon: "graph", label: "График функции · Y / Н" },
   { id: "checklist", icon: "checklist", label: "Чек-лист / задание · K / Л" },
   { id: "quiz", icon: "quiz", label: "Вопрос / мини-тест · G / П" },
   { id: "flashcard", icon: "flashcard", label: "Карточка вопрос–ответ · J / О" },
@@ -292,6 +295,7 @@ const keyTools: Record<string, Tool> = {
   KeyN: "comment",
   KeyB: "table",
   KeyX: "formula",
+  KeyY: "graph",
   KeyK: "checklist",
   KeyG: "quiz",
   KeyJ: "flashcard",
@@ -804,6 +808,19 @@ function FormulaView({ text, fontSize = 28, color = "#20242c" }: { text: string;
   return <div className="formula-view" style={{ fontSize, color }}>{parseSequence()}</div>;
 }
 
+function GraphView({ item }: { item: Item }) {
+  const type=item.graphType ?? "quadratic", A=item.graphA ?? 1, B=item.graphB ?? 0, C=item.graphC ?? 0;
+  const xMin=item.graphXMin ?? -10, xMax=item.graphXMax ?? 10, yMin=item.graphYMin ?? -10, yMax=item.graphYMax ?? 10;
+  const W=600,H=360, sx=(x:number)=>(x-xMin)/(xMax-xMin)*W, sy=(y:number)=>H-(y-yMin)/(yMax-yMin)*H;
+  const f=(x:number)=>type==="linear"?A*x+B:type==="quadratic"?A*x*x+B*x+C:type==="sin"?A*Math.sin(B*x+C):A*Math.cos(B*x+C);
+  const pts=Array.from({length:241},(_,i)=>{const x=xMin+(xMax-xMin)*i/240;return [sx(x),sy(f(x))] as const}).filter(p=>Number.isFinite(p[1])&&p[1]>-H*3&&p[1]<H*4);
+  const path=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const gridX=Array.from({length:Math.min(21,Math.max(0,Math.floor(xMax-xMin)+1))},(_,i)=>Math.ceil(xMin)+i).filter(v=>v<=xMax);
+  const gridY=Array.from({length:Math.min(21,Math.max(0,Math.floor(yMax-yMin)+1))},(_,i)=>Math.ceil(yMin)+i).filter(v=>v<=yMax);
+  const label=type==="linear"?`y = ${A}x ${B>=0?"+ ":"- "}${Math.abs(B)}`:type==="quadratic"?`y = ${A}x² ${B>=0?"+ ":"- "}${Math.abs(B)}x ${C>=0?"+ ":"- "}${Math.abs(C)}`:type==="sin"?`y = ${A}·sin(${B}x ${C>=0?"+ ":"- "}${Math.abs(C)})`:`y = ${A}·cos(${B}x ${C>=0?"+ ":"- "}${Math.abs(C)})`;
+  return <div className="graph-view"><div className="graph-label">{label}</div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">{item.graphGrid!==false&&<g className="graph-grid">{gridX.map(x=><line key={"x"+x} x1={sx(x)} x2={sx(x)} y1="0" y2={H}/>)}{gridY.map(y=><line key={"y"+y} x1="0" x2={W} y1={sy(y)} y2={sy(y)}/>)}</g>}<g className="graph-axes">{xMin<=0&&xMax>=0&&<line x1={sx(0)} x2={sx(0)} y1="0" y2={H}/>} {yMin<=0&&yMax>=0&&<line x1="0" x2={W} y1={sy(0)} y2={sy(0)}/>}</g><path className="graph-curve" d={path}/></svg></div>;
+}
+
 function TableView({ item }: { item: Item }) {
   const rows = Math.max(1, item.tableRows ?? 3);
   const cols = Math.max(1, item.tableCols ?? 3);
@@ -942,6 +959,7 @@ const itemLabel = (item: Item) => {
   if (item.kind === "comment") return item.text.trim().replace(/\s+/g, " ").slice(0, 44) || "Комментарий";
   if (item.kind === "table") return `Таблица ${item.tableRows ?? 3}×${item.tableCols ?? 3}`;
   if (item.kind === "formula") return item.text.trim().replace(/\s+/g, " ").slice(0, 44) || "Формула";
+  if (item.kind === "graph") return "График функции";
   if (item.kind === "checklist") return item.text.trim().replace(/\s+/g, " ").slice(0, 44) || "Чек-лист";
   if (item.kind === "quiz") return item.text.trim().replace(/\s+/g, " ").slice(0, 44) || "Вопрос";
   if (item.kind === "flashcard") return item.text.trim().replace(/\s+/g, " ").slice(0, 44) || "Карточка";
@@ -956,6 +974,7 @@ const itemKindLabel = (item: Item) => {
   if (item.kind === "comment") return item.resolved ? "Комментарий · решён" : "Комментарий";
   if (item.kind === "table") return "Таблица";
   if (item.kind === "formula") return "Формула";
+  if (item.kind === "graph") return "График функции";
   if (item.kind === "checklist") return "Чек-лист / задание";
   if (item.kind === "quiz") return "Вопрос / мини-тест";
   if (item.kind === "flashcard") return item.flashcardFlipped ? "Карточка · ответ" : "Карточка · вопрос";
@@ -977,6 +996,7 @@ const itemIconName = (item: Item): IconName => {
   if (item.kind === "comment") return "comment";
   if (item.kind === "table") return "table";
   if (item.kind === "formula") return "formula";
+  if (item.kind === "graph") return "graph";
   if (item.kind === "checklist") return "checklist";
   if (item.kind === "quiz") return "quiz";
   if (item.kind === "flashcard") return "flashcard";
@@ -1038,6 +1058,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [quizDraft, setQuizDraft] = useState<{ question: string; options: string[]; correct: number; explanation: string; fontSize: number; color: string } | null>(null);
   const [flashcardEditorId, setFlashcardEditorId] = useState<string | null>(null);
   const [flashcardDraft, setFlashcardDraft] = useState<{ front: string; back: string; fontSize: number; color: string } | null>(null);
+  const [graphEditorId, setGraphEditorId] = useState<string | null>(null);
+  const [graphDraft, setGraphDraft] = useState<{type:"linear"|"quadratic"|"sin"|"cos";a:number;b:number;c:number;xMin:number;xMax:number;yMin:number;yMax:number;grid:boolean}|null>(null);
   const [formulaEditorId, setFormulaEditorId] = useState<string | null>(null);
   const [formulaDraft, setFormulaDraft] = useState<{ text: string; fontSize: number; color: string } | null>(null);
   const [formulaPaletteTab, setFormulaPaletteTab] = useState<FormulaPaletteTab>("basic");
@@ -1814,6 +1836,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       setTableEditorId(item.id);
       setTableDraft({ rows, cols, cells: [...cells], header: true, fontSize: 13, align: "left", stripe: false, compact: false });
       return;
+    } else if (tool === "graph") {
+      e.preventDefault(); const item: Item={id:crypto.randomUUID(),kind:"graph",x:p.x-260,y:p.y-170,width:520,height:340,text:"",graphType:"quadratic",graphA:1,graphB:0,graphC:0,graphXMin:-10,graphXMax:10,graphYMin:-10,graphYMax:10,graphGrid:true,color:"#5355c9"}; commit([...itemsRef.current,item]);setSelected([item.id]);setTool("select");window.setTimeout(()=>openGraphEditor(item),0);return;
     } else if (tool === "formula") {
       e.preventDefault();
       const item: Item = { id: crypto.randomUUID(), kind: "formula", x: p.x - 190, y: p.y - 70, width: 380, height: 140, text: "x^2 + y^2 = r^2", fontSize: 28, color: "#20242c" };
@@ -2848,6 +2872,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setNotice(`Создан фрейм вокруг объектов: ${chosen.length}`);
     window.setTimeout(() => startEdit(frame), 0);
   };
+
+  const openGraphEditor = (item: Item) => {
+    if(item.kind!=="graph"||item.locked)return; setSelected([item.id]); setGraphEditorId(item.id);
+    setGraphDraft({type:item.graphType??"quadratic",a:item.graphA??1,b:item.graphB??0,c:item.graphC??0,xMin:item.graphXMin??-10,xMax:item.graphXMax??10,yMin:item.graphYMin??-10,yMax:item.graphYMax??10,grid:item.graphGrid!==false});
+  };
+  const closeGraphEditor=()=>{setGraphEditorId(null);setGraphDraft(null)};
+  const saveGraphEditor=()=>{if(!graphEditorId||!graphDraft){closeGraphEditor();return} const d={...graphDraft,xMin:Math.min(graphDraft.xMin,graphDraft.xMax-1),xMax:Math.max(graphDraft.xMax,graphDraft.xMin+1),yMin:Math.min(graphDraft.yMin,graphDraft.yMax-1),yMax:Math.max(graphDraft.yMax,graphDraft.yMin+1)}; commit(itemsRef.current.map(item=>item.id===graphEditorId?{...item,graphType:d.type,graphA:d.a,graphB:d.b,graphC:d.c,graphXMin:d.xMin,graphXMax:d.xMax,graphYMin:d.yMin,graphYMax:d.yMax,graphGrid:d.grid}:item)); closeGraphEditor(); setNotice("График сохранён")};
 
   const openFormulaEditor = (item: Item) => {
     if (item.kind !== "formula" || item.locked) return;
@@ -4360,6 +4391,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             </div>
           </div>
         )}
+        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal" role="dialog" aria-modal="true" onPointerDown={(e)=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График функции</strong><span>Координатная плоскость и параметры функции</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Тип функции</span><select value={graphDraft.type} onChange={e=>setGraphDraft({...graphDraft,type:e.target.value as "linear"|"quadratic"|"sin"|"cos"})}><option value="linear">Линейная y = ax + b</option><option value="quadratic">Парабола y = ax² + bx + c</option><option value="sin">Синус y = a·sin(bx+c)</option><option value="cos">Косинус y = a·cos(bx+c)</option></select></label><div className="graph-coefficients">{(["a","b","c"] as const).map(k=><label key={k}><span>{k}</span><input type="number" step="0.1" value={graphDraft[k]} onChange={e=>setGraphDraft({...graphDraft,[k]:Number(e.target.value)})}/></label>)}</div><strong>Диапазон осей</strong><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Показывать сетку</label></div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:520,height:340,text:"",graphType:graphDraft.type,graphA:graphDraft.a,graphB:graphDraft.b,graphC:graphDraft.c,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid}}/></div></div><div className="graph-editor-footer"><span>Ctrl+Enter — сохранить</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}><Icon name="check" size={15}/> Сохранить</button></div></div></div></div>)}
         {formulaEditorId && formulaDraft && (
           <div
             className="formula-editor-backdrop"
@@ -4444,7 +4476,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 <aside className="formula-palette-panel">
                   <div className="formula-palette-tabs" role="tablist" aria-label="Категории формул">
                     {([
-                      ["basic", "Основное"], ["greek", "Греческие"], ["relations", "Знаки"], ["functions", "Функции"], ["templates", "Шаблоны"],
+                      ["basic", "Основное"], ["greek", "Греческие"], ["relations", "Знаки"], ["functions", "Функции"], ["geometry", "Геометрия"], ["templates", "Шаблоны"],
                     ] as [FormulaPaletteTab, string][]).map(([tab, label]) => (
                       <button key={tab} className={formulaPaletteTab === tab ? "active" : ""} onClick={() => setFormulaPaletteTab(tab)}>{label}</button>
                     ))}
@@ -4862,6 +4894,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   } else if (tool === "select" && !space && !item.locked && item.kind === "checklist") {
                     setSelected([item.id]);
                     openChecklistEditor(item);
+                  } else if (tool === "select" && !space && !item.locked && item.kind === "graph") { setSelected([item.id]); openGraphEditor(item);
                   } else if (tool === "select" && !space && !item.locked && item.kind === "quiz") {
                     setSelected([item.id]);
                     openQuizEditor(item);
@@ -4887,6 +4920,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
                 {item.kind === "table" && <TableView item={item} />}
                 {item.kind === "formula" && <FormulaView text={item.text} fontSize={item.fontSize ?? 28} color={item.color ?? "#20242c"} />}
+                {item.kind === "graph" && <GraphView item={item}/>}
                 {item.kind === "checklist" && <ChecklistView item={item} onToggle={!presentation && !item.locked ? (indexValue) => {
                   const entries = item.checklistItems?.length ? item.checklistItems : ["Новый пункт"];
                   const nextDone = entries.map((_, index) => index === indexValue ? !(item.checklistDone?.[index] === true) : item.checklistDone?.[index] === true);
