@@ -4823,8 +4823,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button>
         <aside className={`toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
           <div className="toolbar-heading"><span>Инструменты</span><small>{toolShortLabel[tool]}</small></div>
+          <div className="toolbar-primary-nav" aria-label="Навигация по доске">
+            {(["select","hand"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button primary-nav-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}>
+              <span className="tool-icon"><Icon name={t.icon} size={17}/></span><span className="tool-name">{toolShortLabel[id]}</span>{tool===id&&<span className="tool-active-dot" aria-hidden="true"/>}
+            </button>})}
+          </div>
           <div className="toolbar-list">
-            {tools.map((t) => {
+            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand").map((t) => {
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>

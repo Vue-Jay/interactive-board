@@ -4486,3 +4486,23 @@ button {
 .welcome-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.welcome-actions button{display:grid;grid-template-columns:28px 1fr;align-items:center;gap:7px;min-height:52px;padding:8px 10px;border:1px solid #e5e6ec;border-radius:11px;background:#fff;color:#4c4f5a;text-align:left;cursor:pointer}.welcome-actions button:hover{border-color:#d3d2f5;background:#f8f7ff;color:#5254bf;transform:translateY(-1px)}.welcome-actions button>span{display:grid;gap:2px}.welcome-actions b{font-size:10px}.welcome-actions small{font-size:8px;color:#9295a0}.welcome-tip{margin-top:12px;padding-top:10px;border-top:1px solid #eeeef2;font-size:8px;color:#9a9da7}.minimap{right:16px!important;bottom:16px!important}
 @media(max-width:1050px){.toolbar{width:44px!important;padding:5px!important}.toolbar-heading,.tool-name,.tool-active-dot,.toolbar-more span{display:none!important}.tool-button{display:grid!important;grid-template-columns:1fr!important;width:32px!important;padding:0!important}.toolbar-more{width:32px}.coordinates{left:66px!important}.welcome-card{max-width:calc(100vw - 150px)!important}}
 @media(max-width:700px){.toolbar{width:auto!important;max-height:none}.toolbar-heading,.toolbar-more{display:none!important}.secondary-tool{display:block}.tool-name,.tool-active-dot{display:none!important}.coordinates{display:none!important}.welcome-card{width:min(360px,calc(100vw - 36px))!important;max-width:none!important;padding:18px!important}.welcome-actions{grid-template-columns:1fr}}
+
+/* v102 · toolbar viewport fix + permanent select/hand */
+.toolbar{top:78px!important;bottom:72px!important;max-height:none!important;height:auto!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+.toolbar-heading{flex:0 0 auto}
+.toolbar-primary-nav{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 0 6px;margin-bottom:4px;border-bottom:1px solid #efeff3}
+.toolbar-primary-nav .tool-button{display:grid!important;grid-template-columns:22px 1fr 5px!important;height:34px!important;min-height:34px!important;padding:0 6px!important;background:#f7f7fa!important}
+.toolbar-primary-nav .tool-button.active{background:#ecebff!important;color:#5355c7!important}
+.toolbar-primary-nav .tool-name{font-size:9px!important}
+.toolbar-list{flex:1 1 auto!important;min-height:0!important;max-height:none!important;overflow-y:auto!important;overscroll-behavior:contain;padding-right:1px}
+.toolbar-more{flex:0 0 auto}
+@media(max-width:1050px){
+ .toolbar{top:72px!important;bottom:66px!important}
+ .toolbar-primary-nav{grid-template-columns:1fr}
+ .toolbar-primary-nav .tool-button{grid-template-columns:1fr!important;width:32px!important;padding:0!important}
+ .toolbar-primary-nav .tool-name,.toolbar-primary-nav .tool-active-dot{display:none!important}
+}
+@media(max-width:700px){
+ .toolbar{top:auto!important;bottom:auto!important;height:auto!important}
+ .toolbar-primary-nav{display:none!important}
+}
