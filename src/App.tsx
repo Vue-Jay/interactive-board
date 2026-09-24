@@ -4821,29 +4821,23 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           {(["select","hand","pen","eraser","sticky","text","shape"] as Tool[]).map(id=><button key={id} type="button" className={tool===id?"active":""} aria-label={tools.find(t=>t.id===id)?.label??id} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={id} size={20}/></button>)}
         </nav>
         <button type="button" className="mobile-tools-toggle" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={18}/><span>Инструменты</span></button>
-        <aside className={`toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
-          <div className="toolbar-heading"><span>Инструменты</span><small>{toolShortLabel[tool]}</small></div>
-          <div className="toolbar-primary-nav" aria-label="Навигация по доске">
-            {(["select","hand"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button primary-nav-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}>
-              <span className="tool-icon"><Icon name={t.icon} size={17}/></span><span className="tool-name">{toolShortLabel[id]}</span>{tool===id&&<span className="tool-active-dot" aria-hidden="true"/>}
-            </button>})}
+        <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
+          <div className="toolbar-pinned" aria-label="Навигация">
+            {(["select","hand"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
           </div>
+          <span className="toolbar-section-line" aria-hidden="true"/>
           <div className="toolbar-list">
-            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand").map((t) => {
+            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand").map((t)=>{
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
-                  <span className="tool-icon"><Icon name={t.icon} size={17}/></span>
-                  <span className="tool-name">{toolShortLabel[t.id]}</span>
-                  {tool===t.id&&<span className="tool-active-dot" aria-hidden="true"/>}
-                  <span className="tool-tooltip">{t.label}</span>
-                </button>
-                {t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+                  <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
+                </button>{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
             })}
           </div>
-          <button type="button" className="toolbar-more" onClick={()=>setDesktopToolsExpanded(v=>!v)} aria-expanded={desktopToolsExpanded}>
-            <Icon name={desktopToolsExpanded?"chevron-left":"plus"} size={15}/><span>{desktopToolsExpanded?"Свернуть":"Ещё инструменты"}</span>
+          <button type="button" className="toolbar-more" title={desktopToolsExpanded?"Скрыть дополнительные инструменты":"Показать дополнительные инструменты"} onClick={()=>setDesktopToolsExpanded(v=>!v)} aria-expanded={desktopToolsExpanded}>
+            <Icon name={desktopToolsExpanded?"chevron-left":"plus"} size={16}/><span className="tool-tooltip">{desktopToolsExpanded?"Свернуть":"Ещё инструменты"}</span>
           </button>
         </aside>
         <section
