@@ -4,6 +4,19 @@ import type { BoardRole } from "./authStore";
 
 export type ShareRole = Exclude<BoardRole, "owner">;
 
+/** Server-shaped link used by the existing ShareDialog. */
+export type ShareLink = {
+  id: string;
+  board_id: string;
+  role: ShareRole;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+};
+
+export type CreatedShareLink = ShareLink & { token: string };
+
+/** Camel-cased compatibility shape used by BoardsScreen from the archive workflow. */
 export type BoardShareLink = {
   id: string;
   boardId: string;
@@ -13,48 +26,44 @@ export type BoardShareLink = {
   revokedAt: string | null;
 };
 
-type CreatedShareLink = BoardShareLink & { token: string };
-
 const requireRemote = () => {
   if (!isRemoteBackendEnabled()) {
     throw new Error("Ссылки доступа работают только при включённой серверной синхронизации.");
   }
 };
 
-export async function createBoardShareLink(boardId: string, role: ShareRole): Promise<CreatedShareLink> {
+const normalizeServerLink = (row: any): ShareLink => ({
+  id: String(row.id),
+  board_id: String(row.board_id),
+  role: row.role as ShareRole,
+  created_at: String(row.created_at),
+  expires_at: row.expires_at ?? null,
+  revoked_at: row.revoked_at ?? null,
+});
+
+/* API expected by the current Codex-created App.tsx / ShareDialog.tsx. */
+export async function createShareLink(boardId: string, role: ShareRole): Promise<CreatedShareLink> {
   requireRemote();
   const row = await remoteRequest<any>("/rest/v1/rpc/create_board_share_link", {
     method: "POST",
     body: JSON.stringify({ p_board_id: boardId, p_role: role }),
   });
   return {
-    id: row.id,
-    boardId: row.board_id,
-    role: row.role,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at ?? null,
-    revokedAt: null,
-    token: row.token,
+    ...normalizeServerLink({ ...row, revoked_at: null }),
+    token: String(row.token),
   };
 }
 
-export async function listBoardShareLinks(boardId: string): Promise<BoardShareLink[]> {
+export async function listShareLinks(boardId: string): Promise<ShareLink[]> {
   requireRemote();
   const rows = await remoteRequest<any[]>("/rest/v1/rpc/list_board_share_links", {
     method: "POST",
     body: JSON.stringify({ p_board_id: boardId }),
   });
-  return (rows || []).map((row) => ({
-    id: row.id,
-    boardId: row.board_id,
-    role: row.role,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at ?? null,
-    revokedAt: row.revoked_at ?? null,
-  }));
+  return (rows || []).map(normalizeServerLink);
 }
 
-export async function revokeBoardShareLink(linkId: string) {
+export async function revokeShareLink(linkId: string): Promise<void> {
   requireRemote();
   await remoteRequest("/rest/v1/rpc/revoke_board_share_link", {
     method: "POST",
@@ -62,14 +71,61 @@ export async function revokeBoardShareLink(linkId: string) {
   });
 }
 
-export async function redeemBoardShareLink(token: string): Promise<BoardSummary> {
+/**
+ * Returns the server-shaped RPC response because the existing App.tsx
+ * navigates with redeemed.board_id after accepting /join/<token>.
+ */
+export async function redeemShareLink(token: string): Promise<{
+  id: string;
+  board_id: string;
+  title: string;
+  owner_id: string;
+  role: BoardRole;
+  created_at: string;
+  updated_at: string;
+}> {
   requireRemote();
-  const row = await remoteRequest<any>("/rest/v1/rpc/redeem_board_share_link", {
+  return remoteRequest("/rest/v1/rpc/redeem_board_share_link", {
     method: "POST",
     body: JSON.stringify({ p_token: token }),
   });
+}
+
+/* Compatibility aliases for BoardsScreen used in the archive patches. */
+export async function createBoardShareLink(
+  boardId: string,
+  role: ShareRole,
+): Promise<BoardShareLink & { token: string }> {
+  const row = await createShareLink(boardId, role);
   return {
     id: row.id,
+    boardId: row.board_id,
+    role: row.role,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    token: row.token,
+  };
+}
+
+export async function listBoardShareLinks(boardId: string): Promise<BoardShareLink[]> {
+  const rows = await listShareLinks(boardId);
+  return rows.map((row) => ({
+    id: row.id,
+    boardId: row.board_id,
+    role: row.role,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+  }));
+}
+
+export const revokeBoardShareLink = revokeShareLink;
+
+export async function redeemBoardShareLink(token: string): Promise<BoardSummary> {
+  const row = await redeemShareLink(token);
+  return {
+    id: row.board_id || row.id,
     title: row.title,
     ownerId: row.owner_id,
     role: row.role,
