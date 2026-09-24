@@ -45,10 +45,10 @@ export default function AuthScreen({ onAuthenticated }: Props) {
     <main className="auth-shell">
       <section className="auth-card" aria-labelledby="auth-title">
         <div className="auth-brand-row">
-          <div className="auth-logo">B</div>
+          <div className="auth-logo" aria-label="OnlineRepetitor">OR</div>
           <div>
-            <div className="auth-brand">Учебная доска</div>
-            <div className="auth-subtitle">Интерактивное пространство для уроков и совместной работы</div>
+            <div className="auth-brand">OnlineRepetitor</div>
+            <div className="auth-subtitle">Интерактивная доска для занятий</div>
           </div>
         </div>
 
@@ -64,7 +64,9 @@ export default function AuthScreen({ onAuthenticated }: Props) {
             <h1 id="auth-title">{mode === "register" ? "Создать аккаунт" : "С возвращением"}</h1>
             <p>{joining
               ? "После входа откроется доска, которой с вами поделились."
-              : mode === "register" ? "После регистрации откроется список ваших досок." : "Войдите, чтобы продолжить работу с доской."}</p>
+              : mode === "register"
+                ? "Создайте аккаунт и начните работать с собственными досками."
+                : "Войдите, чтобы продолжить занятие или открыть свои доски."}</p>
           </div>
 
           {mode === "register" && (
@@ -92,7 +94,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
         </form>
 
         <div className="auth-role-note">
-          <strong>Доступ к доскам:</strong> владелец управляет доступом, редактор изменяет содержимое, просмотр открывает доску без редактирования.
+          <strong>Совместная работа:</strong> владелец управляет доступом, редактор изменяет содержимое, а режим просмотра защищает доску от случайных правок.
         </div>
       </section>
     </main>
