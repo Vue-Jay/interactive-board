@@ -4516,3 +4516,32 @@ button {
 .compact-toolbar .tool-divider{height:1px!important;margin:4px 5px!important}.compact-toolbar .secondary-tool{display:none!important}.compact-toolbar.expanded .secondary-tool{display:block!important}
 .compact-toolbar .toolbar-more{position:relative!important;display:grid!important;place-items:center!important;width:34px!important;height:32px!important;min-height:32px!important;margin:4px 0 0!important;padding:0!important;border:0!important;border-top:1px solid #ececf2!important;border-radius:0 0 8px 8px!important;background:transparent!important;color:#6265c8!important;flex:0 0 auto!important}.coordinates{left:74px!important}
 @media(max-width:700px){.toolbar.compact-toolbar{top:auto!important;left:auto!important;width:auto!important;max-height:none!important;padding:0!important;overflow:visible!important}.compact-toolbar .toolbar-pinned,.compact-toolbar .toolbar-section-line{display:none!important}.compact-toolbar .toolbar-list{max-height:none!important;overflow:visible!important}.compact-toolbar .secondary-tool{display:block!important}.compact-toolbar .tool-tooltip{display:none!important}}
+
+/* v104 · toolbar clipping root fix
+   The original toolbar was vertically centered with translateY(-50%).
+   v100-v103 changed `top`, but never cancelled that transform, so half of
+   the rail was still shifted above the workspace. */
+.toolbar.compact-toolbar{
+  top:12px!important;
+  bottom:auto!important;
+  transform:none!important;
+  max-height:calc(100% - 24px)!important;
+}
+.compact-toolbar .toolbar-list{
+  max-height:calc(100vh - 300px)!important;
+}
+@media(max-width:900px){
+  .toolbar.compact-toolbar{
+    top:12px!important;
+    bottom:auto!important;
+    transform:translateX(-130%)!important;
+  }
+  .toolbar.compact-toolbar.mobile-open{
+    transform:translateX(0)!important;
+  }
+}
+@media(min-width:901px){
+  .toolbar.compact-toolbar{
+    transform:none!important;
+  }
+}
