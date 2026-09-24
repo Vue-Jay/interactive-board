@@ -9,6 +9,7 @@ import "./App.css";
 import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
 import StudentsScreen from "./StudentsScreen";
+import AssignmentsScreen from "./AssignmentsScreen";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
 import ShareDialog from "./ShareDialog";
 import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
@@ -3747,6 +3748,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
           <button className={guidedFollow?"active":""} onClick={()=>{const next=!guidedFollow;guidedFollowRef.current=next;setGuidedFollow(next);viewControlChannel.current?.sendGuidedFollow(next);if(next){const rect=board.current?.getBoundingClientRect();if(rect){const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom)}}}}>↝<span>{guidedFollow?"Ведение включено":"Вести экран"}</span></button>
           <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
+          <button onClick={()=>{window.history.pushState({},"","/?section=assignments");window.dispatchEvent(new PopStateEvent("popstate"))}}>✓<span>Задания</span></button>
           <button onClick={()=>{setPresentationTimerMode("elapsed");setPresentationTimerRunning(v=>!v)}}>◷<span>{presentationTimerRunning?"Пауза таймера":"Таймер"}</span></button>
           <button onClick={()=>{setPresentationLaser(v=>!v);setPresentationSpotlight(false)}}>•<span>Лазер</span></button>
           <button onClick={()=>{setPresentationSpotlight(v=>!v);setPresentationLaser(false)}}>◉<span>Прожектор</span></button>
@@ -5530,9 +5532,11 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
-        {route.kind === "home" && (new URLSearchParams(window.location.search).get("section")==="students"
+        {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="students"
           ? <StudentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
-          : <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />)}
+          : section==="assignments"
+          ? <AssignmentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
+          : <BoardsScreen user={authUser} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
       </>
