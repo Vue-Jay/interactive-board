@@ -1,7 +1,10 @@
-Исправляет ошибку TS2304 saveLocal в src/studentsStore.ts.
+OnlineRepetitor v51 hotfix 2
+
+Исправляет TS6192 в src/App.tsx:
+удаляет неиспользуемый импорт applyProfileAppearance/getProfileSettings.
 
 Запуск:
-node install_v48_hotfix1.mjs
+node install_v51_hotfix2.mjs
 npm run build
 
 SQL повторно выполнять не нужно.
