@@ -221,8 +221,13 @@ export const remoteStorageRequest=async(bucket:string,path:string,blob?:Blob|nul
 export type RemoteStorageObject={name:string;id?:string;metadata?:unknown};
 export const listRemoteStorageObjects=async(bucket:string,prefix:string):Promise<RemoteStorageObject[]>=>{
  const session=await getRemoteSession();if(!session)throw new Error("Сессия истекла. Войдите снова.");
- const response=await fetch(`${url}/storage/v1/object/list/${bucket}`,{method:"POST",headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({prefix,limit:1000,offset:0,sortBy:{column:"name",order:"asc"}})});
- if(!response.ok)throw new Error(await errorMessage(response));return response.json();
+ const all:RemoteStorageObject[]=[];const limit=1000;
+ for(let offset=0;;offset+=limit){
+  const response=await fetch(`${url}/storage/v1/object/list/${bucket}`,{method:"POST",headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({prefix,limit,offset,sortBy:{column:"name",order:"asc"}})});
+  if(!response.ok)throw new Error(await errorMessage(response));
+  const page=await response.json() as RemoteStorageObject[];all.push(...page);if(page.length<limit)break;
+ }
+ return all;
 };
 export const deleteRemoteStorageObjects=async(bucket:string,paths:string[])=>{
  if(paths.length===0)return;

@@ -2,7 +2,7 @@ import { STORAGE_KEY } from "./boardModel";
 import { getUserByEmail, getUserById, type AuthUser, type BoardRole } from "./authStore";
 import { claimRemoteInvitations, deleteRemoteStorageObjects, isRemoteBackendEnabled, listRemoteStorageObjects, remoteRequest } from "./backend";
 
-export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null;purgeAfter?:string|null};
+export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null;purgeAfter?:string|null;purgeQueued?:boolean;purgeAssetCount?:number};
 export type BoardMember={boardId:string;userId:string;role:Exclude<BoardRole,"owner">;addedAt:string};
 export type BoardInvitation={id:string;boardId:string;email:string;role:Exclude<BoardRole,"owner">;createdAt:string};
 export type BoardAccessMember=BoardMember&{user:AuthUser|null};
@@ -16,7 +16,7 @@ export const boardStorageKey=(id:string)=>`${STORAGE_KEY}.board.${id}`;
 const localRole=(u:string,b:string):BoardRole|null=>{const x=boards().find(v=>v.id===b);if(!x)return null;if(x.ownerId===u)return"owner";return members().find(m=>m.boardId===b&&m.userId===u)?.role??null};
 const claimLocal=(user:AuthUser)=>{const matched=invites().filter(i=>norm(i.email)===norm(user.email));if(!matched.length)return;const next=members();for(const i of matched)if(!next.some(m=>m.boardId===i.boardId&&m.userId===user.id))next.push({boardId:i.boardId,userId:user.id,role:i.role,addedAt:new Date().toISOString()});write(MEMBERS_KEY,next);write(INVITES_KEY,invites().filter(i=>!matched.some(x=>x.id===i.id)))};
 
-const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null,purgeAfter:row.purge_after??null});
+const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null,purgeAfter:row.purge_after??null,purgeQueued:!!row.purge_queued,purgeAssetCount:Number(row.purge_asset_count??0)});
 
 export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
  if(isRemoteBackendEnabled()){
