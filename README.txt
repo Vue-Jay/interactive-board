@@ -1,10 +1,15 @@
-OnlineRepetitor v51 hotfix 2
+OnlineRepetitor v53 Hotfix 1
 
-Исправляет TS6192 в src/App.tsx:
-удаляет неиспользуемый импорт applyProfileAppearance/getProfileSettings.
+Исправляет два TS2345 после v53:
+старые вызовы setTableDraft не передавали новые поля align, stripe, compact.
+
+SQL не нужен.
 
 Запуск:
-node install_v51_hotfix2.mjs
+node install_v53_hotfix1.mjs
 npm run build
 
-SQL повторно выполнять не нужно.
+После успешной сборки:
+git add .
+git commit -m "fix: complete v53 table draft defaults"
+git push

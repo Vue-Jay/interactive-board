@@ -802,7 +802,7 @@ function TableView({ item }: { item: Item }) {
   const cells = item.tableCells ?? [];
   const header = item.tableHeader !== false;
   return (
-    <div className="table-view" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`, fontSize: item.fontSize ?? 13 }}>
+    <div className={`table-view ${item.tableStripe ? "table-striped" : ""} ${item.tableCompact ? "table-compact" : ""}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`, fontSize: item.fontSize ?? 13, textAlign: item.tableAlign ?? "left" }}>
       {Array.from({ length: rows * cols }, (_, index) => (
         <div key={index} className={`table-cell ${header && index < cols ? "table-cell-header" : ""}`}><span>{cells[index] ?? ""}</span></div>
       ))}
@@ -1023,7 +1023,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [tableEditorId, setTableEditorId] = useState<string | null>(null);
-  const [tableDraft, setTableDraft] = useState<{ rows: number; cols: number; cells: string[]; header: boolean; fontSize: number } | null>(null);
+  const [tableDraft, setTableDraft] = useState<{ rows: number; cols: number; cells: string[]; header: boolean; fontSize: number; align: "left" | "center" | "right"; stripe: boolean; compact: boolean } | null>(null);
   const [checklistEditorId, setChecklistEditorId] = useState<string | null>(null);
   const [checklistDraft, setChecklistDraft] = useState<{ title: string; items: string[]; done: boolean[]; fontSize: number; color: string } | null>(null);
   const [quizEditorId, setQuizEditorId] = useState<string | null>(null);
@@ -1803,7 +1803,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       setSelected([item.id]);
       setTool("select");
       setTableEditorId(item.id);
-      setTableDraft({ rows, cols, cells: [...cells], header: true, fontSize: 13 });
+      setTableDraft({ rows, cols, cells: [...cells], header: true, fontSize: 13, align: "left", stripe: false, compact: false });
       return;
     } else if (tool === "formula") {
       e.preventDefault();
@@ -2907,7 +2907,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const cells = Array.from({ length: rows * cols }, (_, index) => item.tableCells?.[index] ?? "");
     setSelected([item.id]);
     setTableEditorId(item.id);
-    setTableDraft({ rows, cols, cells, header: item.tableHeader !== false, fontSize: item.fontSize ?? 13 });
+    setTableDraft({ rows, cols, cells, header: item.tableHeader !== false, fontSize: item.fontSize ?? 13, align: item.tableAlign ?? "left", stripe: item.tableStripe === true, compact: item.tableCompact === true });
   };
 
   const resizeTableDraft = (rowsDelta: number, colsDelta: number) => {
@@ -2923,6 +2923,44 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     });
   };
 
+  const addTableRowAt = (at: number) => setTableDraft((current) => {
+    if (!current || current.rows >= 20) return current;
+    const row = Math.max(0, Math.min(current.rows, at));
+    const cells = [...current.cells];
+    cells.splice(row * current.cols, 0, ...Array(current.cols).fill(""));
+    return { ...current, rows: current.rows + 1, cells };
+  });
+  const removeTableRowAt = (at: number) => setTableDraft((current) => {
+    if (!current || current.rows <= 1) return current;
+    const row = Math.max(0, Math.min(current.rows - 1, at));
+    const cells = [...current.cells];
+    cells.splice(row * current.cols, current.cols);
+    return { ...current, rows: current.rows - 1, cells };
+  });
+  const addTableColAt = (at: number) => setTableDraft((current) => {
+    if (!current || current.cols >= 12) return current;
+    const col = Math.max(0, Math.min(current.cols, at));
+    const nextCols = current.cols + 1;
+    const cells = Array.from({ length: current.rows * nextCols }, (_, index) => {
+      const row = Math.floor(index / nextCols), nextCol = index % nextCols;
+      if (nextCol === col) return "";
+      const oldCol = nextCol > col ? nextCol - 1 : nextCol;
+      return current.cells[row * current.cols + oldCol] ?? "";
+    });
+    return { ...current, cols: nextCols, cells };
+  });
+  const removeTableColAt = (at: number) => setTableDraft((current) => {
+    if (!current || current.cols <= 1) return current;
+    const col = Math.max(0, Math.min(current.cols - 1, at));
+    const nextCols = current.cols - 1;
+    const cells = Array.from({ length: current.rows * nextCols }, (_, index) => {
+      const row = Math.floor(index / nextCols), nextCol = index % nextCols;
+      const oldCol = nextCol >= col ? nextCol + 1 : nextCol;
+      return current.cells[row * current.cols + oldCol] ?? "";
+    });
+    return { ...current, cols: nextCols, cells };
+  });
+
   const saveTableEditor = () => {
     if (!tableEditorId || !tableDraft) { setTableEditorId(null); setTableDraft(null); return; }
     commit(itemsRef.current.map((item) => item.id === tableEditorId ? {
@@ -2932,6 +2970,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       tableCells: tableDraft.cells.map((cell) => cell.slice(0, 2000)),
       tableHeader: tableDraft.header,
       fontSize: Math.max(9, Math.min(32, Math.round(tableDraft.fontSize))),
+      tableAlign: tableDraft.align,
+      tableStripe: tableDraft.stripe,
+      tableCompact: tableDraft.compact,
     } : item));
     setTableEditorId(null);
     setTableDraft(null);
@@ -4543,11 +4584,26 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 <label className="table-header-toggle"><input type="checkbox" checked={tableDraft.header} onChange={(e) => setTableDraft({ ...tableDraft, header: e.target.checked })}/><span>Первая строка — заголовок</span></label>
                 <i/>
                 <label className="table-font-control"><span>Текст</span><input type="range" min="9" max="32" step="1" value={tableDraft.fontSize} onChange={(e) => setTableDraft({ ...tableDraft, fontSize: Number(e.target.value) })}/><strong>{tableDraft.fontSize}px</strong></label>
+                <i/>
+                <span className="table-style-controls">
+                  <button className={tableDraft.align === "left" ? "active" : ""} onClick={() => setTableDraft({ ...tableDraft, align: "left" })} title="По левому краю">≡</button>
+                  <button className={tableDraft.align === "center" ? "active" : ""} onClick={() => setTableDraft({ ...tableDraft, align: "center" })} title="По центру">≣</button>
+                  <button className={tableDraft.align === "right" ? "active" : ""} onClick={() => setTableDraft({ ...tableDraft, align: "right" })} title="По правому краю">≡</button>
+                  <button className={tableDraft.stripe ? "active" : ""} onClick={() => setTableDraft({ ...tableDraft, stripe: !tableDraft.stripe })} title="Чередовать строки">▤</button>
+                  <button className={tableDraft.compact ? "active" : ""} onClick={() => setTableDraft({ ...tableDraft, compact: !tableDraft.compact })} title="Компактные строки">↕</button>
+                </span>
+              </div>
+              <div className="table-editor-column-tools" style={{ gridTemplateColumns: `repeat(${tableDraft.cols}, minmax(120px, 1fr))` }}>
+                {Array.from({ length: tableDraft.cols }, (_, col) => <div key={col}><button onClick={() => addTableColAt(col + 1)} disabled={tableDraft.cols >= 12} title="Добавить столбец справа">+</button><button onClick={() => removeTableColAt(col)} disabled={tableDraft.cols <= 1} title="Удалить столбец">×</button></div>)}
               </div>
               <div className="table-editor-grid" style={{ gridTemplateColumns: `repeat(${tableDraft.cols}, minmax(120px, 1fr))` }}>
                 {tableDraft.cells.map((cell, indexValue) => (
-                  <textarea key={`${tableDraft.rows}-${tableDraft.cols}-${indexValue}`} className={tableDraft.header && indexValue < tableDraft.cols ? "table-editor-header-cell" : ""} style={{ fontSize: tableDraft.fontSize }} value={cell} placeholder={tableDraft.header && indexValue < tableDraft.cols ? `Заголовок ${indexValue + 1}` : "Текст"} onChange={(e) => setTableDraft((current) => current ? { ...current, cells: current.cells.map((value, cellIndex) => cellIndex === indexValue ? e.target.value : value) } : current)} />
+                  <textarea key={`${tableDraft.rows}-${tableDraft.cols}-${indexValue}`} className={`${tableDraft.header && indexValue < tableDraft.cols ? "table-editor-header-cell" : ""} ${tableDraft.stripe && Math.floor(indexValue / tableDraft.cols) % 2 === 1 ? "table-editor-striped-cell" : ""}`} style={{ fontSize: tableDraft.fontSize, textAlign: tableDraft.align, minHeight: tableDraft.compact ? 46 : undefined }} value={cell} placeholder={tableDraft.header && indexValue < tableDraft.cols ? `Заголовок ${indexValue + 1}` : "Текст"} onChange={(e) => setTableDraft((current) => current ? { ...current, cells: current.cells.map((value, cellIndex) => cellIndex === indexValue ? e.target.value : value) } : current)} />
                 ))}
+              </div>
+              <div className="table-editor-row-tools">
+                <button onClick={() => addTableRowAt(tableDraft.rows)} disabled={tableDraft.rows >= 20}><Icon name="plus" size={14}/> Добавить строку</button>
+                <button onClick={() => removeTableRowAt(tableDraft.rows - 1)} disabled={tableDraft.rows <= 1}>× Последняя строка</button>
               </div>
               <div className="table-editor-footer"><span>{tableDraft.header ? "Первая строка выделена как заголовок." : "Все строки отображаются одинаково."}</span><div><button className="secondary" onClick={() => { setTableEditorId(null); setTableDraft(null); }}>Отмена</button><button className="primary" onClick={saveTableEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
             </div>
@@ -4791,7 +4847,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   } else if (tool === "select" && !space && !item.locked && item.kind === "table") {
                     setSelected([item.id]);
                     setTableEditorId(item.id);
-                    setTableDraft({ rows: item.tableRows ?? 3, cols: item.tableCols ?? 3, cells: [...(item.tableCells ?? [])], header: item.tableHeader !== false, fontSize: item.fontSize ?? 13 });
+                    setTableDraft({ rows: item.tableRows ?? 3, cols: item.tableCols ?? 3, cells: [...(item.tableCells ?? [])], header: item.tableHeader !== false, fontSize: item.fontSize ?? 13, align: item.tableAlign ?? "left", stripe: item.tableStripe === true, compact: item.tableCompact === true });
                   } else if (tool === "select" && !space && !item.locked && item.kind === "checklist") {
                     setSelected([item.id]);
                     openChecklistEditor(item);

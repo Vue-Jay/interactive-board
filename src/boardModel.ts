@@ -39,6 +39,9 @@ export type Item = {
   tableCols?: number;
   tableCells?: string[];
   tableHeader?: boolean;
+  tableAlign?: "left" | "center" | "right";
+  tableStripe?: boolean;
+  tableCompact?: boolean;
   resolved?: boolean;
   commentTargetId?: string;
   presentationOrder?: number;
@@ -103,6 +106,9 @@ export function parseDocument(raw: string): DocumentData {
       if (!finite(i.tableRows) || !finite(i.tableCols) || i.tableRows < 1 || i.tableRows > 20 || i.tableCols < 1 || i.tableCols > 12) throw new Error("Повреждён размер таблицы");
       if (!Array.isArray(i.tableCells) || i.tableCells.length !== i.tableRows * i.tableCols || !i.tableCells.every((cell: unknown) => typeof cell === "string" && cell.length <= 2000)) throw new Error("Повреждены ячейки таблицы");
       if (i.tableHeader != null && typeof i.tableHeader !== "boolean") throw new Error("Повреждён заголовок таблицы");
+      if (i.tableAlign != null && !["left","center","right"].includes(i.tableAlign)) throw new Error("Повреждено выравнивание таблицы");
+      if (i.tableStripe != null && typeof i.tableStripe !== "boolean") throw new Error("Повреждено чередование строк таблицы");
+      if (i.tableCompact != null && typeof i.tableCompact !== "boolean") throw new Error("Повреждён компактный режим таблицы");
       if (i.fontSize != null && (!finite(i.fontSize) || i.fontSize < 9 || i.fontSize > 32)) throw new Error("Повреждён размер текста таблицы");
     }
     if (i.kind === "comment") {
