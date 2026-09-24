@@ -4116,27 +4116,28 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button" onClick={() => setSharing(true)}>Поделиться</button>}
-          {(quizItems.length>0||flashcardItems.length>0)&&<button className="lesson-button study-center-button" onClick={()=>setStudyOpen(true)} title="Мини-тесты и карточки на этой доске">Учебный режим <b>{quizItems.length+flashcardItems.length}</b></button>}
-          <button className="lesson-button discussions-button" onClick={()=>void openDiscussions()} title="Серверные обсуждения доски">Обсуждения</button>
-          <button className="lesson-button history-button" onClick={()=>void openHistory()} title="История сохранённых версий доски">История</button>
-          <div className="account-chip" title={`${authUser.name} · ${authUser.email}`}>
-            <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
-            <span className="account-copy">
-              <strong>{authUser.name}</strong>
-              <small>{BOARD_ROLE_LABELS[boardSummary.role]}</small>
-            </span>
-          </div>
-          <button
-            className="lesson-button account-logout"
-            onClick={() => {
-              finishEdit();
-              flushSave();
-              onLogout();
-            }}
-            title="Выйти из аккаунта"
-          >
-            Выйти
-          </button>
+          <details className="topbar-more-menu">
+            <summary className="top-button topbar-more-trigger" title="Дополнительные действия" aria-label="Дополнительные действия"><Icon name="more" /></summary>
+            <div className="topbar-more-popover">
+              <div className="topbar-menu-account">
+                <span className="account-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
+                <span><strong>{authUser.name}</strong><small>{BOARD_ROLE_LABELS[boardSummary.role]}{authUser.email?` · ${authUser.email}`:""}</small></span>
+              </div>
+              <div className="topbar-menu-section">
+                {(quizItems.length>0||flashcardItems.length>0)&&<button onClick={()=>setStudyOpen(true)}><Icon name="quiz" size={16}/><span>Учебный режим</span><b>{quizItems.length+flashcardItems.length}</b></button>}
+                <button onClick={()=>void openDiscussions()}><Icon name="comments" size={16}/><span>Обсуждения</span></button>
+                <button onClick={()=>void openHistory()}><Icon name="reset" size={16}/><span>История изменений</span></button>
+              </div>
+              <div className="topbar-menu-section">
+                <button onClick={()=>{finishEdit();fileInput.current?.click()}}><Icon name="open" size={16}/><span>Импорт доски</span></button>
+                {previous&&<button onClick={()=>{if(window.confirm("Вернуть доску, сохранённую перед последним импортом? Текущие изменения заменятся.")){applyDocument(previous);setNotice("Доска до импорта восстановлена")}}}><Icon name="undo" size={16}/><span>Вернуть до импорта</span></button>}
+                <button onClick={()=>void exportBoard()}><Icon name="download" size={16}/><span>Скачать копию</span></button>
+              </div>
+              <div className="topbar-menu-section">
+                <button className="topbar-menu-danger" onClick={()=>{finishEdit();flushSave();onLogout()}}><Icon name="close" size={16}/><span>Выйти из аккаунта</span></button>
+              </div>
+            </div>
+          </details>
           <input
             ref={mediaInput}
             type="file"
@@ -4168,35 +4169,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
               if (file) void importBoard(file);
             }}
           />
-          <button
-            className="lesson-button backup-button"
-            onClick={() => {
-              finishEdit();
-              fileInput.current?.click();
-            }}
-          >
-            Импорт
-          </button>
-          {previous && (
-            <button
-              className="lesson-button backup-button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Вернуть доску, сохранённую перед последним импортом? Текущие изменения заменятся.",
-                  )
-                ) {
-                  applyDocument(previous);
-                  setNotice("Доска до импорта восстановлена");
-                }
-              }}
-            >
-              До импорта
-            </button>
-          )}
-          <button className="lesson-button backup-button" onClick={() => void exportBoard()}>
-            Скачать копию
-          </button>
           <button
             className="top-button"
             onClick={() => void exportItemsToPng("all")}
