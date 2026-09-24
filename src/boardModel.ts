@@ -55,6 +55,9 @@ export type Item = {
   graphMidpoints?: { a:number; b:number; label:string }[];
   graphSnap?: boolean;
   graphAxisLabels?: boolean;
+  graphGridStep?: number;
+  graphShowCurve?: boolean;
+  graphProjections?: boolean;
   resolved?: boolean;
   commentTargetId?: string;
   presentationOrder?: number;
@@ -123,6 +126,9 @@ export function parseDocument(raw: string): DocumentData {
       if (i.graphShowLabels != null && typeof i.graphShowLabels !== "boolean") throw new Error("Повреждены подписи графика");
       if (i.graphSnap != null && typeof i.graphSnap !== "boolean") throw new Error("Повреждена привязка графика");
       if (i.graphAxisLabels != null && typeof i.graphAxisLabels !== "boolean") throw new Error("Повреждены подписи осей графика");
+      if (i.graphGridStep != null && (!finite(i.graphGridStep) || i.graphGridStep <= 0 || i.graphGridStep > 1000)) throw new Error("Повреждён шаг сетки графика");
+      if (i.graphShowCurve != null && typeof i.graphShowCurve !== "boolean") throw new Error("Повреждена видимость функции графика");
+      if (i.graphProjections != null && typeof i.graphProjections !== "boolean") throw new Error("Повреждены проекции точек графика");
       if (i.graphSegments != null && (!Array.isArray(i.graphSegments) || i.graphSegments.length > 60 || !i.graphSegments.every((s: unknown) => !!s && typeof s === "object" && Number.isInteger((s as {a:number}).a) && Number.isInteger((s as {b:number}).b) && ["segment","line","ray"].includes((s as {kind:string}).kind) && typeof (s as {label:string}).label === "string" && typeof (s as {measure:boolean}).measure === "boolean"))) throw new Error("Повреждены геометрические связи графика");
       if (i.graphCircles != null && (!Array.isArray(i.graphCircles) || i.graphCircles.length > 30 || !i.graphCircles.every((g: unknown) => !!g && typeof g === "object" && Number.isInteger((g as {center:number}).center) && Number.isInteger((g as {edge:number}).edge) && typeof (g as {label:string}).label === "string" && typeof (g as {measure:boolean}).measure === "boolean"))) throw new Error("Повреждены окружности графика");
       if (i.graphPolygons != null && (!Array.isArray(i.graphPolygons) || i.graphPolygons.length > 30 || !i.graphPolygons.every((g: unknown) => !!g && typeof g === "object" && Array.isArray((g as {points:number[]}).points) && (g as {points:number[]}).points.length >= 3 && (g as {points:number[]}).points.length <= 20 && (g as {points:number[]}).points.every(Number.isInteger) && typeof (g as {label:string}).label === "string" && typeof (g as {measure:boolean}).measure === "boolean"))) throw new Error("Повреждены многоугольники графика");
