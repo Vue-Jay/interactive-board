@@ -4283,3 +4283,6 @@ button {
   .topbar{padding-top:env(safe-area-inset-top)}
   .mobile-quick-tools{bottom:max(10px,env(safe-area-inset-bottom))}
 }
+
+/* v63 · PWA reliability */
+.offline-banner,.update-banner{flex-shrink:0;z-index:29;display:flex;align-items:center;justify-content:center;gap:10px;min-height:36px;padding:6px 12px;font-size:12px}.offline-banner{background:#fff5d8;color:#705313;border-bottom:1px solid #ead79e}.offline-banner strong{padding:2px 7px;border-radius:999px;background:#e9b93f;color:#fff}.update-banner{background:#ededff;color:#3f419c;border-bottom:1px solid #d3d4f5}.update-banner button{padding:5px 9px;border-radius:7px;background:#5355c9;color:#fff;cursor:pointer}.update-banner button.secondary{background:#fff;color:#5355c9;border:1px solid #cfd0f1}@media(max-width:620px){.offline-banner,.update-banner{justify-content:flex-start;flex-wrap:wrap;font-size:11px}.offline-banner span{flex:1;min-width:210px}}

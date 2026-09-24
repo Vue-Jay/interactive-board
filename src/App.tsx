@@ -1131,8 +1131,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
   const [installPrompt,setInstallPrompt]=useState<Event|null>(null);
   const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)").matches===true);
+  const [online,setOnline]=useState(()=>navigator.onLine);
+  const [updateReady,setUpdateReady]=useState<ServiceWorkerRegistration|null>(null);
   const gesture = useRef<Gesture | null>(null);
   useEffect(()=>{const ready=(e:Event)=>{e.preventDefault();setInstallPrompt(e)};const installed=()=>{setInstallPrompt(null);setIsStandalone(true)};window.addEventListener("beforeinstallprompt",ready);window.addEventListener("appinstalled",installed);return()=>{window.removeEventListener("beforeinstallprompt",ready);window.removeEventListener("appinstalled",installed)}},[]);
+  useEffect(()=>{const sync=()=>setOnline(navigator.onLine);const update=((e:Event)=>setUpdateReady((e as CustomEvent<{registration:ServiceWorkerRegistration}>).detail.registration)) as EventListener;window.addEventListener("online",sync);window.addEventListener("offline",sync);window.addEventListener("or-sw-update",update);return()=>{window.removeEventListener("online",sync);window.removeEventListener("offline",sync);window.removeEventListener("or-sw-update",update)}},[]);
+  const applyUpdate=()=>{updateReady?.waiting?.postMessage({type:"SKIP_WAITING"})};
   const installApp=async()=>{const p=installPrompt as (Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>})|null;if(!p)return;await p.prompt();await p.userChoice;setInstallPrompt(null)};
   const clipboard = useRef<Item[]>([]);
   const history = useRef<Item[][]>([initial.data.items]);
@@ -3896,7 +3900,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         <button className="secondary" onClick={discardConflictBackup}>Удалить копию</button>
       </div>}
       {!canEdit && <div className="viewer-banner">Только просмотр</div>}
-      <header className="topbar">
+      {!online&&<div className="offline-banner" role="status"><strong>Офлайн</strong><span>Можно продолжать работу с уже открытой локальной доской. Серверная синхронизация возобновится после подключения.</span></div>}{updateReady&&<div className="update-banner" role="status"><span>Доступна новая версия OnlineRepetitor.</span><button type="button" onClick={applyUpdate}>Обновить</button><button type="button" className="secondary" onClick={()=>setUpdateReady(null)}>Позже</button></div>}<header className="topbar">
         <div className="topbar-left">
           <div className="logo-mark">B</div>
           <button

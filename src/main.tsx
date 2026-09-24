@@ -54,6 +54,9 @@ createRoot(root).render(
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Service worker registration failed", error));
+    void navigator.serviceWorker.register("/sw.js").then((registration)=>{const announce=()=>window.dispatchEvent(new CustomEvent("or-sw-update",{detail:{registration}}));if(registration.waiting)announce();registration.addEventListener("updatefound",()=>{const worker=registration.installing;worker?.addEventListener("statechange",()=>{if(worker.state==="installed"&&navigator.serviceWorker.controller)announce()})})}).catch((error) => console.warn("Service worker registration failed", error));
   });
 }
+
+let orReloading=false;
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("controllerchange",()=>{if(orReloading)return;orReloading=true;window.location.reload()});
