@@ -48,6 +48,8 @@ export type Item = {
   graphGrid?: boolean;
   graphPoints?: { x:number; y:number; label:string }[];
   graphShowLabels?: boolean;
+  graphSegments?: { a:number; b:number; kind:"segment"|"line"|"ray"; label:string; measure:boolean }[];
+  graphAngles?: { a:number; vertex:number; b:number; label:string }[];
   resolved?: boolean;
   commentTargetId?: string;
   presentationOrder?: number;
@@ -114,6 +116,8 @@ export function parseDocument(raw: string): DocumentData {
       if (i.graphGrid != null && typeof i.graphGrid !== "boolean") throw new Error("Повреждена сетка графика");
       if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24))) throw new Error("Повреждены точки графика");
       if (i.graphShowLabels != null && typeof i.graphShowLabels !== "boolean") throw new Error("Повреждены подписи графика");
+      if (i.graphSegments != null && (!Array.isArray(i.graphSegments) || i.graphSegments.length > 60 || !i.graphSegments.every((s: unknown) => !!s && typeof s === "object" && Number.isInteger((s as {a:number}).a) && Number.isInteger((s as {b:number}).b) && ["segment","line","ray"].includes((s as {kind:string}).kind) && typeof (s as {label:string}).label === "string" && typeof (s as {measure:boolean}).measure === "boolean"))) throw new Error("Повреждены геометрические связи графика");
+      if (i.graphAngles != null && (!Array.isArray(i.graphAngles) || i.graphAngles.length > 40 || !i.graphAngles.every((g: unknown) => !!g && typeof g === "object" && Number.isInteger((g as {a:number}).a) && Number.isInteger((g as {vertex:number}).vertex) && Number.isInteger((g as {b:number}).b) && typeof (g as {label:string}).label === "string"))) throw new Error("Повреждены углы графика");
       if ((i.graphXMin ?? -10) >= (i.graphXMax ?? 10) || (i.graphYMin ?? -10) >= (i.graphYMax ?? 10)) throw new Error("Повреждён диапазон графика");
     }
     if (i.kind === "table") {
