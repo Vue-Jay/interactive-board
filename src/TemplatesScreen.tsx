@@ -1,0 +1,17 @@
+import { useEffect,useMemo,useState } from "react";
+import type { AuthUser } from "./authStore";
+import { createBoard,type BoardSummary } from "./boardStore";
+import { deleteTemplate,listTemplates,markTemplateUsed,type BoardTemplate } from "./templatesStore";
+type Props={user:AuthUser;onBack:()=>void;onOpenBoard:(b:BoardSummary)=>void};
+export default function TemplatesScreen({user,onBack,onOpenBoard}:Props){
+ const [rows,setRows]=useState<BoardTemplate[]>([]),[q,setQ]=useState(""),[cat,setCat]=useState("all"),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const load=async()=>{try{setRows(await listTemplates(user.id))}catch(e){setNotice(e instanceof Error?e.message:"Не удалось загрузить шаблоны")}};useEffect(()=>{void load()},[user.id]);
+ const cats=useMemo(()=>[...new Set(rows.map(x=>x.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ru")),[rows]);
+ const visible=rows.filter(x=>(cat==="all"||x.category===cat)&&(!q.trim()||`${x.title} ${x.description} ${x.category}`.toLowerCase().includes(q.toLowerCase())));
+ const use=async(t:BoardTemplate)=>{if(busy)return;setBusy(true);try{const b=await createBoard(user,`${t.title} — копия`,false);sessionStorage.setItem("onlinerepetitor.template.apply",JSON.stringify({templateId:t.id,document:t.document}));await markTemplateUsed(t.id);onOpenBoard(b)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось создать доску")}finally{setBusy(false)}};
+ return <main className="templates-shell"><header className="students-header"><div><button className="boards-secondary" onClick={onBack}>← Доски</button><div><strong>Шаблоны</strong><span>Заготовки занятий из ваших досок</span></div></div></header><section className="templates-content">
+ <nav className="dashboard-nav"><button onClick={onBack}>Доски</button><button onClick={()=>location.href="/?section=students"}>Ученики</button><button onClick={()=>location.href="/?section=assignments"}>Задания</button><button onClick={()=>location.href="/?section=progress"}>Прогресс</button><button onClick={()=>location.href="/?section=schedule"}>Расписание</button><button onClick={()=>location.href="/?section=materials"}>Материалы</button><button className="active">Шаблоны</button></nav>
+ {notice&&<div className="access-notice">{notice}</div>}<div className="templates-toolbar"><input type="search" placeholder="Поиск шаблонов" value={q} onChange={e=>setQ(e.target.value)}/><select value={cat} onChange={e=>setCat(e.target.value)}><option value="all">Все категории</option>{cats.map(x=><option key={x}>{x}</option>)}</select><span>{visible.length} шаблонов</span></div>
+ {visible.length===0?<div className="boards-empty"><strong>{rows.length?"Ничего не найдено":"Шаблонов пока нет"}</strong><span>Откройте готовую доску и выберите «Сохранить как шаблон».</span></div>:<div className="templates-grid">{visible.map(t=><article className="template-card" key={t.id}><div className="template-preview"><span className="board-card-grid"/><b>{t.document.items.length}</b><small>объектов</small></div><div><strong>{t.title}</strong><span>{t.category||"Без категории"} · использован {t.useCount} раз</span><p>{t.description||"Без описания"}</p><div><button className="students-primary" disabled={busy} onClick={()=>void use(t)}>Создать доску</button><button className="danger" onClick={async()=>{if(confirm(`Удалить шаблон «${t.title}»?`)){await deleteTemplate(t.id);await load()}}}>Удалить</button></div></div></article>)}</div>}
+ </section></main>
+}
