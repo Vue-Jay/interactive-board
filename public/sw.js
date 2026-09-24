@@ -1,4 +1,4 @@
-const CACHE="onlinerepetitor-shell-v110";
+const CACHE="onlinerepetitor-shell-v111";
 const SHELL=["/","/index.html","/manifest.webmanifest","/favicon.svg","/pwa-icon.svg"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));});
 self.addEventListener("message",event=>{if(event.data?.type==="SKIP_WAITING")self.skipWaiting()});

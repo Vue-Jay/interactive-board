@@ -4953,3 +4953,345 @@ option{background:#fff;color:#343741}
   .boards-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
   .board-card-preview{min-height:72px!important}
 }
+
+/* v111 · mobile + tablet UX completion
+   Breakpoints:
+   phone <= 700px, compact tablet 701-1024px, large tablet 1025-1180px.
+   This block intentionally sits last and normalizes legacy responsive rules. */
+
+:root{
+  --touch-target:44px;
+  --mobile-edge:10px;
+  --tablet-edge:16px;
+  --floating-panel:rgba(255,255,255,.96);
+  --floating-shadow:0 10px 30px rgba(28,31,48,.14);
+}
+
+/* Shared touch ergonomics */
+@media (pointer:coarse){
+  button,summary,[role="button"]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  input,select,textarea{font-size:max(16px,1em)} /* prevents iOS/Android focus zoom */
+  .access-backdrop{padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+  .access-modal,.history-modal,.discussions-modal,.study-modal,.materials-modal,.schedule-modal,.assignment-modal{
+    max-height:calc(100dvh - 20px)!important;
+    overflow:auto!important;
+    overscroll-behavior:contain;
+  }
+  .context-menu{max-height:min(70dvh,520px);overflow:auto;overscroll-behavior:contain}
+}
+
+/* TABLETS: preserve canvas area, make every important action reachable by touch. */
+@media (min-width:701px) and (max-width:1180px){
+  .topbar{
+    height:56px!important;min-height:56px!important;
+    padding:5px max(10px,env(safe-area-inset-right)) 5px max(10px,env(safe-area-inset-left))!important;
+    gap:7px!important;
+  }
+  .topbar-left{flex:1 1 auto!important;min-width:0!important;gap:6px!important}
+  .topbar-right{flex:0 0 auto!important;gap:4px!important}
+  .board-home-button{min-width:84px!important;height:38px!important;padding:0 11px!important}
+  .board-title{flex:1 1 180px!important;min-width:90px!important;max-width:230px!important;font-size:13px!important}
+  .save-status{font-size:10px!important}
+  .realtime-status{font-size:10px!important}
+  .topbar-right .lesson-button{height:38px!important;padding:0 10px!important;font-size:11px!important}
+  .topbar-right .install-app-button{display:none!important}
+  .presence-menu summary{min-height:38px!important;padding:0 9px!important}
+  .top-button,.topbar-more-trigger{width:38px!important;height:38px!important}
+  .workspace{height:calc(100dvh - 56px)!important}
+
+  .compact-toolbar{
+    top:50%!important;left:10px!important;bottom:auto!important;
+    transform:translateY(-50%)!important;
+    max-height:calc(100dvh - 84px)!important;
+    width:50px!important;padding:5px!important;
+    overflow-y:auto!important;overflow-x:hidden!important;
+    scrollbar-width:none;
+  }
+  .compact-toolbar::-webkit-scrollbar{display:none}
+  .compact-toolbar .tool-button{width:38px!important;height:38px!important;min-height:38px!important}
+  .compact-toolbar .toolbar-pinned,.compact-toolbar .toolbar-list{gap:1px!important}
+  .compact-toolbar .tool-tooltip{display:none!important}
+  .mobile-quick-tools,.mobile-tools-toggle{display:none!important}
+
+  .ink-settings,.eraser-settings,.connector-settings,.shape-palette{
+    top:10px!important;left:70px!important;
+    max-width:calc(100vw - 90px)!important;
+    min-height:44px!important;
+    padding:7px 9px!important;
+    border-radius:12px!important;
+    gap:10px!important;
+    overflow-x:auto!important;overflow-y:hidden!important;
+    white-space:nowrap!important;
+    box-shadow:var(--floating-shadow)!important;
+    scrollbar-width:none;
+  }
+  .ink-settings::-webkit-scrollbar,.connector-settings::-webkit-scrollbar,.shape-palette::-webkit-scrollbar{display:none}
+  .shape-palette button{min-width:66px!important;height:52px!important}
+  .board-controls{left:70px!important;bottom:max(12px,env(safe-area-inset-bottom))!important}
+  .minimap{right:12px!important;bottom:max(12px,env(safe-area-inset-bottom))!important;width:150px!important}
+  .coordinates{left:70px!important;bottom:58px!important}
+  .notice{right:12px!important;top:68px!important;max-width:min(380px,calc(100vw - 90px))!important}
+  .selection-actions{transform:translateX(-50%) scale(1.06)!important;transform-origin:center bottom}
+  .resize-handle{width:22px!important;height:22px!important}
+  .resize-handle::after{width:8px!important;height:8px!important}
+  .rotate-handle{width:32px!important;height:30px!important;top:-38px!important}
+
+  /* Cabinet screens */
+  .boards-content,.students-content,.assignments-content,.progress-content,.schedule-content,.materials-content,.templates-content,.notifications-content,.profile-content{
+    width:100%!important;max-width:none!important;padding:16px var(--tablet-edge) 34px!important;
+  }
+  .students-header{min-height:58px!important;padding:8px 16px!important;gap:8px!important}
+  .students-header>div:first-child{min-width:0!important}
+  .students-header strong{font-size:17px!important}
+  .students-header span{font-size:10px!important}
+  .dashboard-nav{overflow-x:auto!important;white-space:nowrap!important;scrollbar-width:none!important}
+  .dashboard-nav::-webkit-scrollbar{display:none}
+  .boards-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .students-grid,.progress-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .materials-grid,.templates-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .materials-layout{grid-template-columns:150px minmax(0,1fr)!important}
+  .schedule-layout{grid-template-columns:minmax(0,1fr) 200px!important}
+  .week-grid{grid-template-columns:repeat(7,minmax(118px,1fr))!important}
+}
+
+/* PHONE: board becomes a purpose-built touch UI, not a shrunken desktop. */
+@media (max-width:700px){
+  .app{height:100dvh!important;min-height:100dvh!important}
+  .topbar{
+    height:50px!important;min-height:50px!important;
+    flex-wrap:nowrap!important;
+    padding:5px max(7px,env(safe-area-inset-right)) 5px max(7px,env(safe-area-inset-left))!important;
+    gap:5px!important;
+  }
+  .topbar-left{width:auto!important;flex:1 1 auto!important;min-width:0!important;gap:5px!important}
+  .topbar-right{width:auto!important;flex:0 0 auto!important;flex-wrap:nowrap!important;gap:3px!important}
+  .board-home-button{min-width:66px!important;width:auto!important;height:38px!important;padding:0 8px!important;font-size:10px!important}
+  .board-title{flex:1 1 auto!important;width:auto!important;min-width:50px!important;max-width:none!important;padding:6px!important;font-size:12px!important}
+  .save-status,.guest-session-badge,.topbar-right .install-app-button{display:none!important}
+  .realtime-status{display:none!important}
+  .presence-menu summary{width:36px!important;min-width:36px!important;height:38px!important;padding:0!important;justify-content:center!important}
+  .presence-menu summary span:not(.presence-live-dot){display:none!important}
+  .topbar-right>.lesson-button:not(.start-live-lesson){display:none!important}
+  .topbar-right>.start-live-lesson{width:38px!important;height:38px!important;padding:0!important;font-size:0!important}
+  .topbar-right>.start-live-lesson::after{content:"▶";font-size:13px!important}
+  .topbar-more-trigger{width:38px!important;height:38px!important}
+  .topbar-more-popover{
+    position:fixed!important;top:54px!important;right:7px!important;left:auto!important;
+    width:min(300px,calc(100vw - 14px))!important;
+    max-height:calc(100dvh - 66px)!important;overflow:auto!important;
+    border-radius:14px!important;
+  }
+  .workspace{height:calc(100dvh - 50px)!important;padding:0!important}
+
+  /* Primary tools live in one thumb-friendly bottom dock. */
+  .mobile-quick-tools{
+    display:flex!important;
+    position:absolute!important;
+    z-index:90!important;
+    left:50%!important;
+    right:auto!important;
+    bottom:max(7px,env(safe-area-inset-bottom))!important;
+    transform:translateX(-50%)!important;
+    width:auto!important;max-width:calc(100vw - 116px)!important;
+    gap:2px!important;padding:4px!important;
+    overflow-x:auto!important;overflow-y:hidden!important;
+    border:1px solid #e1e2e9!important;border-radius:14px!important;
+    background:rgba(255,255,255,.95)!important;
+    box-shadow:0 8px 24px rgba(28,31,48,.16)!important;
+    backdrop-filter:blur(14px)!important;
+    scrollbar-width:none!important;
+  }
+  .mobile-quick-tools::-webkit-scrollbar{display:none}
+  .mobile-quick-tools button{
+    flex:0 0 38px!important;width:38px!important;height:38px!important;min-height:38px!important;
+    padding:0!important;border-radius:10px!important;
+  }
+  .mobile-quick-tools button.active{background:#ececff!important;color:#5153cc!important}
+
+  /* Full tool drawer opens above the dock. */
+  .mobile-tools-toggle{
+    display:grid!important;place-items:center!important;
+    position:absolute!important;z-index:92!important;
+    left:7px!important;bottom:max(7px,env(safe-area-inset-bottom))!important;
+    width:44px!important;height:46px!important;min-height:46px!important;
+    padding:0!important;border:1px solid #e1e2e9!important;border-radius:13px!important;
+    background:rgba(255,255,255,.97)!important;color:#5355ca!important;
+    box-shadow:0 8px 24px rgba(28,31,48,.14)!important;
+    font-size:0!important;
+  }
+  .mobile-tools-toggle span{display:none!important}
+  .compact-toolbar{
+    display:none!important;
+    position:absolute!important;z-index:91!important;
+    left:7px!important;right:7px!important;top:auto!important;
+    bottom:60px!important;
+    transform:none!important;
+    width:auto!important;max-width:none!important;height:auto!important;max-height:min(58dvh,390px)!important;
+    padding:8px!important;border-radius:16px!important;
+    overflow:auto!important;
+    background:rgba(255,255,255,.98)!important;
+    box-shadow:0 12px 34px rgba(28,31,48,.18)!important;
+  }
+  .compact-toolbar.mobile-open{display:grid!important;grid-template-columns:auto 1px 1fr auto!important;align-items:start!important;gap:7px!important}
+  .compact-toolbar .toolbar-pinned{display:grid!important;grid-template-columns:repeat(2,42px)!important;gap:4px!important}
+  .compact-toolbar .toolbar-section-line{width:1px!important;height:100%!important;background:#ececf2!important}
+  .compact-toolbar .toolbar-list{display:grid!important;grid-template-columns:repeat(6,minmax(40px,1fr))!important;gap:4px!important}
+  .compact-toolbar .tool-wrap{display:block!important}
+  .compact-toolbar .secondary-tool{display:block!important}
+  .compact-toolbar .tool-button{width:42px!important;height:42px!important;min-height:42px!important;margin:auto!important}
+  .compact-toolbar .tool-divider,.compact-toolbar .tool-tooltip{display:none!important}
+  .compact-toolbar .toolbar-more{display:none!important}
+
+  /* Zoom stays reachable without colliding with the tool dock. */
+  .board-controls{
+    left:auto!important;right:7px!important;
+    bottom:max(7px,env(safe-area-inset-bottom))!important;
+    padding:3px!important;border-radius:12px!important;
+  }
+  .board-controls button{width:38px!important;min-width:38px!important;height:38px!important}
+  .board-controls .zoom-value{display:none!important}
+  .coordinates,.minimap{display:none!important}
+
+  /* Tool settings become a single horizontal floating strip. */
+  .ink-settings,.eraser-settings,.connector-settings,.shape-palette{
+    top:7px!important;left:7px!important;right:7px!important;
+    width:auto!important;max-width:none!important;min-height:46px!important;
+    padding:6px 8px!important;gap:9px!important;
+    overflow-x:auto!important;overflow-y:hidden!important;
+    white-space:nowrap!important;border-radius:13px!important;
+    box-shadow:var(--floating-shadow)!important;
+    scrollbar-width:none!important;
+  }
+  .ink-settings::-webkit-scrollbar,.connector-settings::-webkit-scrollbar,.shape-palette::-webkit-scrollbar{display:none}
+  .ink-settings label,.connector-settings label{flex:0 0 auto!important;font-size:11px!important}
+  .ink-settings input[type="range"],.eraser-settings input[type="range"],.connector-settings input[type="range"]{width:90px!important}
+  .eraser-settings>span,.connector-hint{display:none!important}
+  .shape-palette button{flex:0 0 58px!important;min-width:58px!important;width:58px!important;height:48px!important}
+  .shape-palette button span:last-child{font-size:8px!important}
+
+  .notice{
+    position:absolute!important;left:7px!important;right:7px!important;top:auto!important;
+    bottom:64px!important;max-width:none!important;
+    padding:9px 10px!important;border-radius:11px!important;font-size:11px!important;
+  }
+  .selection-actions{bottom:calc(100% + 42px)!important;height:34px!important;padding:3px!important}
+  .selection-actions button{width:30px!important;height:28px!important}
+  .selection-size{font-size:9px!important}
+  .resize-handle{width:24px!important;height:24px!important}
+  .resize-handle::after{width:8px!important;height:8px!important}
+  .rotate-handle{width:34px!important;height:32px!important;top:-40px!important}
+
+  /* Full-screen-ish editors are easier to use on a phone. */
+  .access-modal,.history-modal,.discussions-modal,.study-modal,.materials-modal,.schedule-modal,.assignment-modal{
+    width:calc(100vw - 14px)!important;max-width:none!important;
+    border-radius:16px!important;padding:12px!important;
+  }
+  .access-head{position:sticky!important;top:-12px!important;z-index:3!important;background:inherit!important;padding:4px 0 8px!important}
+  .access-head h2{font-size:17px!important}
+  .access-head p{font-size:11px!important}
+  .access-head>button{width:40px!important;height:40px!important;min-height:40px!important}
+  .context-menu{min-width:210px!important;border-radius:13px!important}
+  .context-menu button{min-height:44px!important;font-size:12px!important}
+
+  /* Every cabinet screen follows the same mobile rhythm. */
+  .boards-content,.students-content,.assignments-content,.progress-content,.schedule-content,.materials-content,.templates-content,.notifications-content,.profile-content{
+    width:100%!important;max-width:none!important;padding:9px 9px 26px!important;
+  }
+  .students-header{
+    min-height:52px!important;height:auto!important;
+    padding:7px 9px!important;gap:6px!important;flex-wrap:nowrap!important;
+  }
+  .students-header>div:first-child{min-width:0!important;gap:7px!important}
+  .students-header>div:first-child>div{min-width:0!important}
+  .students-header strong{font-size:15px!important;line-height:1.15!important;white-space:normal!important}
+  .students-header span{font-size:9px!important;white-space:normal!important;overflow-wrap:anywhere!important}
+  .students-header .boards-secondary{min-width:66px!important;min-height:38px!important;padding:0 8px!important;font-size:10px!important}
+  .students-header>.boards-secondary{flex:0 0 auto!important}
+  .dashboard-nav{
+    display:flex!important;overflow-x:auto!important;gap:4px!important;
+    padding:3px!important;margin:0 0 9px!important;border-radius:11px!important;
+    scrollbar-width:none!important;
+  }
+  .dashboard-nav::-webkit-scrollbar{display:none}
+  .dashboard-nav button{flex:0 0 auto!important;min-height:36px!important;padding:0 9px!important;font-size:10px!important}
+
+  .boards-grid,.students-grid,.progress-grid,.materials-grid,.templates-grid{grid-template-columns:1fr!important;gap:8px!important}
+  .boards-toolbar,.students-toolbar,.assignments-toolbar,.progress-toolbar,.materials-toolbar,.templates-toolbar{
+    grid-template-columns:1fr 1fr!important;gap:6px!important;margin:9px 0!important;
+  }
+  .boards-toolbar input[type="search"],.students-toolbar input[type="search"],.assignments-toolbar input[type="search"],.materials-toolbar input[type="search"],.templates-toolbar input[type="search"]{
+    grid-column:1/-1!important;width:100%!important;
+  }
+  .boards-toolbar input,.boards-toolbar select,.students-toolbar input,.students-toolbar select,.assignments-toolbar input,.assignments-toolbar select,.progress-toolbar select,.materials-toolbar input,.materials-toolbar select,.templates-toolbar input,.templates-toolbar select{
+    width:100%!important;min-width:0!important;min-height:42px!important;
+  }
+  .board-card,.student-card,.assignment-card,.material-card,.template-card,.notification-card,.progress-card{
+    border-radius:13px!important;
+  }
+  .board-card-actions,.student-actions,.assignment-actions,.material-actions{flex-wrap:wrap!important}
+  .board-card-actions button,.student-actions button,.assignment-actions button,.material-actions button{min-height:38px!important}
+
+  .materials-layout{grid-template-columns:1fr!important;gap:8px!important}
+  .materials-folders{
+    display:flex!important;overflow-x:auto!important;gap:4px!important;padding-bottom:2px!important;
+    scrollbar-width:none!important;
+  }
+  .materials-folders::-webkit-scrollbar{display:none}
+  .materials-folders button{flex:0 0 auto!important;min-height:38px!important;padding:0 10px!important}
+  .material-card{grid-template-columns:42px minmax(0,1fr)!important}
+  .material-icon{width:42px!important;height:42px!important}
+
+  .schedule-layout{grid-template-columns:1fr!important}
+  .schedule-side{order:-1!important}
+  .week-grid{grid-template-columns:repeat(7,132px)!important;scroll-snap-type:x proximity}
+  .schedule-day{min-height:360px!important;scroll-snap-align:start}
+  .schedule-toolbar{grid-template-columns:38px 58px 1fr 38px!important;gap:4px!important}
+  .schedule-toolbar strong{font-size:10px!important}
+  .schedule-form{grid-template-columns:1fr!important}
+  .schedule-form label.wide{grid-column:auto!important}
+
+  .notification-filters,.notification-kind-filter{overflow-x:auto!important;white-space:nowrap!important;scrollbar-width:none!important}
+  .notification-filters::-webkit-scrollbar,.notification-kind-filter::-webkit-scrollbar{display:none}
+  .notification-filters button,.notification-kind-filter button{flex:0 0 auto!important;min-height:36px!important}
+  .notification-card{grid-template-columns:7px minmax(0,1fr) auto!important;padding:10px!important}
+  .notification-card strong{font-size:12px!important}
+  .notification-card p{font-size:10px!important;line-height:1.4!important}
+
+  .profile-grid{grid-template-columns:1fr!important;margin-top:8px!important}
+  .profile-card{padding:12px!important;gap:9px!important}
+}
+
+/* Landscape phones: reclaim vertical space aggressively while retaining 44px touch targets. */
+@media (max-width:900px) and (orientation:landscape) and (max-height:520px){
+  .topbar{height:46px!important;min-height:46px!important;padding-top:3px!important;padding-bottom:3px!important}
+  .workspace{height:calc(100dvh - 46px)!important}
+  .board-home-button{height:36px!important}
+  .topbar-more-trigger,.presence-menu summary,.topbar-right>.start-live-lesson{height:36px!important;min-height:36px!important}
+  .mobile-quick-tools{bottom:max(5px,env(safe-area-inset-bottom))!important;padding:3px!important}
+  .mobile-quick-tools button{width:36px!important;flex-basis:36px!important;height:36px!important;min-height:36px!important}
+  .mobile-tools-toggle{bottom:max(5px,env(safe-area-inset-bottom))!important;width:42px!important;height:44px!important;min-height:44px!important}
+  .compact-toolbar{bottom:55px!important;max-height:calc(100dvh - 108px)!important}
+  .board-controls{bottom:max(5px,env(safe-area-inset-bottom))!important}
+  .board-controls button{width:36px!important;min-width:36px!important;height:36px!important}
+  .ink-settings,.eraser-settings,.connector-settings,.shape-palette{top:5px!important;min-height:42px!important}
+  .notice{bottom:56px!important}
+  .students-header{min-height:46px!important;padding:5px 8px!important}
+  .boards-content,.students-content,.assignments-content,.progress-content,.schedule-content,.materials-content,.templates-content,.notifications-content,.profile-content{padding-top:7px!important}
+  .boards-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .students-grid,.progress-grid,.materials-grid,.templates-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* Tablet portrait: two-column content, no giant desktop whitespace. */
+@media (min-width:701px) and (max-width:1024px) and (orientation:portrait){
+  .boards-grid,.students-grid,.progress-grid,.materials-grid,.templates-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .schedule-layout{grid-template-columns:1fr!important}
+  .schedule-side{order:-1!important}
+}
+
+/* Safe areas on notched devices. */
+@media(display-mode:standalone){
+  .topbar{padding-left:max(8px,env(safe-area-inset-left))!important;padding-right:max(8px,env(safe-area-inset-right))!important}
+  .workspace{padding-left:env(safe-area-inset-left)!important;padding-right:env(safe-area-inset-right)!important}
+}
