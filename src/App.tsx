@@ -1289,7 +1289,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   }, [
     items,
     title,
-    view,
     editing,
     draft,
     path,
@@ -1410,7 +1409,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setSpace(false);
     setTool("select");
     setTitle(data.title);
-    setView(data.view);
+    if (!fromRemote) setView(data.view);
     display(data.items);
     history.current = [data.items];
     index.current = 0;
@@ -3698,7 +3697,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
       (teacherView) => {
-        if (!followTeacherRef.current) return;
+        if (!(followTeacherRef.current || guidedFollowRef.current)) return;
         const rect = board.current?.getBoundingClientRect();
         if (!rect) return;
 
@@ -3711,8 +3710,6 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       (guided) => {
         guidedFollowRef.current = guided.enabled;
         setGuidedFollow(guided.enabled);
-        followTeacherRef.current = guided.enabled || followTeacherRef.current;
-        if (guided.enabled) setFollowTeacher(true);
         setNotice(guided.enabled
           ? `${guided.senderName} включил режим общего следования`
           : `${guided.senderName} выключил режим общего следования`);
@@ -4080,7 +4077,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </span>}
           {boardSummary.role !== "owner" && isRemoteBackendEnabled() && <button
             type="button"
-            className={`lesson-button follow-teacher-button ${followTeacher ? "active" : ""}`}
+            className={`lesson-button follow-teacher-button ${followTeacher || guidedFollow ? "active" : ""}`}
             title={guidedFollow ? "Преподаватель включил общий режим следования" : followTeacher ? "Перестать автоматически следовать за экраном преподавателя" : "Автоматически следовать за экраном преподавателя"}
             disabled={guidedFollow}
             onClick={() => {

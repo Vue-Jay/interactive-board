@@ -3,7 +3,10 @@ import type { RemoteBoardDocument } from "./backend";
 
 // JSONB can reorder object keys; equality must not depend on property order.
 export function documentFingerprint(document: DocumentData): string {
-  return JSON.stringify(document, (_key, value: unknown) => {
+  // Viewport is personal UI state. Panning/zooming must never create a collaborative revision
+  // or a false conflict between participants.
+  const collaborative = { ...document, view: undefined };
+  return JSON.stringify(collaborative, (_key, value: unknown) => {
     if (value && typeof value === "object" && !Array.isArray(value)) {
       return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
     }
