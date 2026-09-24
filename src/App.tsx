@@ -988,6 +988,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [liveLesson,setLiveLesson]=useState<LiveLesson|null>(null);
   const [lessonOpen,setLessonOpen]=useState(false),[lessonFinishOpen,setLessonFinishOpen]=useState(false);
   const [lessonStudentId,setLessonStudentId]=useState(""),[lessonTopic,setLessonTopic]=useState("");
+  const [lessonScheduleId,setLessonScheduleId]=useState<string|null>(null);
   const [lessonResult,setLessonResult]=useState(""),[lessonHomework,setLessonHomework]=useState(""),[lessonClock,setLessonClock]=useState(Date.now());
   const [lessonPanelOpen,setLessonPanelOpen]=useState(false);
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
@@ -3734,9 +3735,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setNotice("Резервная копия скачана");
   };
 
-  useEffect(()=>{if(boardSummary.role==="owner")void getActiveLesson(boardSummary.id).then(setLiveLesson).catch(()=>undefined)},[boardSummary.id,boardSummary.role]);
+  useEffect(()=>{if(boardSummary.role!=="owner")return;void getActiveLesson(boardSummary.id).then(existing=>{if(existing){setLiveLesson(existing);return}try{const raw=sessionStorage.getItem("onlinerepetitor.schedule.start");if(!raw)return;const planned=JSON.parse(raw);sessionStorage.removeItem("onlinerepetitor.schedule.start");if(!planned?.studentId)return;setLessonStudentId(planned.studentId);setLessonTopic(planned.topic||"");setLessonScheduleId(planned.scheduleId||null);setLessonOpen(true);setNotice("Занятие из расписания готово к запуску")}catch{sessionStorage.removeItem("onlinerepetitor.schedule.start")}}).catch(()=>undefined)},[boardSummary.id,boardSummary.role]);
   useEffect(()=>{if(!liveLesson)return;setLessonClock(Date.now());const t=window.setInterval(()=>setLessonClock(Date.now()),1000);return()=>window.clearInterval(t)},[liveLesson?.id]);
-  const beginLiveLesson=async()=>{const student=lessonStudents.find(u=>u.userId===lessonStudentId);if(!student){setNotice("Выберите ученика, который сейчас на доске");return}try{const lesson=await startLesson(boardSummary.id,student.userId,student.name,lessonTopic);setLiveLesson(lesson);setLessonOpen(false);setPresentationElapsed(0);setPresentationTimerMode("elapsed");setPresentationTimerRunning(true);setNotice("Урок начат")}catch{setNotice("Не удалось начать урок")}};
+  const beginLiveLesson=async()=>{const student=lessonStudents.find(u=>u.userId===lessonStudentId);if(!student){setNotice("Выберите ученика, который сейчас на доске");return}try{const lesson=await startLesson(boardSummary.id,student.userId,student.name,lessonTopic,lessonScheduleId);setLiveLesson(lesson);setLessonScheduleId(null);setLessonOpen(false);setPresentationElapsed(0);setPresentationTimerMode("elapsed");setPresentationTimerRunning(true);setNotice("Урок начат")}catch{setNotice("Не удалось начать урок")}};
   const completeLiveLesson=async()=>{if(!liveLesson)return;try{const done=await finishLesson(liveLesson,lessonResult,lessonHomework);setLiveLesson(null);setLessonFinishOpen(false);setPresentationTimerRunning(false);setLessonResult("");setLessonHomework("");setNotice(`Урок завершён · ${done.minutes} мин. Запись добавлена в историю`)}catch{setNotice("Не удалось завершить урок")}};
 
   return (
