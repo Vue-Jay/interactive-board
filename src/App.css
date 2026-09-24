@@ -4289,3 +4289,6 @@ button {
 
 /* v64 · share controls */
 .share-link-settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}.share-link-settings label{display:grid;gap:5px;font-size:12px;font-weight:650}.share-link-settings select,.share-link-settings input{min-height:36px;padding:6px 9px;border:1px solid #dfe0e7;border-radius:8px;background:#fff}.share-link-settings small{font-weight:400;color:#858895}@media(max-width:620px){.share-link-settings{grid-template-columns:1fr}}
+
+/* v65 · guest access */
+.auth-or{display:flex;align-items:center;gap:10px;color:#9a9daa;font-size:12px}.auth-or:before,.auth-or:after{content:"";height:1px;background:#e3e4e9;flex:1}.auth-guest{width:100%;min-height:42px;border:1px solid #cfd0f1;border-radius:10px;background:#f4f4ff;color:#4e50bd;font-weight:700;cursor:pointer}.auth-guest:hover{background:#ebebff}.auth-guest:disabled{opacity:.55;cursor:default}.auth-guest-note{margin:0;text-align:center;color:#888b96;font-size:11px;line-height:1.4}

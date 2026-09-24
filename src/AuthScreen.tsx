@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { loginUser, registerUser, type AuthUser } from "./authStore";
+import { loginUser, loginGuest, registerUser, type AuthUser } from "./authStore";
 
 type Mode = "login" | "register";
 
@@ -52,7 +52,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
           </div>
         </div>
 
-        {joining && <div className="access-notice">Войдите или зарегистрируйтесь, чтобы открыть доску по приглашению.</div>}
+        {joining && <div className="access-notice">Откройте доску по приглашению: войдите в аккаунт или продолжите без регистрации.</div>}
 
         <div className="auth-tabs" role="tablist" aria-label="Вход или регистрация">
           <button type="button" className={mode === "login" ? "active" : ""} onClick={() => changeMode("login")}>Вход</button>
@@ -91,6 +91,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
           <button className="auth-submit" type="submit" disabled={busy}>
             {busy ? "Подождите…" : mode === "register" ? "Зарегистрироваться" : "Войти"}
           </button>
+          {joining && <><div className="auth-or"><span>или</span></div><button className="auth-guest" type="button" disabled={busy} onClick={async()=>{if(busy)return;setBusy(true);setError("");try{onAuthenticated(await loginGuest())}catch(value){setError(value instanceof Error?value.message:"Не удалось войти как гость")}finally{setBusy(false)}}}>Продолжить как гость</button><p className="auth-guest-note">Без регистрации. Доступ действует в этом браузере и определяется ссылкой владельца.</p></>}
         </form>
 
         <div className="auth-role-note">
