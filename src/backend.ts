@@ -217,3 +217,16 @@ export const remoteStorageRequest=async(bucket:string,path:string,blob?:Blob|nul
  const verb=method||(blob?"POST":"GET");const response=await fetch(`${url}/storage/v1/object/${verb==="GET"?"authenticated/":""}${bucket}/${path}`,{method:verb,headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,...(blob?{"Content-Type":blob.type||"application/octet-stream","x-upsert":"false"}:{})},...(blob?{body:blob}:{})});
  if(!response.ok)throw new Error(await errorMessage(response));return verb==="GET"?response.blob():null;
 };
+
+export type RemoteStorageObject={name:string;id?:string;metadata?:unknown};
+export const listRemoteStorageObjects=async(bucket:string,prefix:string):Promise<RemoteStorageObject[]>=>{
+ const session=await getRemoteSession();if(!session)throw new Error("Сессия истекла. Войдите снова.");
+ const response=await fetch(`${url}/storage/v1/object/list/${bucket}`,{method:"POST",headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({prefix,limit:1000,offset:0,sortBy:{column:"name",order:"asc"}})});
+ if(!response.ok)throw new Error(await errorMessage(response));return response.json();
+};
+export const deleteRemoteStorageObjects=async(bucket:string,paths:string[])=>{
+ if(paths.length===0)return;
+ const session=await getRemoteSession();if(!session)throw new Error("Сессия истекла. Войдите снова.");
+ const response=await fetch(`${url}/storage/v1/object/${bucket}`,{method:"DELETE",headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({prefixes:paths})});
+ if(!response.ok)throw new Error(await errorMessage(response));
+};

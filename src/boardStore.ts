@@ -1,6 +1,6 @@
 import { STORAGE_KEY } from "./boardModel";
 import { getUserByEmail, getUserById, type AuthUser, type BoardRole } from "./authStore";
-import { claimRemoteInvitations, isRemoteBackendEnabled, remoteRequest } from "./backend";
+import { claimRemoteInvitations, deleteRemoteStorageObjects, isRemoteBackendEnabled, listRemoteStorageObjects, remoteRequest } from "./backend";
 
 export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;createdAt:string;updatedAt:string;deletedAt?:string|null;purgeAfter?:string|null};
 export type BoardMember={boardId:string;userId:string;role:Exclude<BoardRole,"owner">;addedAt:string};
@@ -72,4 +72,15 @@ export const getTrashedBoards=async(_user:AuthUser):Promise<BoardSummary[]>=>{
  return rows.map(row=>rowToBoard(row,"owner"));
 };
 export const restoreBoard=async(id:string)=>{await remoteRequest("/rest/v1/rpc/restore_board",{method:"POST",body:JSON.stringify({p_board_id:id})});return true};
-export const deleteBoardForever=async(id:string,confirmation:string)=>{await remoteRequest("/rest/v1/rpc/delete_board_forever",{method:"POST",body:JSON.stringify({p_board_id:id,p_confirmation:confirmation})});return true};
+export const deleteBoardForever=async(id:string,confirmation:string)=>{
+ const prep=await remoteRequest<{board_id:string;asset_count:number}>("/rest/v1/rpc/prepare_board_permanent_delete",{method:"POST",body:JSON.stringify({p_board_id:id,p_confirmation:confirmation})});
+ let deleted=0;
+ if((prep.asset_count||0)>0){
+   const prefix=`${id}/`;
+   const objects=await listRemoteStorageObjects("board-assets",prefix);
+   const paths=objects.map(item=>prefix+item.name);
+   for(let i=0;i<paths.length;i+=100){const batch=paths.slice(i,i+100);await deleteRemoteStorageObjects("board-assets",batch);deleted+=batch.length}
+ }
+ await remoteRequest("/rest/v1/rpc/finish_board_permanent_delete",{method:"POST",body:JSON.stringify({p_board_id:id,p_confirmation:confirmation})});
+ return {deletedAssets:deleted};
+};
