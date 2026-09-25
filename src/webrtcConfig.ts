@@ -1,12 +1,13 @@
-export type IceServerSource="stun"|"turn";
+import { isRemoteBackendEnabled,remoteFunctionRequest } from "./backend";
 
 const DEFAULT_STUN:RTCIceServer={urls:"stun:stun.l.google.com:19302"};
+type TurnResponse={iceServers:RTCIceServer[];expiresAt?:number};
+let cached:{servers:RTCIceServer[];expiresAt:number}|null=null;
 
 function splitUrls(value:string|undefined):string[]{
  return (value??"").split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean);
 }
-
-export function getBoardCallIceServers():RTCIceServer[]{
+function localIceServers():RTCIceServer[]{
  const servers:RTCIceServer[]=[DEFAULT_STUN];
  const stun=splitUrls(import.meta.env.VITE_WEBRTC_STUN_URLS);
  if(stun.length)servers.splice(0,1,{urls:stun});
@@ -16,10 +17,28 @@ export function getBoardCallIceServers():RTCIceServer[]{
  if(turn.length&&username&&credential)servers.push({urls:turn,username,credential});
  return servers;
 }
-
-export function hasTurnServer():boolean{
- return getBoardCallIceServers().some(server=>{
+function containsTurn(servers:RTCIceServer[]):boolean{
+ return servers.some(server=>{
   const urls=Array.isArray(server.urls)?server.urls:[server.urls];
   return urls.some(url=>/^turns?:/i.test(url));
  });
+}
+
+export async function getBoardCallIceServers():Promise<RTCIceServer[]>{
+ const now=Math.floor(Date.now()/1000);
+ if(cached&&cached.expiresAt>now+60)return cached.servers;
+ if(isRemoteBackendEnabled()){
+  try{
+   const result=await remoteFunctionRequest<TurnResponse>("turn-credentials",{method:"POST",body:"{}"});
+   if(Array.isArray(result.iceServers)&&result.iceServers.length){
+    cached={servers:result.iceServers,expiresAt:Number(result.expiresAt||now+300)};
+    return cached.servers;
+   }
+  }catch{ /* Static TURN/STUN fallback below keeps calls available. */ }
+ }
+ return localIceServers();
+}
+
+export async function hasTurnServer():Promise<boolean>{
+ return containsTurn(await getBoardCallIceServers());
 }
