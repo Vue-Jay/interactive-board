@@ -42,7 +42,18 @@ export default function BoardVideoCallPanel({boardId,userId,participants}:Props)
   if(connectionState==="disconnected"){
    clearDisconnectTimer();
    disconnectTimer.current=window.setTimeout(()=>{
-    if(pc.current===peer&&peer.connectionState==="disconnected"){setError("Связь прервалась. Пытаемся восстановить звонок…");void peer.restartIce()}
+    if(pc.current!==peer||peer.connectionState!=="disconnected")return;
+    setError("Связь прервалась. Пытаемся восстановить звонок…");
+    if(userId.localeCompare(otherId)<0){
+     void (async()=>{
+      try{
+       peer.restartIce();
+       const offer=await peer.createOffer({iceRestart:true});
+       await peer.setLocalDescription(offer);
+       await sendBoardCallSignal(boardId,otherId,"offer",offer);
+      }catch{setError("Не удалось автоматически восстановить соединение.")}
+     })();
+    }
    },3000);
    return;
   }
@@ -53,7 +64,7 @@ export default function BoardVideoCallPanel({boardId,userId,participants}:Props)
   }
  };return peer};
  const flushCandidates=async()=>{if(!pc.current?.remoteDescription)return;for(const c of candidateQueue.current.splice(0)){try{await pc.current.addIceCandidate(c)}catch{}}};
- const handleSignal=useCallback(async(signal:BoardCallSignal)=>{if(signal.board_id!==boardId||signal.receiver_id!==userId||seen.current.has(signal.id))return;seen.current.add(signal.id);try{if(signal.kind==="offer"){if(stateRef.current!=="idle"&&signal.sender_id!==peerId){void sendBoardCallSignal(boardId,signal.sender_id,"hangup",{});return}pendingOffer.current=signal.payload as RTCSessionDescriptionInit;setIncomingId(signal.sender_id);if(stateRef.current==="idle"){setCallState("incoming");setOpen(true)}}else if(signal.kind==="answer"&&pc.current&&signal.sender_id===targetId){await pc.current.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);await flushCandidates();setCallState("connecting")}else if(signal.kind==="candidate"&&signal.sender_id===peerId){const c=signal.payload as RTCIceCandidateInit;if(pc.current?.remoteDescription)await pc.current.addIceCandidate(c);else candidateQueue.current.push(c)}else if(signal.kind==="hangup"&&signal.sender_id===peerId){setError("Звонок завершён");reset()}}catch(e){setError(e instanceof Error?e.message:"Ошибка видеозвонка")}},[boardId,userId,targetId,peerId,reset]);
+ const handleSignal=useCallback(async(signal:BoardCallSignal)=>{if(signal.board_id!==boardId||signal.receiver_id!==userId||seen.current.has(signal.id))return;seen.current.add(signal.id);try{if(signal.kind==="offer"){if(stateRef.current!=="idle"&&signal.sender_id!==peerId){void sendBoardCallSignal(boardId,signal.sender_id,"hangup",{});return}const offer=signal.payload as RTCSessionDescriptionInit;if(pc.current&&signal.sender_id===peerId&&stateRef.current!=="idle"){await pc.current.setRemoteDescription(offer);await flushCandidates();const answer=await pc.current.createAnswer();await pc.current.setLocalDescription(answer);await sendBoardCallSignal(boardId,signal.sender_id,"answer",answer);setCallState("connecting");return}pendingOffer.current=offer;setIncomingId(signal.sender_id);if(stateRef.current==="idle"){setCallState("incoming");setOpen(true)}}else if(signal.kind==="answer"&&pc.current&&signal.sender_id===targetId){await pc.current.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);await flushCandidates();setCallState("connecting")}else if(signal.kind==="candidate"&&signal.sender_id===peerId){const c=signal.payload as RTCIceCandidateInit;if(pc.current?.remoteDescription)await pc.current.addIceCandidate(c);else candidateQueue.current.push(c)}else if(signal.kind==="hangup"&&signal.sender_id===peerId){setError("Звонок завершён");reset()}}catch(e){setError(e instanceof Error?e.message:"Ошибка видеозвонка")}},[boardId,userId,targetId,peerId,reset]);
  useEffect(()=>{const since=new Date(Date.now()-15000).toISOString();const off=subscribeBoardCallSignals(userId,s=>void handleSignal(s));void listRecentBoardCallSignals(boardId,since).then(rows=>rows.forEach(s=>void handleSignal(s))).catch(()=>{});return()=>{off();closePeer();stopMedia()}},[boardId,userId,handleSignal]);
  const call=async(otherId:string)=>{setError("");setChooser(false);setTargetId(otherId);setOpen(true);setMinimized(false);setCallState("calling");try{const peer=await createPeer(otherId);const offer=await peer.createOffer();await peer.setLocalDescription(offer);await sendBoardCallSignal(boardId,otherId,"offer",offer)}catch(e){setError(e instanceof Error?e.message:"Не удалось начать звонок");reset()}};
  const accept=async()=>{const offer=pendingOffer.current,otherId=incomingId;if(!offer||!otherId)return;setError("");setCallState("connecting");try{const peer=await createPeer(otherId);await peer.setRemoteDescription(offer);await flushCandidates();const answer=await peer.createAnswer();await peer.setLocalDescription(answer);await sendBoardCallSignal(boardId,otherId,"answer",answer)}catch(e){setError(e instanceof Error?e.message:"Не удалось принять звонок");reset()}};
