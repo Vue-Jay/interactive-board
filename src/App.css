@@ -7185,3 +7185,233 @@ option{background:#fff;color:#343741}
   border-color:#444650!important;
 }
 [data-theme="dark"] .mobile-tool-separator{background:#4a4b55!important}
+
+/* v169 · mobile toolbar correction.
+   IMPORTANT: mobile layout is width/orientation driven, not pointer:coarse.
+   Some Android/WebView/desktop-touch combinations report a fine pointer and
+   were therefore falling back to the old toolbar. */
+@media (max-width:1100px){
+  .toolbar.compact-toolbar,
+  .mobile-tools-toggle,
+  .mobile-quick-tools{display:none!important}
+
+  .mobile-board-tools{
+    display:flex!important;
+    position:fixed!important;
+    left:50%!important;
+    right:auto!important;
+    bottom:max(10px,env(safe-area-inset-bottom))!important;
+    transform:translateX(-50%)!important;
+    z-index:240!important;
+    align-items:center!important;
+    gap:3px!important;
+    width:max-content!important;
+    max-width:calc(100vw - 20px)!important;
+    height:54px!important;
+    padding:5px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none!important;
+    border:1px solid rgba(218,219,228,.96)!important;
+    border-radius:17px!important;
+    background:rgba(255,255,255,.98)!important;
+    box-shadow:0 8px 30px rgba(28,30,43,.16)!important;
+  }
+  .mobile-board-tools::-webkit-scrollbar{display:none!important}
+  .mobile-tool-cluster{display:flex!important;align-items:center!important;gap:2px!important;flex:0 0 auto!important}
+  .mobile-tool-cluster-navigation{order:1!important}
+  .mobile-board-tools>.mobile-tool-separator:first-of-type{order:2!important}
+  .mobile-tool-cluster-create{order:3!important}
+  .mobile-board-tools>.mobile-tool-separator:last-of-type{order:4!important}
+  .mobile-tools-more{order:5!important}
+  .mobile-tool-separator{
+    display:block!important;
+    flex:0 0 1px!important;
+    width:1px!important;
+    height:28px!important;
+    margin:0 3px!important;
+    background:#e2e3ea!important;
+  }
+  .mobile-board-tools button{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 42px!important;
+    width:42px!important;
+    min-width:42px!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:11px!important;
+    background:transparent!important;
+    color:#555b68!important;
+  }
+  .mobile-board-tools button.active{
+    background:#ececff!important;
+    color:#5053c6!important;
+    box-shadow:inset 0 0 0 1px #d6d7f9!important;
+  }
+
+  .mobile-tools-sheet{
+    display:block!important;
+    position:fixed!important;
+    left:50%!important;
+    right:auto!important;
+    bottom:74px!important;
+    transform:translateX(-50%)!important;
+    z-index:239!important;
+    width:min(720px,calc(100vw - 20px))!important;
+    max-height:min(68dvh,470px)!important;
+    overflow:auto!important;
+    padding:9px!important;
+    border:1px solid #dedfe7!important;
+    border-radius:17px!important;
+    background:rgba(255,255,255,.99)!important;
+    box-shadow:0 16px 48px rgba(26,28,40,.20)!important;
+  }
+  .mobile-tools-sheet-head{display:flex!important;align-items:center!important;justify-content:space-between!important}
+  .mobile-tools-groups{display:grid!important;gap:10px!important}
+  .mobile-tools-group{display:grid!important;gap:5px!important}
+  .mobile-tools-group>span{
+    display:block!important;
+    padding-left:4px!important;
+    color:#7f8390!important;
+    font-size:10px!important;
+    font-weight:850!important;
+    letter-spacing:.06em!important;
+    text-transform:uppercase!important;
+  }
+  .mobile-tools-group>div{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:5px!important;
+  }
+  .mobile-tools-group button{
+    display:flex!important;
+    min-width:0!important;
+    min-height:48px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:5px!important;
+    padding:5px 7px!important;
+    border:1px solid transparent!important;
+    border-radius:11px!important;
+    background:#f7f7fa!important;
+    color:#555a67!important;
+  }
+  .mobile-tools-group button.active{background:#ececff!important;border-color:#d6d7f9!important;color:#5053c6!important}
+  .mobile-tools-group button small{font-size:9px!important;font-weight:750!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+
+  /* Give the navigation controls their own physical layout slots. */
+  .board-controls{
+    display:flex!important;
+    position:fixed!important;
+    left:max(10px,env(safe-area-inset-left))!important;
+    right:auto!important;
+    bottom:max(10px,env(safe-area-inset-bottom))!important;
+    z-index:235!important;
+    width:auto!important;
+    max-width:none!important;
+    height:52px!important;
+    min-height:52px!important;
+    padding:5px!important;
+    gap:4px!important;
+    overflow:visible!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+  }
+  .board-controls .fit-all-button,
+  .board-controls .fit-selection-button{
+    position:relative!important;
+    display:flex!important;
+    flex:0 0 auto!important;
+    width:auto!important;
+    min-width:58px!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 10px!important;
+    gap:5px!important;
+  }
+  .board-controls .fit-selection-button{
+    margin-left:20px!important;
+  }
+  .board-controls .fit-selection-button::before{
+    content:""!important;
+    position:absolute!important;
+    left:-11px!important;
+    top:8px!important;
+    bottom:8px!important;
+    width:1px!important;
+    background:#dedfe7!important;
+  }
+  .board-controls .fit-selection-button:disabled{display:none!important}
+
+  .selection-toolbar-screen{bottom:76px!important;z-index:245!important}
+}
+
+/* Landscape is the main mobile board mode. Navigation stays left, tools stay
+   right. There is a reserved empty corridor between them, so no overlap is possible. */
+@media (max-width:1100px) and (orientation:landscape){
+  .board-controls{
+    left:max(10px,env(safe-area-inset-left))!important;
+    bottom:max(8px,env(safe-area-inset-bottom))!important;
+    height:50px!important;
+  }
+  .board-controls .fit-selection-button{margin-left:24px!important}
+  .board-controls .fit-selection-button::before{left:-13px!important}
+
+  .mobile-board-tools{
+    left:auto!important;
+    right:max(10px,env(safe-area-inset-right))!important;
+    bottom:max(8px,env(safe-area-inset-bottom))!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:calc(100vw - 330px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;
+    height:50px!important;
+    padding:4px!important;
+  }
+  .mobile-board-tools button{
+    flex-basis:40px!important;
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    min-height:40px!important;
+  }
+  .mobile-tools-sheet{
+    left:auto!important;
+    right:max(10px,env(safe-area-inset-right))!important;
+    bottom:66px!important;
+    transform:none!important;
+    width:min(760px,calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right)))!important;
+    max-height:calc(100dvh - 122px - env(safe-area-inset-bottom))!important;
+  }
+  .mobile-tools-groups{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    column-gap:14px!important;
+  }
+  .mobile-tools-group>div{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+
+/* On narrow landscape screens, preserve all three navigation tools including Lasso.
+   Less essential creation buttons may scroll instead of disappearing. */
+@media (max-width:780px) and (orientation:landscape){
+  .mobile-board-tools{
+    max-width:calc(100vw - 255px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;
+  }
+  .mobile-tool-cluster-navigation{
+    position:sticky!important;
+    left:0!important;
+    z-index:3!important;
+    background:rgba(255,255,255,.98)!important;
+  }
+  .board-controls .zoom-value,
+  .board-controls>button[aria-label="Уменьшить"],
+  .board-controls>button[aria-label="Увеличить"]{display:none!important}
+}
+
+/* Portrait still keeps Lasso in the primary navigation group. */
+@media (max-width:520px) and (orientation:portrait){
+  .mobile-board-tools{max-width:calc(100vw - 16px)!important}
+  .mobile-tool-cluster-create button:last-child{display:none!important}
+  .mobile-tools-group>div{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}

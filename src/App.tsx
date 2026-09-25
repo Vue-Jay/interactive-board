@@ -5622,7 +5622,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             <Icon name="snap" size={16} />
           </button>
           <button
-            className="fit-button"
+            className="fit-button fit-all-button"
             disabled={!items.length}
             onClick={() => fitToBounds(boundsOf(itemsRef.current.filter((item) => !item.hidden)))}
             title="Показать всю доску"
@@ -5630,7 +5630,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             <Icon name="fit" size={15} /><span>Все</span>
           </button>
           <button
-            className="fit-button"
+            className="fit-button fit-selection-button"
             disabled={!selectionBounds}
             onClick={() => fitToBounds(selectionBounds, 120)}
             title="Приблизить выделение"
