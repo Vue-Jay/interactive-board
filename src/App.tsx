@@ -1210,6 +1210,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const remoteVersion = useRef<number | null>(initialRemoteVersion);
   const remoteSaveInFlight = useRef(false);
   const queuedRemoteSnapshot = useRef<DocumentData | null>(null);
+  const remoteSaveFailures = useRef(0);
+  const remoteRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acknowledgedDocument = useRef<string | null>(initialRemoteVersion == null ? null : documentFingerprint(initial.data));
   const deferredRemote = useRef<RemoteBoardDocument | null>(null);
   const pendingRemote = useRef<RemoteBoardDocument | null>(null);
@@ -1221,7 +1223,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const boardMounted = useRef(true);
   useEffect(() => {
     boardMounted.current = true;
-    return () => { boardMounted.current = false; };
+    return () => {
+      boardMounted.current = false;
+      if (remoteRetryTimer.current) clearTimeout(remoteRetryTimer.current);
+    };
   }, []);
   useEffect(() => {
     localStorage.setItem("lesson-board.grid-mode", gridMode);
@@ -1267,9 +1272,27 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       }
       remoteVersion.current = result.version;
       acknowledgedDocument.current = documentFingerprint(data);
+      remoteSaveFailures.current = 0;
+      if (remoteRetryTimer.current) {
+        clearTimeout(remoteRetryTimer.current);
+        remoteRetryTimer.current = null;
+      }
       setSaveStatus("Сохранено на сервере");
     } catch {
-      setSaveStatus("Сохранено локально · сервер временно недоступен");
+      // A short Supabase/network hiccup must not permanently leave the board in
+      // a scary "server unavailable" state. The local copy is already safe,
+      // so retry the latest snapshot quietly with a small exponential backoff.
+      remoteSaveFailures.current += 1;
+      const delay = Math.min(8000, 1000 * 2 ** Math.min(remoteSaveFailures.current - 1, 3));
+      setSaveStatus(remoteSaveFailures.current < 3
+        ? "Сохранено локально · повторная синхронизация…"
+        : "Сохранено локально · восстанавливаем связь с сервером…");
+      if (remoteRetryTimer.current) clearTimeout(remoteRetryTimer.current);
+      remoteRetryTimer.current = setTimeout(() => {
+        remoteRetryTimer.current = null;
+        if (!boardMounted.current || !snapshot.current || pendingRemote.current) return;
+        void pushRemoteSnapshot(snapshot.current);
+      }, delay);
     } finally {
       remoteSaveInFlight.current = false;
       const deferred = deferredRemote.current;
@@ -3748,6 +3771,8 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     acknowledgedDocument.current = documentFingerprint(data);
     pendingRemote.current = null;
     queuedRemoteSnapshot.current = null;
+    remoteSaveFailures.current = 0;
+    if (remoteRetryTimer.current) { clearTimeout(remoteRetryTimer.current); remoteRetryTimer.current = null; }
     setRemoteConflict(null);
     setTableEditorId(null); setChecklistEditorId(null); setQuizEditorId(null);
     setFlashcardEditorId(null); setFormulaEditorId(null); setFrameNotesEditorId(null);
