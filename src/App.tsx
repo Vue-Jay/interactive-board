@@ -299,6 +299,15 @@ const toolShortLabel: Record<Tool, string> = {
   cover:"Шторка",media:"Фото / PDF",linkmedia:"Видео / аудио",
 };
 const primaryDesktopTools = new Set<Tool>(["select","hand","pen","marker","eraser","connector","text","sticky","shape","media"]);
+const mobileToolGroups: { label:string; tools:Tool[] }[] = [
+  { label:"Навигация", tools:["hand","select","lasso"] },
+  { label:"Рисование", tools:["pen","marker","eraser"] },
+  { label:"Создание", tools:["sticky","text","shape","connector"] },
+  { label:"Материалы", tools:["media","linkmedia","frame"] },
+  { label:"Учёба", tools:["table","formula","graph","checklist","quiz","flashcard","cover","comment"] },
+];
+const mobileDockTools: Tool[] = ["hand","select","pen","sticky","text","shape"];
+
 
 const keyTools: Record<string, Tool> = {
   KeyV: "select",
@@ -4868,7 +4877,23 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             ))}
           </div>
         )}
-<button type="button" className="mobile-tools-toggle" aria-label="Инструменты" title="Инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={tool} size={20}/></button>
+<nav className="mobile-board-tools" aria-label="Основные инструменты">
+          <div className="mobile-tool-cluster mobile-tool-cluster-navigation" aria-label="Навигация">
+            {mobileDockTools.slice(0,2).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+          </div>
+          <span className="mobile-tool-separator" aria-hidden="true"/>
+          <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
+            {mobileDockTools.slice(2).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+          </div>
+          <span className="mobile-tool-separator" aria-hidden="true"/>
+          <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
+        </nav>
+        {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
+          <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div>
+          <div className="mobile-tools-groups">
+            {mobileToolGroups.map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
+          </div>
+        </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
           <div className="toolbar-pinned" aria-label="Навигация">
             {(["select","hand"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
