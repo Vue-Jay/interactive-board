@@ -2,6 +2,8 @@ import { isRemoteBackendEnabled,remoteFunctionRequest } from "./backend";
 
 const DEFAULT_STUN:RTCIceServer={urls:"stun:stun.l.google.com:19302"};
 type TurnResponse={iceServers:RTCIceServer[];expiresAt?:number};
+export type BoardCallIceMode="direct"|"turn";
+export type BoardCallIceConfig={iceServers:RTCIceServer[];mode:BoardCallIceMode};
 let cached:{servers:RTCIceServer[];expiresAt:number}|null=null;
 
 function splitUrls(value:string|undefined):string[]{
@@ -22,6 +24,11 @@ function containsTurn(servers:RTCIceServer[]):boolean{
   const urls=Array.isArray(server.urls)?server.urls:[server.urls];
   return urls.some(url=>/^turns?:/i.test(url));
  });
+}
+
+export async function getBoardCallIceConfig():Promise<BoardCallIceConfig>{
+ const iceServers=await getBoardCallIceServers();
+ return {iceServers,mode:containsTurn(iceServers)?"turn":"direct"};
 }
 
 export async function getBoardCallIceServers():Promise<RTCIceServer[]>{
