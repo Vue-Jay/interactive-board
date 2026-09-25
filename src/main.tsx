@@ -36,14 +36,17 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-// Do not force a full page reload when a new service worker takes control.
-// On slow mobile networks that turned every deployment into a second complete startup.
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+// v151: temporarily retire the Service Worker.
+// The app is an online collaborative board, and a stale/intercepted navigation is worse
+// than losing offline shell caching. This also repairs already-installed PWAs.
+if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").then((registration) => {
-      // Ask for an update quietly. The new worker activates immediately and will
-      // serve the next navigation without interrupting the current session.
-      void registration.update().catch(() => undefined);
-    }).catch((error) => console.warn("Service worker registration failed", error));
+    void navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((key) => key.startsWith("onlinerepetitor-")).map((key) => caches.delete(key)));
+      }
+    }).catch((error) => console.warn("Service worker cleanup failed", error));
   });
 }

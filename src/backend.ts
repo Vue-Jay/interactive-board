@@ -13,17 +13,6 @@ export type BackendSession = {
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/$/, "") || "";
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
 const SESSION_KEY = "lesson-board.supabase.session.v1";
-const NETWORK_TIMEOUT_MS = 5000;
-
-const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    window.clearTimeout(timer);
-  }
-};
 
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
 
@@ -76,7 +65,7 @@ const normalizeSession = (data: any): BackendSession => ({
 });
 
 export const signUpRemote = async (email: string, password: string, name: string) => {
-  const response = await fetch(`${url}/auth/v1/signup`, {
+  const response = await fetchWithTimeout(`${url}/auth/v1/signup`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ email, password, data: { display_name: name } }),
@@ -92,7 +81,7 @@ export const signUpRemote = async (email: string, password: string, name: string
 };
 
 export const signInAnonymousRemote = async (name = "Гость") => {
-  const response = await fetch(`${url}/auth/v1/signup`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ data: { display_name: name.trim() || "Гость", is_guest: true } }) });
+  const response = await fetchWithTimeout(`${url}/auth/v1/signup`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ data: { display_name: name.trim() || "Гость", is_guest: true } }) });
   if (!response.ok) throw new Error(await errorMessage(response));
   const data = await response.json();
   if (!data.access_token) throw new Error("Анонимный вход отключён в настройках Supabase.");
@@ -100,7 +89,7 @@ export const signInAnonymousRemote = async (name = "Гость") => {
 };
 
 export const signInRemote = async (email: string, password: string) => {
-  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+  const response = await fetchWithTimeout(`${url}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ email, password }),
@@ -112,7 +101,7 @@ export const signInRemote = async (email: string, password: string) => {
 };
 
 const refreshRemoteSession = async (session: BackendSession) => {
-  const response = await fetchWithTimeout(`${url}/auth/v1/token?grant_type=refresh_token`, {
+  const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ refresh_token: session.refresh_token }),
@@ -129,15 +118,16 @@ const refreshRemoteSession = async (session: BackendSession) => {
 export const getRemoteSession = async (): Promise<BackendSession | null> => {
   let session = loadSession();
   if (!session) return null;
-  // A valid JWT is enough to boot the app. Do not block every page load on /auth/v1/user.
-  // Protected Supabase requests still validate the token server-side.
-  if (session.expires_at > Math.floor(Date.now() / 1000) + 30) return session;
-  try {
+  if (session.expires_at <= Math.floor(Date.now() / 1000) + 30) {
     session = await refreshRemoteSession(session);
-    return session;
-  } catch {
-    return null;
+    if (!session) return null;
   }
+  const response = await fetch(`${url}/auth/v1/user`, { headers: authHeaders(session.access_token) });
+  if (!response.ok) {
+    session = await refreshRemoteSession(session);
+    if (!session) return null;
+  }
+  return session;
 };
 
 export const signOutRemote = async () => {
@@ -157,7 +147,7 @@ export const remoteRequest = async <T>(path: string, init: RequestInit = {}): Pr
   headers.set("apikey", anonKey);
   headers.set("Authorization", `Bearer ${session.access_token}`);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(`${url}${path}`, { ...init, headers });
+  const response = await fetchWithTimeout(`${url}${path}`, { ...init, headers });
   if (!response.ok) throw new Error(await errorMessage(response));
   if (response.status === 204) return undefined as T;
   const text = await response.text();
