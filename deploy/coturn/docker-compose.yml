@@ -1,11 +1,16 @@
 services:
   coturn:
-    image: coturn/coturn:4.6.3
+    image: coturn/coturn:4.18.0
     restart: unless-stopped
     network_mode: host
     env_file: .env
     command:
       - -c
       - /etc/coturn/turnserver.conf
+      - --realm=${TURN_REALM}
+      - --server-name=${TURN_REALM}
+      - --static-auth-secret=${TURN_SHARED_SECRET}
+      - --external-ip=${TURN_PUBLIC_IP}
+      - --log-file=stdout
     volumes:
       - ./turnserver.conf:/etc/coturn/turnserver.conf:ro

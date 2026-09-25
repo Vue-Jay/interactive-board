@@ -5488,3 +5488,19 @@ option{background:#fff;color:#343741}
 .board-call-button.active::after{content:"";position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#28a86b;border:2px solid #fff;box-sizing:content-box}
 .board-call-button:disabled{opacity:.38!important}
 @media(max-width:700px){.board-call-control{flex-basis:38px;width:38px;min-width:38px}.board-call-button{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important}.board-call-button .board-call-icon{width:21px;height:21px}}
+
+
+/* v141 · compact fixed call window */
+.compact-call-layer{pointer-events:none;display:block}
+.compact-call-layer .compact-call-card{pointer-events:auto;position:fixed!important;top:auto!important;left:auto!important;right:16px!important;bottom:16px!important;width:320px!important;max-width:calc(100vw - 24px)!important;max-height:min(430px,calc(100dvh - 24px))!important;border-radius:18px!important;overflow:hidden!important}
+.compact-call-card>header{padding:12px 14px!important;min-height:54px}
+.compact-call-card>header strong{font-size:14px!important}.compact-call-card>header span{font-size:11px!important}
+.compact-call-stage{min-height:0!important;height:210px!important}.compact-call-stage.audio-only{height:118px!important;background:linear-gradient(145deg,#161925,#0c0e14)}
+.compact-call-stage.audio-only .video-call-placeholder{font-size:34px;width:58px;height:58px;inset:50% auto auto 50%;transform:translate(-50%,-50%);border-radius:50%;background:#292d3a;color:#fff}
+.compact-call-stage .video-call-local{width:92px!important;right:10px!important;bottom:10px!important;border-radius:10px!important}.compact-call-stage .video-call-local.camera-off{display:none}
+.compact-call-card .video-call-sharing-badge{left:8px;top:8px;padding:4px 7px;font-size:9px}
+.compact-call-actions{display:flex!important;grid-template-columns:none!important;justify-content:center!important;align-items:center!important;gap:12px!important;padding:12px 14px 14px!important}
+.compact-call-actions .compact-call-action{display:grid!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:0!important;border-radius:50%!important;font-size:18px!important}
+.compact-call-actions .compact-call-action.active{background:#4f46e5!important;color:#fff!important}.compact-call-actions .video-call-decline{background:#e5484d!important;color:#fff!important;transform:rotate(135deg)}
+.compact-call-actions .video-call-decline span{display:block}
+@media(max-width:700px){.compact-call-layer{background:transparent!important}.compact-call-layer .compact-call-card{left:auto!important;right:8px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;width:min(300px,calc(100vw - 16px))!important;height:auto!important;max-height:calc(100dvh - 16px - env(safe-area-inset-bottom))!important;border-radius:16px!important}.compact-call-stage{height:180px!important}.compact-call-stage.audio-only{height:104px!important}.compact-call-actions .compact-call-action{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important}}

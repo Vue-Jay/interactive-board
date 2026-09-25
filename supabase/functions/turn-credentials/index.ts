@@ -9,12 +9,12 @@ const corsHeaders = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
 function splitUrls(value: string) {
-  return value.split(/[\\s,;]+/).map((value) => value.trim()).filter(Boolean);
+  return value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean);
 }
 
 async function hmacSha1Base64(secret: string, value: string) {
@@ -39,6 +39,8 @@ Deno.serve(async (request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!supabaseUrl || !anonKey) return json({ error: "Supabase environment is incomplete" }, 500);
+
     const client = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
     });
@@ -50,6 +52,7 @@ Deno.serve(async (request) => {
     const requestedTtl = Number(Deno.env.get("TURN_CREDENTIAL_TTL") ?? "3600") || 3600;
     const ttl = Math.min(86400, Math.max(60, requestedTtl));
     if (!turnUrls.length || !sharedSecret) return json({ error: "TURN is not configured" }, 503);
+    if (turnUrls.some((url) => !/^turns?:/i.test(url))) return json({ error: "TURN_URLS contains an invalid URL" }, 500);
 
     const expiresAt = Math.floor(Date.now() / 1000) + ttl;
     const username = `${expiresAt}:${user.id}`;
