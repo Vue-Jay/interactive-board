@@ -7063,3 +7063,125 @@ option{background:#fff;color:#343741}
     display:none!important;
   }
 }
+
+/* v168 · final mobile toolbar pass */
+@media (max-width:1100px) and (pointer:coarse){
+  /* Strong, predictable tap feedback */
+  .mobile-board-tools button,
+  .mobile-tools-group button{
+    -webkit-tap-highlight-color:transparent!important;
+    user-select:none!important;
+  }
+  .mobile-board-tools button:focus-visible,
+  .mobile-tools-group button:focus-visible{
+    outline:2px solid #7779dc!important;
+    outline-offset:2px!important;
+  }
+
+  /* The full tool catalogue behaves like a real mobile sheet. */
+  .mobile-tools-sheet{
+    padding-bottom:max(10px,env(safe-area-inset-bottom))!important;
+  }
+  .mobile-tools-group>span{
+    position:sticky!important;
+    left:0!important;
+  }
+
+  /* Selection controls never fight with the bottom dock. */
+  .selection-toolbar-screen{
+    z-index:230!important;
+    max-height:52px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none!important;
+    overscroll-behavior-x:contain!important;
+  }
+  .selection-toolbar-screen::-webkit-scrollbar{display:none!important}
+
+  /* Board navigation is intentionally separate from creation tools. */
+  .board-controls{
+    white-space:nowrap!important;
+    flex-wrap:nowrap!important;
+  }
+  .board-controls .fit-button + .fit-button{
+    isolation:isolate!important;
+  }
+}
+
+/* Landscape phone/tablet: compact, reachable and collision-proof. */
+@media (max-width:1100px) and (pointer:coarse) and (orientation:landscape){
+  .mobile-board-tools{
+    border-radius:15px!important;
+  }
+  .mobile-tools-sheet{
+    border-radius:15px!important;
+  }
+
+  /* Keep categories readable without producing a tall modal. */
+  .mobile-tools-group>span{
+    font-size:8px!important;
+    letter-spacing:.07em!important;
+  }
+  .mobile-tools-group button small{
+    font-size:8px!important;
+  }
+
+  /* Definitive All / Selection layout. The second control owns a separate slot. */
+  .board-controls .fit-button:first-of-type{
+    margin-right:0!important;
+  }
+  .board-controls .fit-button + .fit-button{
+    margin-left:22px!important;
+  }
+  .board-controls .fit-button + .fit-button::before{
+    left:-12px!important;
+  }
+}
+
+/* Extra-short landscape screens: keep every important tool one tap away. */
+@media (max-height:430px) and (pointer:coarse) and (orientation:landscape){
+  .mobile-board-tools{
+    height:46px!important;
+    padding-top:3px!important;
+    padding-bottom:3px!important;
+  }
+  .mobile-board-tools button{
+    width:38px!important;
+    min-width:38px!important;
+    height:38px!important;
+    min-height:38px!important;
+    flex-basis:38px!important;
+  }
+  .mobile-tools-sheet{
+    bottom:60px!important;
+    max-height:calc(100dvh - 112px - env(safe-area-inset-bottom))!important;
+  }
+  .mobile-tools-group button{height:40px!important}
+  .selection-toolbar-screen{bottom:62px!important}
+}
+
+/* Dark theme parity for the new mobile controls. */
+[data-theme="dark"] .mobile-board-tools,
+[data-theme="dark"] .mobile-tools-sheet,
+[data-theme="dark"] .mobile-tools-sheet-head,
+[data-theme="dark"] .mobile-tool-cluster-navigation{
+  background:rgba(38,39,47,.98)!important;
+  border-color:#444650!important;
+  color:#f1f1f5!important;
+}
+[data-theme="dark"] .mobile-board-tools button{color:#d1d2dc!important}
+[data-theme="dark"] .mobile-board-tools button.active,
+[data-theme="dark"] .mobile-tools-group button.active{
+  background:#414267!important;
+  color:#f0f0ff!important;
+  border-color:#5a5c88!important;
+}
+[data-theme="dark"] .mobile-tools-group button{
+  background:#303139!important;
+  color:#d8d9e1!important;
+}
+[data-theme="dark"] .mobile-tool-separator,
+[data-theme="dark"] .mobile-tools-sheet-head{
+  border-color:#444650!important;
+}
+[data-theme="dark"] .mobile-tool-separator{background:#4a4b55!important}
