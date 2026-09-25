@@ -5563,28 +5563,151 @@ option{background:#fff;color:#343741}
   }
 }
 
-/* v150 · call overlay is portaled to body, so teacher/student layout cannot move it */
-.compact-call-layer .compact-call-card{
-  position:fixed!important;
-  top:auto!important;
-  bottom:18px!important;
-  right:18px!important;
-  left:auto!important;
-  transform:none!important;
-  max-height:calc(100dvh - 36px)!important;
-}
-.compact-call-actions .compact-call-action,
-.compact-call-actions .video-call-decline,
-.compact-call-actions .video-call-accept,
-.compact-call-actions .call-action-icon{
-  transform:none!important;
-}
-@media(max-width:700px){
-  .compact-call-layer .compact-call-card{
-    top:auto!important;
-    bottom:calc(10px + env(safe-area-inset-bottom))!important;
-    right:10px!important;
-    left:auto!important;
-    max-height:calc(100dvh - 20px - env(safe-area-inset-bottom))!important;
+/* v154 · compact phone board UI */
+@media (max-width:700px){
+  .topbar{
+    height:44px!important;
+    min-height:44px!important;
+    padding-top:3px!important;
+    padding-bottom:3px!important;
   }
+  .workspace{height:calc(100dvh - 44px)!important}
+
+  .board-home-button{
+    width:36px!important;
+    min-width:36px!important;
+    height:34px!important;
+    padding:0!important;
+    overflow:hidden!important;
+    font-size:0!important;
+  }
+  .board-home-button::before{
+    content:"‹";
+    display:block;
+    font-size:24px;
+    line-height:1;
+  }
+  .board-title{
+    height:34px!important;
+    min-width:0!important;
+    padding:4px 6px!important;
+    font-size:11px!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+  }
+  .presence-menu summary,
+  .topbar-more-trigger,
+  .topbar-right>.start-live-lesson,
+  .topbar-right>.chat-top-button,
+  .topbar-right>.board-chat-button{
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:0!important;
+  }
+  .topbar-more-popover{
+    top:47px!important;
+    width:min(286px,calc(100vw - 12px))!important;
+    max-height:calc(100dvh - 54px)!important;
+  }
+
+  .mobile-quick-tools{
+    left:52px!important;
+    right:52px!important;
+    bottom:max(5px,env(safe-area-inset-bottom))!important;
+    transform:none!important;
+    width:auto!important;
+    max-width:none!important;
+    justify-content:space-between!important;
+    overflow:hidden!important;
+    gap:1px!important;
+    padding:3px!important;
+    border-radius:12px!important;
+  }
+  .mobile-quick-tools button{
+    flex:1 1 0!important;
+    width:auto!important;
+    min-width:34px!important;
+    max-width:42px!important;
+    height:36px!important;
+    min-height:36px!important;
+    border-radius:9px!important;
+  }
+  .mobile-tools-toggle{
+    left:5px!important;
+    bottom:max(5px,env(safe-area-inset-bottom))!important;
+    width:42px!important;
+    height:42px!important;
+    min-height:42px!important;
+    border-radius:12px!important;
+  }
+  .board-controls{
+    right:5px!important;
+    bottom:max(5px,env(safe-area-inset-bottom))!important;
+    padding:2px!important;
+  }
+  .board-controls button{width:34px!important;min-width:34px!important;height:36px!important}
+  .board-controls .fit-button,
+  .board-controls .grid-toggle,
+  .board-controls .snap-toggle{display:none!important}
+
+  .compact-toolbar{
+    left:5px!important;
+    right:5px!important;
+    bottom:52px!important;
+    max-height:min(54dvh,340px)!important;
+    padding:6px!important;
+    border-radius:14px!important;
+  }
+  .compact-toolbar.mobile-open{
+    grid-template-columns:1fr!important;
+    gap:5px!important;
+  }
+  .compact-toolbar .toolbar-pinned{
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:4px!important;
+  }
+  .compact-toolbar .toolbar-section-line{display:none!important}
+  .compact-toolbar .toolbar-list{
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:3px!important;
+  }
+  .compact-toolbar .tool-button{
+    width:38px!important;
+    height:38px!important;
+    min-height:38px!important;
+  }
+
+  .ink-settings,.eraser-settings,.connector-settings,.shape-palette{
+    top:5px!important;
+    left:5px!important;
+    right:5px!important;
+    min-height:40px!important;
+    padding:4px 6px!important;
+    border-radius:11px!important;
+  }
+  .ink-settings input[type="range"],
+  .eraser-settings input[type="range"],
+  .connector-settings input[type="range"]{width:72px!important}
+
+  .selection-toolbar-screen{
+    max-width:calc(100vw - 10px)!important;
+    overflow-x:auto!important;
+    scrollbar-width:none!important;
+  }
+  .selection-toolbar-screen::-webkit-scrollbar{display:none}
+  .notice{left:5px!important;right:5px!important;bottom:52px!important;padding:7px 9px!important}
+}
+
+@media (max-width:390px){
+  .board-title{font-size:10px!important}
+  .presence-menu{display:none!important}
+  .mobile-quick-tools{left:49px!important;right:47px!important}
+  .mobile-quick-tools button{min-width:32px!important;height:34px!important;min-height:34px!important}
+  .mobile-tools-toggle{width:39px!important;height:40px!important;min-height:40px!important}
+  .board-controls button{width:32px!important;min-width:32px!important;height:34px!important}
 }
