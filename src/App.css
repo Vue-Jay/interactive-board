@@ -5475,3 +5475,16 @@ option{background:#fff;color:#343741}
 .board-chat-button{position:relative;display:inline-flex!important;align-items:center;gap:7px}
 .board-chat-button .top-badge{position:absolute;right:-7px;top:-8px;min-width:19px;height:19px;padding:0 5px;display:grid;place-items:center;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:800;box-shadow:0 0 0 2px #fff}
 @media(max-width:900px){.board-chat-button>span{display:none}.board-chat-button{min-width:38px!important;padding-inline:10px!important}}
+
+
+/* v135 · compact board call icon */
+.board-call-control{position:relative;display:flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;min-width:40px;overflow:visible}
+.board-call-button{position:relative!important;display:grid!important;place-items:center!important;width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;padding:0!important;border:1px solid transparent!important;border-radius:12px!important;overflow:visible!important;color:#555b6d!important;background:transparent!important;line-height:1!important}
+.board-call-button .board-call-icon{display:block;width:22px;height:22px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.board-call-button:hover:not(:disabled){background:#f4f3ff!important;border-color:#dedcff!important;color:#5b50d6!important;transform:translateY(-1px)}
+.board-call-button:active:not(:disabled){transform:translateY(0) scale(.96)}
+.board-call-button:focus-visible{outline:3px solid #7c72e533;outline-offset:2px}
+.board-call-button.active{background:#eeecff!important;border-color:#d5d0ff!important;color:#5548d9!important;box-shadow:0 5px 14px #6559d322}
+.board-call-button.active::after{content:"";position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#28a86b;border:2px solid #fff;box-sizing:content-box}
+.board-call-button:disabled{opacity:.38!important}
+@media(max-width:700px){.board-call-control{flex-basis:38px;width:38px;min-width:38px}.board-call-button{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important}.board-call-button .board-call-icon{width:21px;height:21px}}
