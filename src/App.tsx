@@ -5715,14 +5715,21 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
+    const startupFallback = window.setTimeout(() => {
+      if (alive) setAuthReady(true);
+    }, 4500);
     void getCurrentUser().then((user) => {
       if (alive) setAuthUser(user);
     }).catch(() => {
       if (alive) setAuthUser(null);
     }).finally(() => {
+      window.clearTimeout(startupFallback);
       if (alive) setAuthReady(true);
     });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      window.clearTimeout(startupFallback);
+    };
   }, []);
 
   const logout = () => {
