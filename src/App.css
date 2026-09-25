@@ -7415,3 +7415,31 @@ option{background:#fff;color:#343741}
   .mobile-tool-cluster-create button:last-child{display:none!important}
   .mobile-tools-group>div{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 }
+
+/* v172 · center the primary mobile toolbar in landscape */
+@media (max-width:1100px) and (orientation:landscape){
+  .mobile-board-tools{
+    left:50%!important;
+    right:auto!important;
+    transform:translateX(-50%)!important;
+    max-width:calc(100vw - 330px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;
+  }
+
+  /* The expanded catalogue follows the centered toolbar. */
+  .mobile-tools-sheet{
+    left:50%!important;
+    right:auto!important;
+    transform:translateX(-50%)!important;
+  }
+}
+
+/* On narrow landscape screens keep the dock centered too.
+   Horizontal scrolling remains available if all tools do not fit. */
+@media (max-width:780px) and (orientation:landscape){
+  .mobile-board-tools{
+    left:50%!important;
+    right:auto!important;
+    transform:translateX(-50%)!important;
+    max-width:calc(100vw - 255px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;
+  }
+}

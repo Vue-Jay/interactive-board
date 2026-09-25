@@ -37,8 +37,8 @@ if (!root) {
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
 // v171: installed/mobile app must never remain pinned to an old application shell.
-const APP_BUILD_VERSION = "171";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v171";
+const APP_BUILD_VERSION = "172";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v172";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
