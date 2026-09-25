@@ -19,7 +19,6 @@ import { getAccountAccess,type AccountRole } from "./accountRoleStore";
 import AdminScreen from "./AdminScreen";
 import TemplatesScreen from "./TemplatesScreen";
 import TestingGuideScreen from "./TestingGuideScreen";
-import BoardVideoCallPanel from "./BoardVideoCallPanel";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -4067,7 +4066,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             {realtimeStatus === "online" ? "Онлайн" : realtimeStatus === "reconnecting" ? "Переподключение..." : "Офлайн"}
           </span>}
         </div>
-        <div className="topbar-right"><BoardVideoCallPanel boardId={boardSummary.id} userId={authUser.id} participants={presenceUsers.map((user)=>({userId:user.userId,name:user.name}))}/>{installPrompt&&!isStandalone&&<button type="button" className="install-app-button" onClick={()=>void installApp()} title="Установить OnlineRepetitor на устройство">{isCoarsePointer?"Установить приложение":"Установить"}</button>}
+        <div className="topbar-right">{installPrompt&&!isStandalone&&<button type="button" className="install-app-button" onClick={()=>void installApp()} title="Установить OnlineRepetitor на устройство">{isCoarsePointer?"Установить приложение":"Установить"}</button>}
           {isRemoteBackendEnabled() && <details className="presence-menu">
             <summary title="Пользователи, которые сейчас находятся на доске">
               <span className="presence-live-dot" aria-hidden="true"/>
@@ -5715,21 +5714,14 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    const startupFallback = window.setTimeout(() => {
-      if (alive) setAuthReady(true);
-    }, 250);
     void getCurrentUser().then((user) => {
       if (alive) setAuthUser(user);
     }).catch(() => {
       if (alive) setAuthUser(null);
     }).finally(() => {
-      window.clearTimeout(startupFallback);
       if (alive) setAuthReady(true);
     });
-    return () => {
-      alive = false;
-      window.clearTimeout(startupFallback);
-    };
+    return () => { alive = false; };
   }, []);
 
   const logout = () => {
