@@ -15,9 +15,12 @@
       content="OnlineRepetitor — интерактивная доска для онлайн-занятий, совместной работы и учебных материалов."
     />
     <title>OnlineRepetitor — интерактивная доска для занятий</title>
+  <style>
+      .boot-shell{position:fixed;inset:0;display:grid;place-items:center;background:#f7f7fb;color:#262837;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.boot-card{width:min(360px,calc(100vw - 40px));display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center;padding:18px 20px;border:1px solid #e7e7ef;border-radius:18px;background:#fff;box-shadow:0 18px 55px rgba(38,40,70,.08)}.boot-logo{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#5658c7;color:#fff;font-weight:900;letter-spacing:-.04em}.boot-copy{display:grid;gap:3px}.boot-copy strong{font-size:16px}.boot-copy span{font-size:11px;color:#777a88}.boot-line{grid-column:1/-1;height:3px;overflow:hidden;border-radius:99px;background:#ececf3}.boot-line i{display:block;width:42%;height:100%;border-radius:inherit;background:#5b5dcc;animation:orboot 1.05s ease-in-out infinite alternate}@keyframes orboot{from{transform:translateX(-10%)}to{transform:translateX(155%)}}@media(prefers-color-scheme:dark){.boot-shell{background:#191a20;color:#f2f2f5}.boot-card{background:#23242b;border-color:#34353e}.boot-copy span{color:#a8a9b2}.boot-line{background:#353640}}
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot-shell" role="status" aria-live="polite"><div class="boot-card"><div class="boot-logo">OR</div><div class="boot-copy"><strong>OnlineRepetitor</strong><span>Загружаем рабочее пространство…</span></div><div class="boot-line"><i></i></div></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
