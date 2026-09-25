@@ -13,6 +13,17 @@ export type BackendSession = {
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/$/, "") || "";
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
 const SESSION_KEY = "lesson-board.supabase.session.v1";
+const NETWORK_TIMEOUT_MS = 8000;
+
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+};
 
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
 
@@ -94,7 +105,7 @@ export const signInRemote = async (email: string, password: string) => {
 };
 
 const refreshRemoteSession = async (session: BackendSession) => {
-  const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+  const response = await fetchWithTimeout(`${url}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ refresh_token: session.refresh_token }),
@@ -111,16 +122,23 @@ const refreshRemoteSession = async (session: BackendSession) => {
 export const getRemoteSession = async (): Promise<BackendSession | null> => {
   let session = loadSession();
   if (!session) return null;
-  if (session.expires_at <= Math.floor(Date.now() / 1000) + 30) {
-    session = await refreshRemoteSession(session);
-    if (!session) return null;
+  try {
+    if (session.expires_at <= Math.floor(Date.now() / 1000) + 30) {
+      session = await refreshRemoteSession(session);
+      if (!session) return null;
+    }
+    const response = await fetchWithTimeout(`${url}/auth/v1/user`, { headers: authHeaders(session.access_token) });
+    if (response.ok) return session;
+    if (response.status === 401 || response.status === 403) {
+      session = await refreshRemoteSession(session);
+      return session;
+    }
+    return session;
+  } catch {
+    // Mobile networks, VPNs and DNS filters may temporarily make Supabase unreachable.
+    // Keep a still-valid cached session so the UI can boot instead of hanging on a blank screen.
+    return session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
   }
-  const response = await fetch(`${url}/auth/v1/user`, { headers: authHeaders(session.access_token) });
-  if (!response.ok) {
-    session = await refreshRemoteSession(session);
-    if (!session) return null;
-  }
-  return session;
 };
 
 export const signOutRemote = async () => {
