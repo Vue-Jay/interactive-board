@@ -5346,3 +5346,56 @@ option{background:#fff;color:#343741}
 /* v117 · empty-board welcome actions are interactive */
 .welcome-card{pointer-events:auto!important}
 .welcome-card .welcome-actions,.welcome-card .welcome-actions button{pointer-events:auto!important}
+
+/* v118 · rendering performance pass
+   Keep the board visually identical while reducing expensive compositing work. */
+.board-object {
+  contain: layout style;
+}
+.remote-cursors-layer,
+.selection-toolbar-screen,
+.lasso-overlay,
+.guides-layer {
+  pointer-events: none;
+}
+/* Blur is one of the most expensive effects while the whole board is moving. */
+.board-panning ~ *,
+.board-panning .welcome-card,
+.board-panning .toolbar,
+.board-panning .board-controls {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.board-panning .board-object,
+.board-panning .welcome-card {
+  box-shadow: none !important;
+}
+.board-panning .board-object,
+.board-panning .remote-cursor,
+.board-panning .selection-toolbar-screen {
+  transition: none !important;
+}
+/* Mobile GPUs benefit noticeably from avoiding live blur on floating chrome. */
+@media (max-width: 1180px), (pointer: coarse) {
+  .toolbar,
+  .board-controls,
+  .welcome-card,
+  .selection-toolbar-screen,
+  .context-menu,
+  .shape-palette,
+  .connector-palette,
+  .ink-settings,
+  .connector-settings {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .board-object {
+    box-shadow: 0 3px 10px rgba(31,35,48,.10);
+  }
+  .board-object.object-pen,
+  .board-object.object-marker,
+  .board-object.object-connector,
+  .board-object.object-frame {
+    box-shadow: none !important;
+  }
+}
