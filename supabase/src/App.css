@@ -5407,3 +5407,13 @@ option{background:#fff;color:#343741}
 .lesson-chat-modal .discussion-compose{position:sticky;bottom:0;background:inherit;padding-top:10px}
 .lesson-chat-modal .discussion-compose textarea{min-height:72px;max-height:180px}
 @media(max-width:700px){.lesson-chat-modal{width:calc(100vw - 12px)!important;max-height:94dvh}.lesson-chat-modal .discussions-list{max-height:50dvh}.lesson-chat-modal .discussion-compose textarea{min-height:62px}}
+
+
+/* v122 · chat access and unread UX */
+.chat-top-button{position:relative!important}
+.chat-top-button .top-badge{position:absolute;right:-5px;top:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;display:grid;place-items:center;background:#6b5cff;color:#fff;font-size:9px;font-weight:800;line-height:1;border:2px solid var(--ui-panel,#fff)}
+.lesson-chat-modal .discussion-thread{max-width:88%}
+.lesson-chat-modal .discussion-reply{margin-left:28px}
+.lesson-chat-modal .discussion-meta span{font-variant-numeric:tabular-nums}
+.lesson-chat-modal .discussion-body{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:700px){.topbar-right>.chat-top-button{display:inline-grid!important;flex:0 0 36px!important;width:36px!important;min-width:36px!important;height:36px!important}.lesson-chat-modal .discussion-thread{max-width:96%}.lesson-chat-modal .discussion-reply{margin-left:16px}}
