@@ -6160,3 +6160,107 @@ option{background:#fff;color:#343741}
   .board-title{max-width:112px!important}
   .presence-menu{display:none!important}
 }
+
+/* v158 · tablet/mobile header: keep useful actions, no collisions */
+@media (min-width:701px) and (max-width:1100px){
+  /* v157 hid too much on landscape phones/tablets. Restore the useful actions
+     as compact icon buttons while keeping text-heavy controls out of the strip. */
+  .topbar-right>.start-live-lesson,
+  .topbar-right>.board-invite-button,
+  .topbar-right>button[title="Экспорт всей доски в PNG · Ctrl+Shift+E без выделения"],
+  .topbar-right>button[title="Шаблоны уроков и схем"],
+  .topbar-right>button[title^="Горячие клавиши"],
+  .topbar-right>.comments-top-button,
+  .topbar-right>button[title^="Поиск"],
+  .topbar-right>button[title="Режим показа"],
+  .topbar-right>button[title="Слои и объекты"],
+  .topbar-right>button[title^="Отменить"],
+  .topbar-right>button[title^="Повторить"]{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 34px!important;
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:0!important;
+    border-radius:9px!important;
+    overflow:hidden!important;
+    font-size:0!important;
+    white-space:nowrap!important;
+  }
+
+  /* Text-only lesson/invite actions cannot fit as text, give them recognizable compact marks. */
+  .topbar-right>.start-live-lesson::before{
+    content:"▶";
+    display:block;
+    font-size:15px;
+    line-height:1;
+  }
+  .topbar-right>.board-invite-button::before{
+    content:"+";
+    display:block;
+    font-size:22px;
+    line-height:1;
+  }
+  .topbar-right>.board-invite-button>span{display:none!important}
+
+  .topbar-right>.board-chat-button{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 34px!important;
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:0!important;
+  }
+  .topbar-right>.board-chat-button>span{display:none!important}
+
+  .topbar-left{max-width:260px!important}
+  .board-title{max-width:150px!important}
+  .topbar-right{margin-left:auto!important}
+
+  /* Keep lowest-value actions in the overflow menu on this width. */
+  .topbar-right>.install-app-button,
+  .topbar-right>button[title^="Отменить"],
+  .topbar-right>button[title^="Повторить"]{
+    display:none!important;
+  }
+}
+
+/* Wide landscape phones often report >700 CSS px. Give them the compact board tools too,
+   instead of treating them as desktop just because of orientation. */
+@media (max-width:1100px) and (pointer:coarse){
+  .welcome-card{display:none!important}
+
+  .toolbar.compact-toolbar{
+    display:none!important;
+    position:fixed!important;
+    left:8px!important;
+    right:8px!important;
+    bottom:58px!important;
+    top:auto!important;
+    width:auto!important;
+    max-width:none!important;
+    max-height:min(62dvh,430px)!important;
+    overflow:auto!important;
+    transform:none!important;
+    z-index:190!important;
+  }
+  .toolbar.compact-toolbar.mobile-open{display:grid!important}
+  .mobile-tools-toggle{
+    display:grid!important;
+    place-items:center!important;
+    position:fixed!important;
+    left:10px!important;
+    bottom:max(10px,env(safe-area-inset-bottom))!important;
+    z-index:191!important;
+    width:46px!important;
+    min-width:46px!important;
+    height:46px!important;
+    min-height:46px!important;
+    padding:0!important;
+  }
+  .mobile-quick-tools{display:none!important}
+}
