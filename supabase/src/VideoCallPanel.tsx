@@ -1,0 +1,33 @@
+import { useCallback,useEffect,useRef,useState } from "react";
+import { listRecentCallSignals,sendCallSignal,type CallSignal } from "./videoCallStore";
+import { subscribeCallSignals } from "./videoCallRealtime";
+
+type Props={conversationId:string;userId:string;otherUserId:string;otherName:string};
+type CallState="idle"|"incoming"|"calling"|"connecting"|"connected";
+
+export default function VideoCallPanel({conversationId,userId,otherUserId,otherName}:Props){
+ const [state,setState]=useState<CallState>("idle"),[open,setOpen]=useState(false),[muted,setMuted]=useState(false),[cameraOff,setCameraOff]=useState(false),[error,setError]=useState("");
+ const stateRef=useRef<CallState>("idle");
+ const setCallState=(next:CallState)=>{stateRef.current=next;setState(next)};
+ const localVideo=useRef<HTMLVideoElement>(null),remoteVideo=useRef<HTMLVideoElement>(null),pc=useRef<RTCPeerConnection|null>(null),stream=useRef<MediaStream|null>(null),pendingOffer=useRef<RTCSessionDescriptionInit|null>(null),candidateQueue=useRef<RTCIceCandidateInit[]>([]),startedAt=useRef(new Date(Date.now()-15000).toISOString()),seen=useRef(new Set<string>());
+ const attachLocal=(s:MediaStream)=>{stream.current=s;if(localVideo.current)localVideo.current.srcObject=s};
+ const stopMedia=()=>{stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;if(localVideo.current)localVideo.current.srcObject=null;if(remoteVideo.current)remoteVideo.current.srcObject=null};
+ const closePeer=()=>{pc.current?.close();pc.current=null;candidateQueue.current=[]};
+ const reset=useCallback(()=>{closePeer();stopMedia();pendingOffer.current=null;setCallState("idle");setOpen(false);setMuted(false);setCameraOff(false)},[]);
+ const media=async()=>{if(stream.current)return stream.current;if(!navigator.mediaDevices?.getUserMedia)throw new Error("Браузер не поддерживает доступ к камере и микрофону");const s=await navigator.mediaDevices.getUserMedia({video:true,audio:true});attachLocal(s);return s};
+ const createPeer=async()=>{const s=await media();const peer=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});pc.current=peer;s.getTracks().forEach(track=>peer.addTrack(track,s));peer.ontrack=e=>{if(remoteVideo.current)remoteVideo.current.srcObject=e.streams[0]};peer.onicecandidate=e=>{if(e.candidate)void sendCallSignal(conversationId,otherUserId,"candidate",e.candidate.toJSON()).catch(()=>{})};peer.onconnectionstatechange=()=>{if(peer.connectionState==="connected")setCallState("connected");if(["failed","closed"].includes(peer.connectionState)){setError(peer.connectionState==="failed"?"Не удалось установить прямое соединение":"");reset()}};return peer};
+ const flushCandidates=async()=>{if(!pc.current?.remoteDescription)return;for(const c of candidateQueue.current.splice(0)){try{await pc.current.addIceCandidate(c)}catch{}}};
+ const handleSignal=useCallback(async(signal:CallSignal)=>{if(signal.conversation_id!==conversationId||signal.sender_id!==otherUserId||signal.receiver_id!==userId||seen.current.has(signal.id))return;seen.current.add(signal.id);try{
+  if(signal.kind==="offer"){pendingOffer.current=signal.payload as RTCSessionDescriptionInit;if(stateRef.current==="idle"){setCallState("incoming");setOpen(true)}}
+  else if(signal.kind==="answer"&&pc.current){await pc.current.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);await flushCandidates();setCallState("connecting")}
+  else if(signal.kind==="candidate"){const c=signal.payload as RTCIceCandidateInit;if(pc.current?.remoteDescription)await pc.current.addIceCandidate(c);else candidateQueue.current.push(c)}
+  else if(signal.kind==="hangup"){setError("Звонок завершён");reset()}
+ }catch(e){setError(e instanceof Error?e.message:"Ошибка видеозвонка")}},[conversationId,otherUserId,userId,reset]);
+ useEffect(()=>{startedAt.current=new Date(Date.now()-15000).toISOString();const off=subscribeCallSignals(userId,s=>void handleSignal(s));void listRecentCallSignals(conversationId,startedAt.current).then(rows=>rows.forEach(s=>void handleSignal(s))).catch(()=>{});return()=>{off();closePeer();stopMedia()}},[conversationId,userId,handleSignal]);
+ const call=async()=>{setError("");setOpen(true);setCallState("calling");try{const peer=await createPeer();const offer=await peer.createOffer();await peer.setLocalDescription(offer);await sendCallSignal(conversationId,otherUserId,"offer",offer)}catch(e){setError(e instanceof Error?e.message:"Не удалось начать звонок");reset()}};
+ const accept=async()=>{const offer=pendingOffer.current;if(!offer)return;setError("");setCallState("connecting");try{const peer=await createPeer();await peer.setRemoteDescription(offer);await flushCandidates();const answer=await peer.createAnswer();await peer.setLocalDescription(answer);await sendCallSignal(conversationId,otherUserId,"answer",answer)}catch(e){setError(e instanceof Error?e.message:"Не удалось принять звонок");reset()}};
+ const hangup=async()=>{try{await sendCallSignal(conversationId,otherUserId,"hangup",{})}catch{}reset()};
+ const toggleMute=()=>{const next=!muted;stream.current?.getAudioTracks().forEach(t=>t.enabled=!next);setMuted(next)};
+ const toggleCamera=()=>{const next=!cameraOff;stream.current?.getVideoTracks().forEach(t=>t.enabled=!next);setCameraOff(next)};
+ return <><button className="chat-video-call-button" onClick={()=>void call()} disabled={state!=="idle"} title="Видеозвонок">📹 <span>Позвонить</span></button>{open&&<div className="video-call-backdrop"><section className="video-call-card"><header><div><strong>{state==="incoming"?`${otherName} звонит`:state==="connected"?`Разговор с ${otherName}`:`Соединяем с ${otherName}`}</strong><span>{state==="incoming"?"Входящий видеозвонок":state==="connected"?"Соединение установлено":"Камера и микрофон используются только во время звонка"}</span></div></header><div className="video-call-stage"><video ref={remoteVideo} autoPlay playsInline className="video-call-remote"/><video ref={localVideo} autoPlay muted playsInline className="video-call-local"/><div className="video-call-placeholder">{state==="incoming"?"📞":state==="connected"?"":"Подключаем видео…"}</div></div>{error&&<div className="video-call-error">{error}</div>}<footer>{state==="incoming"?<><button className="video-call-decline" onClick={()=>void hangup()}>Отклонить</button><button className="video-call-accept" onClick={()=>void accept()}>Принять</button></>:<><button onClick={toggleMute}>{muted?"🔇 Включить микрофон":"🎙 Микрофон"}</button><button onClick={toggleCamera}>{cameraOff?"📷 Включить камеру":"📹 Камера"}</button><button className="video-call-decline" onClick={()=>void hangup()}>Завершить</button></>}</footer></section></div>}</>;
+}
