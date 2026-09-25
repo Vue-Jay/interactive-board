@@ -6193,3 +6193,206 @@ option{background:#fff;color:#343741}
 @media(max-width:700px){
   .presence-menu summary .presence-count{display:inline!important}
 }
+
+/* v161 · authoritative responsive board layout.
+   This block intentionally overrides the accumulated v154-v160 media rules. */
+@media (max-width:1100px){
+  .topbar{
+    display:flex!important;
+    visibility:visible!important;
+    position:relative!important;
+    z-index:300!important;
+    height:48px!important;
+    min-height:48px!important;
+    width:100%!important;
+    padding:5px 8px!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    gap:5px!important;
+    overflow:visible!important;
+    background:#fff!important;
+  }
+  .workspace{
+    position:relative!important;
+    height:calc(100dvh - 48px)!important;
+  }
+  .topbar-left{
+    display:flex!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    align-items:center!important;
+    gap:5px!important;
+    overflow:hidden!important;
+  }
+  .topbar-right{
+    display:flex!important;
+    flex:0 0 auto!important;
+    min-width:0!important;
+    width:auto!important;
+    margin-left:auto!important;
+    align-items:center!important;
+    gap:3px!important;
+    overflow:visible!important;
+  }
+  .board-home-button{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 36px!important;
+    width:36px!important;
+    min-width:36px!important;
+    height:36px!important;
+    min-height:36px!important;
+    padding:0!important;
+    font-size:0!important;
+    border-radius:10px!important;
+  }
+  .board-home-button::before{
+    content:"‹"!important;
+    display:block!important;
+    font-size:25px!important;
+    line-height:1!important;
+  }
+  .board-title{
+    display:block!important;
+    flex:1 1 auto!important;
+    width:auto!important;
+    min-width:72px!important;
+    max-width:180px!important;
+    height:36px!important;
+    padding:0 6px!important;
+    border:0!important;
+    background:transparent!important;
+    font-size:13px!important;
+    font-weight:750!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .save-status,.realtime-status,.guest-session-badge,.collab-editing-status{
+    display:none!important;
+  }
+
+  /* The four collaboration controls are always visible. */
+  .presence-menu{
+    display:block!important;
+    flex:0 0 auto!important;
+  }
+  .presence-menu summary,
+  .follow-teacher-button,
+  .compact-top-action,
+  .board-chat-button,
+  .topbar-more-trigger{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 36px!important;
+    width:36px!important;
+    min-width:36px!important;
+    height:36px!important;
+    min-height:36px!important;
+    padding:0!important;
+    border-radius:10px!important;
+  }
+  .presence-menu summary{
+    grid-template-columns:auto auto!important;
+    gap:5px!important;
+  }
+  .presence-menu summary .presence-count{
+    display:inline!important;
+    font-size:12px!important;
+    font-weight:800!important;
+  }
+  .board-chat-button>span{display:none!important}
+
+  /* Nonessential desktop actions are available from ⋯, not duplicated in the strip. */
+  .topbar-right>.install-app-button,
+  .topbar-right>button.top-button:not(.topbar-more-trigger){
+    display:none!important;
+  }
+
+  /* One permanent left tool column on phone/tablet, including portrait. */
+  .mobile-tools-toggle,.mobile-quick-tools{display:none!important}
+  .toolbar.compact-toolbar{
+    display:flex!important;
+    visibility:visible!important;
+    position:absolute!important;
+    left:10px!important;
+    top:10px!important;
+    right:auto!important;
+    bottom:auto!important;
+    z-index:180!important;
+    width:58px!important;
+    max-width:58px!important;
+    height:auto!important;
+    max-height:calc(100% - 20px)!important;
+    padding:5px!important;
+    flex-direction:column!important;
+    gap:3px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    transform:none!important;
+    border-radius:15px!important;
+    background:rgba(255,255,255,.97)!important;
+    box-shadow:0 6px 22px rgba(26,28,40,.12)!important;
+  }
+  .toolbar.compact-toolbar.mobile-open{display:flex!important}
+  .toolbar.compact-toolbar .toolbar-pinned,
+  .toolbar.compact-toolbar .toolbar-list{
+    display:flex!important;
+    width:100%!important;
+    flex-direction:column!important;
+    gap:3px!important;
+  }
+  .toolbar.compact-toolbar .tool-wrap{
+    display:block!important;
+    width:100%!important;
+  }
+  .toolbar.compact-toolbar .tool-button{
+    display:grid!important;
+    place-items:center!important;
+    width:46px!important;
+    min-width:46px!important;
+    height:42px!important;
+    min-height:42px!important;
+    margin:0 auto!important;
+    padding:0!important;
+    border-radius:10px!important;
+  }
+  .toolbar.compact-toolbar .toolbar-section-line{
+    display:block!important;
+    width:30px!important;
+    height:1px!important;
+    margin:2px auto!important;
+  }
+  .toolbar.compact-toolbar .secondary-tool{display:none!important}
+  .toolbar.compact-toolbar.expanded .secondary-tool{display:block!important}
+  .toolbar.compact-toolbar .toolbar-more{
+    display:grid!important;
+    place-items:center!important;
+    width:46px!important;
+    min-width:46px!important;
+    height:38px!important;
+    min-height:38px!important;
+    margin:0 auto!important;
+  }
+  .toolbar.compact-toolbar .tool-tooltip{display:none!important}
+
+  .welcome-card{display:none!important}
+}
+
+@media (max-width:560px){
+  .topbar{padding:4px!important;gap:3px!important}
+  .board-title{max-width:110px!important;font-size:11px!important}
+  .board-home-button,
+  .presence-menu summary,
+  .follow-teacher-button,
+  .compact-top-action,
+  .board-chat-button,
+  .topbar-more-trigger{
+    flex-basis:34px!important;
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+  }
+}
