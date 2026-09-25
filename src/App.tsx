@@ -26,7 +26,7 @@ import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./l
 import ShareDialog from "./ShareDialog";
 import { clearPendingShare, initialRoute, parseRoute, rememberShareToken, type AppRoute } from "./routes";
 import { redeemShareLink } from "./shareLinks";
-import { BOARD_ROLE_LABELS, getCurrentUser, logoutUser, type AuthUser } from "./authStore";
+import { BOARD_ROLE_LABELS, getCachedCurrentUser, getCurrentUser, logoutUser, type AuthUser } from "./authStore";
 import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from "./boardStore";
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
@@ -5682,10 +5682,10 @@ export default function App() {
     window.addEventListener("popstate", changed);
     return () => window.removeEventListener("popstate", changed);
   }, []);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getCachedCurrentUser());
   const [accountRole,setAccountRoleState]=useState<AccountRole>("student");
   const [isAppAdmin,setIsAppAdmin]=useState(false);
-  const [authReady, setAuthReady] = useState(false);
+  const [authReady, setAuthReady] = useState(() => Boolean(getCachedCurrentUser()));
   const [activeBoard, setActiveBoard] = useState<BoardSummary | null>(null);
   const boardChanged = useCallback((updated: BoardSummary) => {
     setActiveBoard(current => current?.id === updated.id ? updated : current);
@@ -5717,7 +5717,7 @@ export default function App() {
     let alive = true;
     const startupFallback = window.setTimeout(() => {
       if (alive) setAuthReady(true);
-    }, 900);
+    }, 250);
     void getCurrentUser().then((user) => {
       if (alive) setAuthUser(user);
     }).catch(() => {

@@ -18,13 +18,15 @@ const remoteUser=(s:Awaited<ReturnType<typeof getRemoteSession>>):AuthUser|null=
  if(!s)return null; const meta=s.user.user_metadata||{}; const name=String(meta.display_name||meta.full_name||s.user.email?.split("@")[0]||"Пользователь");
  return {id:s.user.id,name,email:s.user.email||"",createdAt:s.user.created_at||new Date().toISOString(),isGuest:Boolean(meta.is_guest)||!s.user.email};
 };
-export const getCurrentUser=async():Promise<AuthUser|null>=>{
- if(isRemoteBackendEnabled()){
-  const cached=remoteUser(getCachedRemoteSession());
-  if(cached)return cached;
-  return remoteUser(await getRemoteSession());
- }
+export const getCachedCurrentUser=():AuthUser|null=>{
+ if(isRemoteBackendEnabled())return remoteUser(getCachedRemoteSession());
  try{const raw=localStorage.getItem(SESSION_KEY);if(!raw)return null;const id=JSON.parse(raw)?.userId;const u=loadUsers().find(x=>x.id===id);return u?publicUser(u):null}catch{return null}
+};
+export const getCurrentUser=async():Promise<AuthUser|null>=>{
+ const cached=getCachedCurrentUser();
+ if(cached)return cached;
+ if(isRemoteBackendEnabled())return remoteUser(await getRemoteSession());
+ return null;
 };
 export const registerUser=async(input:{name:string;email:string;password:string}):Promise<AuthUser>=>{
  const name=input.name.trim(),email=normalizeEmail(input.email),password=input.password;
