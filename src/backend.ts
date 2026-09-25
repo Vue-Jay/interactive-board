@@ -13,7 +13,7 @@ export type BackendSession = {
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/$/, "") || "";
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
 const SESSION_KEY = "lesson-board.supabase.session.v1";
-const NETWORK_TIMEOUT_MS = 8000;
+const NETWORK_TIMEOUT_MS = 5000;
 
 const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
   const controller = new AbortController();
@@ -28,6 +28,11 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
 
 export const getCachedRemoteSession = (): BackendSession | null => loadSession();
+
+export const isCachedRemoteSessionUsable = () => {
+  const session = loadSession();
+  return Boolean(session && session.expires_at > Math.floor(Date.now() / 1000) + 30);
+};
 
 export const getRealtimeSocketUrl = () =>
   `${url.replace(/^http/, "ws")}/realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0`;
@@ -124,22 +129,14 @@ const refreshRemoteSession = async (session: BackendSession) => {
 export const getRemoteSession = async (): Promise<BackendSession | null> => {
   let session = loadSession();
   if (!session) return null;
+  // A valid JWT is enough to boot the app. Do not block every page load on /auth/v1/user.
+  // Protected Supabase requests still validate the token server-side.
+  if (session.expires_at > Math.floor(Date.now() / 1000) + 30) return session;
   try {
-    if (session.expires_at <= Math.floor(Date.now() / 1000) + 30) {
-      session = await refreshRemoteSession(session);
-      if (!session) return null;
-    }
-    const response = await fetchWithTimeout(`${url}/auth/v1/user`, { headers: authHeaders(session.access_token) });
-    if (response.ok) return session;
-    if (response.status === 401 || response.status === 403) {
-      session = await refreshRemoteSession(session);
-      return session;
-    }
+    session = await refreshRemoteSession(session);
     return session;
   } catch {
-    // Mobile networks, VPNs and DNS filters may temporarily make Supabase unreachable.
-    // Keep a still-valid cached session so the UI can boot instead of hanging on a blank screen.
-    return session && session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
+    return null;
   }
 };
 
