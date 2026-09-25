@@ -1146,7 +1146,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }
   });
   const [title, setTitle] = useState(initial.data.title);
-  const [saveStatus, setSaveStatus] = useState(
+  const [, setSaveStatus] = useState(
     initial.error || "Сохранено в браузере",
   );
   const [color, setColor] = useState("#5355c9");
