@@ -1,0 +1,28 @@
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import type { AuthUser } from "./authStore";
+import { ensureDirectChat,listDirectChatContacts,listDirectChats,listDirectMessages,markDirectChatRead,sendDirectMessage,type DirectChatContact,type DirectChatConversation,type DirectChatMessage } from "./directChatStore";
+import { subscribeDirectChat } from "./directChatRealtime";
+
+type Props={user:AuthUser;onBack:()=>void};
+const time=(iso:string|null)=>iso?new Intl.DateTimeFormat("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(iso)):"";
+
+export default function ChatScreen({user,onBack}:Props){
+ const [chats,setChats]=useState<DirectChatConversation[]>([]),[contacts,setContacts]=useState<DirectChatContact[]>([]),[messages,setMessages]=useState<DirectChatMessage[]>([]);
+ const [active,setActive]=useState<string|null>(null),[draft,setDraft]=useState(""),[query,setQuery]=useState(""),[busy,setBusy]=useState(true),[error,setError]=useState("");
+ const bottom=useRef<HTMLDivElement>(null);
+ const refreshChats=useCallback(async()=>setChats(await listDirectChats()),[]);
+ const refreshMessages=useCallback(async(id:string)=>{const rows=await listDirectMessages(id);setMessages(rows);await markDirectChatRead(id);await refreshChats()},[refreshChats]);
+ useEffect(()=>{let alive=true;Promise.all([listDirectChats(),listDirectChatContacts()]).then(([a,b])=>{if(!alive)return;setChats(a);setContacts(b);setActive(a[0]?.id??null)}).catch(e=>alive&&setError(e instanceof Error?e.message:"Не удалось загрузить чат")).finally(()=>alive&&setBusy(false));return()=>{alive=false}},[]);
+ useEffect(()=>{if(active)void refreshMessages(active).catch(e=>setError(e instanceof Error?e.message:"Не удалось загрузить сообщения"));else setMessages([])},[active,refreshMessages]);
+ useEffect(()=>subscribeDirectChat(user.id,()=>{void refreshChats();if(active)void refreshMessages(active)}),[user.id,active,refreshChats,refreshMessages]);
+ useEffect(()=>{bottom.current?.scrollIntoView({behavior:"smooth"})},[messages.length,active]);
+ const current=chats.find(x=>x.id===active);
+ const filtered=useMemo(()=>chats.filter(x=>(x.other_name+" "+(x.last_message||"")).toLowerCase().includes(query.trim().toLowerCase())),[chats,query]);
+ const start=async(contact:DirectChatContact)=>{setError("");try{const id=await ensureDirectChat(contact.user_id);await refreshChats();setActive(id)}catch(e){setError(e instanceof Error?e.message:"Не удалось открыть диалог")}};
+ const send=async()=>{const body=draft.trim();if(!active||!body)return;setDraft("");try{await sendDirectMessage(active,body);await refreshMessages(active)}catch(e){setDraft(body);setError(e instanceof Error?e.message:"Не удалось отправить сообщение")}};
+ const existing=new Set(chats.map(x=>x.other_user_id));
+ return <main className="chat-hub-shell"><header className="chat-hub-header"><button onClick={onBack}>← Доски</button><div><strong>Сообщения</strong><span>Личные диалоги преподавателя и ученика</span></div><span className="chat-hub-user">{user.name}</span></header>
+ <div className="chat-hub-layout"><aside className={`chat-hub-sidebar ${active?"mobile-hidden":""}`}><div className="chat-hub-search"><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Поиск диалогов"/></div>{busy?<div className="chat-hub-empty">Загрузка…</div>:filtered.length?<div className="chat-hub-list">{filtered.map(chat=><button key={chat.id} className={active===chat.id?"active":""} onClick={()=>setActive(chat.id)}><span className="chat-avatar">{chat.other_name.charAt(0).toUpperCase()}</span><span className="chat-list-copy"><b>{chat.other_name}</b><small>{chat.last_message||"Диалог создан"}</small></span><span className="chat-list-side"><small>{time(chat.last_message_at)}</small>{chat.unread_count>0&&<b>{chat.unread_count>99?"99+":chat.unread_count}</b>}</span></button>)}</div>:<div className="chat-hub-empty">Диалогов пока нет</div>}
+ {contacts.some(x=>!existing.has(x.user_id))&&<div className="chat-hub-contacts"><strong>Начать диалог</strong>{contacts.filter(x=>!existing.has(x.user_id)).slice(0,20).map(c=><button key={c.user_id} onClick={()=>void start(c)}><span className="chat-avatar">{c.display_name.charAt(0).toUpperCase()}</span><span><b>{c.display_name}</b><small>{c.email||"Участник ваших досок"}</small></span><i>＋</i></button>)}</div>}</aside>
+ <section className={`chat-hub-thread ${!active?"mobile-hidden":""}`}>{current?<><div className="chat-thread-head"><button className="chat-mobile-back" onClick={()=>setActive(null)}>←</button><span className="chat-avatar">{current.other_name.charAt(0).toUpperCase()}</span><div><b>{current.other_name}</b><small>{current.other_email||"Участник OnlineRepetitor"}</small></div></div><div className="chat-thread-messages">{messages.length===0&&<div className="chat-hub-empty">Начните переписку. Сообщения сохраняются на сервере.</div>}{messages.map(m=><article key={m.id} className={m.sender_id===user.id?"mine":"theirs"}><small>{m.sender_id===user.id?"Вы":m.sender_name}</small><div>{m.body}</div><time>{time(m.created_at)}</time></article>)}<div ref={bottom}/></div><div className="chat-thread-compose"><textarea value={draft} maxLength={4000} placeholder="Сообщение…" onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send()}}}/><button disabled={!draft.trim()} onClick={()=>void send()}>Отправить</button></div></>:<div className="chat-thread-placeholder"><span>💬</span><strong>Выберите диалог</strong><p>Переписка теперь доступна независимо от открытой доски.</p></div>}</section></div>{error&&<div className="chat-hub-error" onClick={()=>setError("")}>{error}</div>}</main>;
+}

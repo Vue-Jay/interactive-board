@@ -19,6 +19,7 @@ import { getAccountAccess,type AccountRole } from "./accountRoleStore";
 import AdminScreen from "./AdminScreen";
 import TemplatesScreen from "./TemplatesScreen";
 import TestingGuideScreen from "./TestingGuideScreen";
+import ChatScreen from "./ChatScreen";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -4167,6 +4168,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             {guidedFollow ? "Преподаватель ведёт экран" : followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
+          <button className="lesson-button global-chat-button" onClick={()=>{window.location.href="/?section=chat"}} title="Личные сообщения"><Icon name="comments" size={16}/><span>Сообщения</span></button>
           {boardSummary.role === "owner" && <button className="lesson-button board-invite-button" onClick={() => setSharing(true)}><span aria-hidden="true">＋</span> Пригласить</button>}
           {isRemoteBackendEnabled() && <button type="button" className={`top-button chat-top-button ${chatOpen ? "active" : ""}`} onClick={()=>void openDiscussions()} title="Чат доски" aria-label={`Чат доски${chatUnread?` · новых сообщений ${chatUnread}`:""}`}><Icon name="comments" />{chatUnread>0&&<span className="top-badge">{Math.min(99,chatUnread)}</span>}</button>}
           <details className="topbar-more-menu">
@@ -5846,6 +5848,8 @@ export default function App() {
           ? <MaterialsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="notifications"
           ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="chat"
+          ? <ChatScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="profile"
           ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onLogout={logout} installAvailable={Boolean(globalInstallPrompt)} isInstalled={globalStandalone} onInstall={()=>void installGlobalApp()} />
           : section==="guide"
