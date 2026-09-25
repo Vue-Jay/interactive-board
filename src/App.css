@@ -5520,3 +5520,45 @@ option{background:#fff;color:#343741}
     max-height:calc(100dvh - 80px - env(safe-area-inset-bottom))!important;
   }
 }
+
+/* v149 · call card sits clearly inside the board and uses stable SVG controls */
+.compact-call-layer .compact-call-card{
+  top:112px!important;
+  bottom:auto!important;
+  right:16px!important;
+  max-height:calc(100dvh - 128px)!important;
+}
+.compact-call-actions .compact-call-action{
+  padding:0!important;
+  line-height:1!important;
+  transform:none!important;
+}
+.compact-call-actions .video-call-decline{
+  background:#e5484d!important;
+  color:#fff!important;
+  transform:none!important;
+}
+.compact-call-actions .video-call-accept{
+  background:#2e9d64!important;
+  color:#fff!important;
+}
+.call-action-icon{
+  width:21px;
+  height:21px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  pointer-events:none;
+}
+.call-action-icon path:first-child:only-child{fill:none}
+@media(max-width:700px){
+  .compact-call-layer .compact-call-card{
+    top:104px!important;
+    bottom:auto!important;
+    right:8px!important;
+    max-height:calc(100dvh - 112px - env(safe-area-inset-bottom))!important;
+  }
+}
