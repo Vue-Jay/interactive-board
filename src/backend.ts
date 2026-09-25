@@ -235,3 +235,16 @@ export const deleteRemoteStorageObjects=async(bucket:string,paths:string[])=>{
  const response=await fetch(`${url}/storage/v1/object/${bucket}`,{method:"DELETE",headers:{apikey:anonKey,Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"},body:JSON.stringify({prefixes:paths})});
  if(!response.ok)throw new Error(await errorMessage(response));
 };
+
+
+export const remoteFunctionRequest=async<T>(functionName:string,init:RequestInit={}):Promise<T>=>{
+ const session=await getRemoteSession();
+ if(!session)throw new Error("Сессия истекла. Войдите снова.");
+ const headers=new Headers(init.headers||{});
+ headers.set("apikey",anonKey);
+ headers.set("Authorization",`Bearer ${session.access_token}`);
+ if(!headers.has("Content-Type"))headers.set("Content-Type","application/json");
+ const response=await fetch(`${url}/functions/v1/${functionName}`,{...init,headers});
+ if(!response.ok)throw new Error(await errorMessage(response));
+ return response.json() as Promise<T>;
+};
