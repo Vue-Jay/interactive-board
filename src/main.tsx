@@ -36,17 +36,57 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-// v151: temporarily retire the Service Worker.
-// The app is an online collaborative board, and a stale/intercepted navigation is worse
-// than losing offline shell caching. This also repairs already-installed PWAs.
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-      await Promise.all(registrations.map((registration) => registration.unregister()));
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.filter((key) => key.startsWith("onlinerepetitor-")).map((key) => caches.delete(key)));
-      }
-    }).catch((error) => console.warn("Service worker cleanup failed", error));
-  });
+// v171: installed/mobile app must never remain pinned to an old application shell.
+const APP_BUILD_VERSION = "171";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v171";
+
+async function clearLegacyAppShell() {
+  if (!("serviceWorker" in navigator)) return false;
+  const hadController = !!navigator.serviceWorker.controller;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((registration) => registration.unregister()));
+  if ("caches" in window) {
+    const keys = await caches.keys();
+    // There is intentionally no offline application shell now. Remove every cache
+    // created by previous OnlineRepetitor PWA builds, including builds that used
+    // an older cache name.
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  }
+  return hadController || registrations.length > 0;
 }
+
+async function checkForNewBuild() {
+  try {
+    const response = await fetch(`/version.json?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) return;
+    const payload = await response.json() as { version?: string };
+    if (payload.version && payload.version !== APP_BUILD_VERSION) {
+      window.location.reload();
+    }
+  } catch {
+    // Offline/temporary network failure should not interrupt an active lesson.
+  }
+}
+
+window.addEventListener("load", () => {
+  void clearLegacyAppShell()
+    .then((hadLegacyShell) => {
+      if (hadLegacyShell && sessionStorage.getItem(UPDATE_RELOAD_GUARD) !== "1") {
+        sessionStorage.setItem(UPDATE_RELOAD_GUARD, "1");
+        window.location.reload();
+        return;
+      }
+      sessionStorage.removeItem(UPDATE_RELOAD_GUARD);
+      void checkForNewBuild();
+    })
+    .catch((error) => console.warn("Legacy app-shell cleanup failed", error));
+});
+
+window.addEventListener("focus", () => { void checkForNewBuild(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void checkForNewBuild();
+});
+window.setInterval(() => { void checkForNewBuild(); }, 60_000);
