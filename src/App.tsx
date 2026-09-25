@@ -5717,7 +5717,7 @@ export default function App() {
     let alive = true;
     const startupFallback = window.setTimeout(() => {
       if (alive) setAuthReady(true);
-    }, 4500);
+    }, 900);
     void getCurrentUser().then((user) => {
       if (alive) setAuthUser(user);
     }).catch(() => {
