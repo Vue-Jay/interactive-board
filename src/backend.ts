@@ -27,6 +27,8 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}
 
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
 
+export const getCachedRemoteSession = (): BackendSession | null => loadSession();
+
 export const getRealtimeSocketUrl = () =>
   `${url.replace(/^http/, "ws")}/realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0`;
 
