@@ -1,4 +1,4 @@
-import { claimRemoteInvitations, getRemoteSession, isRemoteBackendEnabled, signInRemote, signInAnonymousRemote, signOutRemote, signUpRemote } from "./backend";
+import { claimRemoteInvitations, getCachedRemoteSession, getRemoteSession, isRemoteBackendEnabled, signInRemote, signInAnonymousRemote, signOutRemote, signUpRemote } from "./backend";
 
 export type BoardRole = "owner" | "editor" | "viewer";
 export const BOARD_ROLE_LABELS: Record<BoardRole, string> = { owner:"Владелец", editor:"Редактор", viewer:"Просмотр" };
@@ -19,7 +19,11 @@ const remoteUser=(s:Awaited<ReturnType<typeof getRemoteSession>>):AuthUser|null=
  return {id:s.user.id,name,email:s.user.email||"",createdAt:s.user.created_at||new Date().toISOString(),isGuest:Boolean(meta.is_guest)||!s.user.email};
 };
 export const getCurrentUser=async():Promise<AuthUser|null>=>{
- if(isRemoteBackendEnabled()) return remoteUser(await getRemoteSession());
+ if(isRemoteBackendEnabled()){
+  const cached=remoteUser(getCachedRemoteSession());
+  if(cached)return cached;
+  return remoteUser(await getRemoteSession());
+ }
  try{const raw=localStorage.getItem(SESSION_KEY);if(!raw)return null;const id=JSON.parse(raw)?.userId;const u=loadUsers().find(x=>x.id===id);return u?publicUser(u):null}catch{return null}
 };
 export const registerUser=async(input:{name:string;email:string;password:string}):Promise<AuthUser>=>{
