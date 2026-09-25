@@ -4166,12 +4166,19 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 return next;
               });
             }}
+            aria-label={guidedFollow ? "Преподаватель включил следование" : followTeacher ? "Следование за преподавателем включено" : "Следовать за преподавателем"}
           >
-            {guidedFollow ? "Преподаватель ведёт экран" : followTeacher ? "Следую за преподавателем" : "Следовать за преподавателем"}
+            <svg className="follow-teacher-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h10"/>
+              <path d="m11 8 4 4-4 4"/>
+              <path d="M17.5 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+              <path d="M14.5 21v-4.5c0-2 1.3-3.5 3-3.5s3 1.5 3 3.5V21"/>
+            </svg>
+            {(followTeacher || guidedFollow) && <span className="follow-teacher-live-dot" aria-hidden="true"/>}
           </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}>Начать урок</button>)}
           {boardSummary.role === "owner" && <button className="lesson-button board-invite-button" onClick={() => setSharing(true)}><span aria-hidden="true">＋</span> Пригласить</button>}
-          {isRemoteBackendEnabled() && <button type="button" className={`lesson-button board-chat-button ${chatOpen ? "active" : ""}`} onClick={()=>void openDiscussions()} title="Сообщения этой доски" aria-label={`Сообщения этой доски${chatUnread?` · новых сообщений ${chatUnread}`:""}`}><Icon name="comments" size={16}/><span>Сообщения</span>{chatUnread>0&&<b className="top-badge">{chatUnread>99?"99+":chatUnread}</b>}</button>}
+          {isRemoteBackendEnabled() && <button type="button" className={`lesson-button board-chat-button ${chatOpen ? "active" : ""}`} onClick={()=>void openDiscussions()} title="Чат этой доски" aria-label={`Чат этой доски${chatUnread?` · новых сообщений ${chatUnread}`:""}`}><Icon name="comments" size={16}/><span>Чат</span>{chatUnread>0&&<b className="top-badge">{chatUnread>99?"99+":chatUnread}</b>}</button>}
           <details className="topbar-more-menu">
             <summary className="top-button topbar-more-trigger" title="Дополнительные действия" aria-label="Дополнительные действия"><Icon name="more" /></summary>
             <div className="topbar-more-popover">

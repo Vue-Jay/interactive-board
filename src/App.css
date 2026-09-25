@@ -5711,3 +5711,119 @@ option{background:#fff;color:#343741}
   .mobile-tools-toggle{width:39px!important;height:40px!important;min-height:40px!important}
   .board-controls button{width:32px!important;min-width:32px!important;height:34px!important}
 }
+
+/* v155 · one coherent responsive board UI */
+.follow-teacher-button{
+  position:relative!important;
+  display:grid!important;
+  place-items:center!important;
+  width:36px!important;
+  min-width:36px!important;
+  height:34px!important;
+  min-height:34px!important;
+  padding:0!important;
+}
+.follow-teacher-icon{
+  width:20px;
+  height:20px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.follow-teacher-button.active{
+  background:#ececff!important;
+  color:#5052c8!important;
+  border-color:#d3d4fa!important;
+  box-shadow:inset 0 0 0 1px #d7d7fb!important;
+}
+.follow-teacher-live-dot{
+  position:absolute;
+  right:3px;
+  top:3px;
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#32b66b;
+  box-shadow:0 0 0 2px #fff;
+}
+.follow-teacher-button:disabled{opacity:1!important;cursor:default!important}
+
+/* Calls are archived, not part of the active product UI. Hide every legacy call
+   selector as a migration safety net for old markup and cached mobile shells. */
+.chat-video-call-button,
+.board-call-control,
+.board-call-button,
+.board-call-chooser,
+.video-call-backdrop,
+.video-call-layer,
+.compact-call-layer,
+.compact-call-card{display:none!important}
+
+@media(max-width:700px){
+  /* Phone uses the same information architecture as desktop:
+     board identity on the left, collaboration actions on the right. */
+  .topbar{
+    height:46px!important;
+    min-height:46px!important;
+    overflow:visible!important;
+  }
+  .workspace{height:calc(100dvh - 46px)!important}
+  .topbar-left{overflow:hidden!important}
+  .topbar-right{overflow:visible!important}
+  .board-home-button{flex:0 0 34px!important;width:34px!important;min-width:34px!important}
+  .board-title{min-width:0!important;max-width:none!important}
+  .follow-teacher-button,
+  .board-chat-button,
+  .topbar-more-trigger,
+  .presence-menu summary,
+  .topbar-right>.start-live-lesson{
+    flex:0 0 34px!important;
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+  }
+  .board-chat-button{padding:0!important;justify-content:center!important}
+  .board-chat-button>span{display:none!important}
+  .topbar-more-popover{top:48px!important}
+
+  /* Chat is a clean board drawer, never mixed with legacy call UI. */
+  .board-chat-drawer{
+    top:46px!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    width:100vw!important;
+    max-width:none!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  .board-chat-head{min-height:50px!important;padding:8px 10px!important}
+  .board-chat-head h2{font-size:14px!important}
+  .board-chat-head p{font-size:9px!important;max-width:calc(100vw - 70px)!important}
+  .board-chat-drawer .discussions-list{padding:8px!important}
+  .board-chat-drawer .discussion-compose{padding:8px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))!important}
+  .board-chat-drawer .discussion-compose textarea{min-height:48px!important;max-height:100px!important}
+  .board-chat-drawer .discussion-compose>small{display:none!important}
+
+  /* Avoid competing floating islands at the bottom. */
+  .mobile-quick-tools{
+    left:50px!important;
+    right:48px!important;
+    z-index:82!important;
+  }
+  .mobile-tools-toggle{z-index:84!important}
+  .board-controls{z-index:84!important}
+  .notice{z-index:85!important}
+}
+
+@media(max-width:430px){
+  .topbar{gap:3px!important;padding-left:max(4px,env(safe-area-inset-left))!important;padding-right:max(4px,env(safe-area-inset-right))!important}
+  .board-home-button{flex-basis:32px!important;width:32px!important;min-width:32px!important}
+  .follow-teacher-button,.board-chat-button,.topbar-more-trigger,.presence-menu summary,.topbar-right>.start-live-lesson{
+    flex-basis:32px!important;width:32px!important;min-width:32px!important;
+  }
+  .follow-teacher-icon{width:19px;height:19px}
+}
