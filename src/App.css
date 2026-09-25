@@ -7443,3 +7443,25 @@ option{background:#fff;color:#343741}
     max-width:calc(100vw - 255px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;
   }
 }
+
+/* v173 · authoritative landscape centering, deliberately last */
+@media screen and (max-width:1100px) and (orientation:landscape){
+  body .mobile-board-tools{
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    margin-left:auto!important;
+    margin-right:auto!important;
+    transform:none!important;
+    width:max-content!important;
+    max-width:min(calc(100vw - 260px),520px)!important;
+    justify-content:center!important;
+  }
+  body .mobile-tools-sheet{
+    left:0!important;
+    right:0!important;
+    margin-left:auto!important;
+    margin-right:auto!important;
+    transform:none!important;
+  }
+}

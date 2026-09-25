@@ -37,8 +37,8 @@ if (!root) {
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
 // v171: installed/mobile app must never remain pinned to an old application shell.
-const APP_BUILD_VERSION = "172";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v172";
+const APP_BUILD_VERSION = "173";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v173";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
@@ -64,7 +64,11 @@ async function checkForNewBuild() {
     if (!response.ok) return;
     const payload = await response.json() as { version?: string };
     if (payload.version && payload.version !== APP_BUILD_VERSION) {
-      window.location.reload();
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("_appv") !== payload.version) {
+        url.searchParams.set("_appv", payload.version);
+        window.location.replace(url.toString());
+      }
     }
   } catch {
     // Offline/temporary network failure should not interrupt an active lesson.

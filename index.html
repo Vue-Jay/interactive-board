@@ -10,14 +10,28 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#5355c9" />
-    <meta
-      name="description"
-      content="OnlineRepetitor — интерактивная доска для онлайн-занятий, совместной работы и учебных материалов."
-    />
+    <meta name="description" content="OnlineRepetitor — интерактивная доска для онлайн-занятий, совместной работы и учебных материалов." />
     <title>OnlineRepetitor — интерактивная доска для занятий</title>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var expected = "173";
+        try {
+          fetch("/version.json?bootstrap=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (v) {
+              if (!v || !v.version || v.version === expected) return;
+              var u = new URL(location.href);
+              if (u.searchParams.get("_appv") === v.version) return;
+              u.searchParams.set("_appv", v.version);
+              location.replace(u.toString());
+            })
+            .catch(function () {});
+        } catch (_) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
