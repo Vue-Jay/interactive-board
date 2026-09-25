@@ -4061,16 +4061,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             maxLength={300}
             readOnly={!canEdit}
           />
-          <span className="save-status">{saveStatus}</span>{authUser.isGuest&&<span className="guest-session-badge" title="Временная гостевая сессия">Гость · {authUser.name}</span>}
-          {isRemoteBackendEnabled() && <span className={`realtime-status ${realtimeStatus}`} role="status">
-            {realtimeStatus === "online" ? "Онлайн" : realtimeStatus === "reconnecting" ? "Переподключение..." : "Офлайн"}
-          </span>}
+          {authUser.isGuest&&<span className="guest-session-badge" title="Временная гостевая сессия">Гость · {authUser.name}</span>}
         </div>
         <div className="topbar-right">{installPrompt&&!isStandalone&&<button type="button" className="install-app-button" onClick={()=>void installApp()} title="Установить OnlineRepetitor на устройство">{isCoarsePointer?"Установить приложение":"Установить"}</button>}
           {isRemoteBackendEnabled() && <details className="presence-menu">
-            <summary title="Пользователи, которые сейчас находятся на доске">
-              <span className="presence-live-dot" aria-hidden="true"/>
-              <span>В сети {Math.max(1, presenceUsers.length)}</span>
+            <summary title={realtimeStatus === "online" ? "Подключено · пользователи на доске" : realtimeStatus === "reconnecting" ? "Подключение к доске..." : "Нет подключения"}>
+              <span className={`presence-live-dot connection-${realtimeStatus}`} aria-hidden="true"/>
+              <span className="presence-count">{Math.max(1, presenceUsers.length)}</span>
             </summary>
             <div className="presence-popover">
               <div className="presence-popover-head">
