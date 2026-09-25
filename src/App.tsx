@@ -304,9 +304,10 @@ const mobileToolGroups: { label:string; tools:Tool[] }[] = [
   { label:"Рисование", tools:["pen","marker","eraser"] },
   { label:"Создание", tools:["sticky","text","shape","connector"] },
   { label:"Материалы", tools:["media","linkmedia","frame"] },
-  { label:"Учёба", tools:["table","formula","graph","checklist","quiz","flashcard","cover","comment"] },
+  { label:"Задания", tools:["checklist","quiz","flashcard"] },
+  { label:"Интерактив", tools:["table","formula","graph","cover","comment"] },
 ];
-const mobileDockTools: Tool[] = ["hand","select","pen","sticky","text","shape"];
+const mobileDockTools: Tool[] = ["hand","select","lasso","pen","sticky","text","shape"];
 
 
 const keyTools: Record<string, Tool> = {
@@ -4879,11 +4880,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         )}
 <nav className="mobile-board-tools" aria-label="Основные инструменты">
           <div className="mobile-tool-cluster mobile-tool-cluster-navigation" aria-label="Навигация">
-            {mobileDockTools.slice(0,2).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+            {mobileDockTools.slice(0,3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(2).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>

@@ -6917,3 +6917,22 @@ option{background:#fff;color:#343741}
   .mobile-tools-group button{height:52px!important;flex-direction:column!important;gap:2px!important}
   .board-controls{left:8px!important}
 }
+
+/* v166 · lasso promoted to primary navigation */
+@media (max-width:1100px) and (pointer:coarse){
+  .mobile-tool-cluster-navigation{gap:1px!important}
+}
+@media (max-width:1100px) and (pointer:coarse) and (orientation:landscape){
+  .mobile-board-tools{
+    max-width:calc(100vw - 220px)!important;
+  }
+  .mobile-tool-cluster-navigation button{
+    width:38px!important;
+    min-width:38px!important;
+    flex-basis:38px!important;
+  }
+}
+@media (max-width:520px) and (pointer:coarse) and (orientation:portrait){
+  /* Keep Lasso primary even on narrow portrait; move Shapes into + first. */
+  .mobile-tool-cluster-create button:last-child{display:none!important}
+}
