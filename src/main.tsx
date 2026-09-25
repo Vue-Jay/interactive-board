@@ -3,21 +3,12 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 
-type ErrorBoundaryState = {
-  error: Error | null;
-};
+type ErrorBoundaryState = { error: Error | null };
 
 class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null };
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("InteractiveBoard render error", error, info);
-  }
-
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("InteractiveBoard render error", error, info); }
   render() {
     if (this.state.error) {
       return (
@@ -33,30 +24,26 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
         </div>
       );
     }
-
     return this.props.children;
   }
 }
 
 const root = document.getElementById("root");
-
 if (!root) {
   document.body.innerHTML = '<div style="padding:32px;font-family:system-ui">Ошибка: в index.html не найден элемент #root.</div>';
   throw new Error("Не найден корневой элемент #root");
 }
 
-createRoot(root).render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>,
-);
+createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-
+// Do not force a full page reload when a new service worker takes control.
+// On slow mobile networks that turned every deployment into a second complete startup.
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").then((registration)=>{const announce=()=>window.dispatchEvent(new CustomEvent("or-sw-update",{detail:{registration}}));if(registration.waiting)announce();registration.addEventListener("updatefound",()=>{const worker=registration.installing;worker?.addEventListener("statechange",()=>{if(worker.state==="installed"&&navigator.serviceWorker.controller)announce()})})}).catch((error) => console.warn("Service worker registration failed", error));
+    void navigator.serviceWorker.register("/sw.js").then((registration) => {
+      // Ask for an update quietly. The new worker activates immediately and will
+      // serve the next navigation without interrupting the current session.
+      void registration.update().catch(() => undefined);
+    }).catch((error) => console.warn("Service worker registration failed", error));
   });
 }
-
-let orReloading=false;
-if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("controllerchange",()=>{if(orReloading)return;orReloading=true;window.location.reload()});

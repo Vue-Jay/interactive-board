@@ -1,6 +1,58 @@
-const CACHE="onlinerepetitor-shell-v145";
+const CACHE="onlinerepetitor-shell-v146";
 const SHELL=["/","/index.html","/manifest.webmanifest","/favicon.svg","/pwa-icon.svg"];
-self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>Promise.allSettled(SHELL.map(url=>cache.add(url)))).then(()=>self.skipWaiting()));});
-self.addEventListener("message",event=>{if(event.data?.type==="SKIP_WAITING")self.skipWaiting()});
-self.addEventListener("activate",event=>{event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith("onlinerepetitor-shell-")&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()]))});
-self.addEventListener("fetch",event=>{if(event.request.method!=="GET")return;const url=new URL(event.request.url);if(url.origin!==location.origin)return;if(event.request.mode==="navigate"){event.respondWith(fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(c=>c.put("/index.html",copy))}return response}).catch(()=>caches.match("/index.html")));return}if(["script","style","worker"].includes(event.request.destination)){event.respondWith(fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(c=>c.put(event.request,copy))}return response}).catch(()=>caches.match(event.request)));return}if(["image","font"].includes(event.request.destination)||SHELL.includes(url.pathname)){event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(c=>c.put(event.request,copy))}return response})))}});
+
+const put=async(request,response)=>{
+  if(response?.ok){const cache=await caches.open(CACHE);await cache.put(request,response.clone())}
+  return response;
+};
+
+self.addEventListener("install",event=>{
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE);
+    await Promise.allSettled(SHELL.map(url=>cache.add(url)));
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener("activate",event=>{
+  event.waitUntil((async()=>{
+    const keys=await caches.keys();
+    await Promise.all(keys.filter(k=>k.startsWith("onlinerepetitor-shell-")&&k!==CACHE).map(k=>caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener("fetch",event=>{
+  if(event.request.method!=="GET")return;
+  const url=new URL(event.request.url);
+  if(url.origin!==self.location.origin)return;
+
+  // Hashed Vite assets are immutable. Never wait for the network if we already have them.
+  if(url.pathname.startsWith("/assets/")){
+    event.respondWith((async()=>{
+      const cached=await caches.match(event.request);
+      if(cached)return cached;
+      return put(event.request,await fetch(event.request));
+    })());
+    return;
+  }
+
+  // For navigation show the cached application shell immediately, while refreshing it in background.
+  if(event.request.mode==="navigate"){
+    event.respondWith((async()=>{
+      const cached=await caches.match("/index.html");
+      const network=fetch(event.request).then(r=>put("/index.html",r)).catch(()=>null);
+      if(cached){event.waitUntil(network);return cached}
+      return (await network)||Response.error();
+    })());
+    return;
+  }
+
+  if(["image","font"].includes(event.request.destination)||SHELL.includes(url.pathname)){
+    event.respondWith((async()=>{
+      const cached=await caches.match(event.request);
+      if(cached)return cached;
+      return put(event.request,await fetch(event.request));
+    })());
+  }
+});
