@@ -137,7 +137,7 @@ export const getRemoteSession = async (): Promise<BackendSession | null> => {
   } catch {
     // Mobile networks, VPNs and DNS filters may temporarily make Supabase unreachable.
     // Keep a still-valid cached session so the UI can boot instead of hanging on a blank screen.
-    return session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
+    return session && session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
   }
 };
 
