@@ -1091,6 +1091,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const workChannel = useRef<BoardWorkChannel | null>(null);
   const board = useRef<HTMLElement>(null);
   const storageKey = boardStorageKey(boardSummary.id);
+  const viewStorageKey = `${storageKey}.view`;
   const [initial] = useState(() => loadInitial(storageKey));
   const [saveBlocked, setSaveBlocked] = useState(!!initial.error);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -1171,7 +1172,22 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [preview, setPreview] = useState<Item | null>(null);
   const [tool, setTool] = useState<Tool>("hand");
-  const [view, setView] = useState<View>(initial.data.view);
+  const [view, setView] = useState<View>(() => {
+    try {
+      const raw = localStorage.getItem(viewStorageKey);
+      if (!raw) return initial.data.view;
+      const saved = JSON.parse(raw) as Partial<View>;
+      if (
+        typeof saved.x === "number" && Number.isFinite(saved.x) &&
+        typeof saved.y === "number" && Number.isFinite(saved.y) &&
+        typeof saved.zoom === "number" && Number.isFinite(saved.zoom) &&
+        saved.zoom >= 0.1 && saved.zoom <= 8
+      ) return { x: saved.x, y: saved.y, zoom: saved.zoom };
+    } catch {/* Fall back to the view stored in the board document. */}
+    return initial.data.view;
+  });
+  const viewRef = useRef(view);
+  const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
   const [selected, setSelected] = useState<string[]>([]);
@@ -1243,6 +1259,39 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   useEffect(() => {
     localStorage.setItem("lesson-board.grid-mode", gridMode);
   }, [gridMode]);
+
+  // Viewport is personal UI state, not shared board content. Persist it separately
+  // so reopening or refreshing a board returns this user to the exact same place
+  // without broadcasting pan/zoom changes as document revisions.
+  useEffect(() => {
+    viewRef.current = view;
+    if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
+    viewSaveTimer.current = setTimeout(() => {
+      viewSaveTimer.current = null;
+      try { localStorage.setItem(viewStorageKey, JSON.stringify(viewRef.current)); }
+      catch {/* Board content saving still works if viewport persistence is unavailable. */}
+    }, 120);
+    return () => {
+      if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
+    };
+  }, [view, viewStorageKey]);
+
+  useEffect(() => {
+    const saveViewNow = () => {
+      try { localStorage.setItem(viewStorageKey, JSON.stringify(viewRef.current)); }
+      catch {/* Ignore storage failures during navigation. */}
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") saveViewNow();
+    };
+    window.addEventListener("pagehide", saveViewNow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      saveViewNow();
+      window.removeEventListener("pagehide", saveViewNow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [viewStorageKey]);
   useEffect(() => {
     if (!presentation || !presentationTimerRunning) return;
     const id = window.setInterval(() => {
