@@ -5562,3 +5562,29 @@ option{background:#fff;color:#343741}
     max-height:calc(100dvh - 112px - env(safe-area-inset-bottom))!important;
   }
 }
+
+/* v150 · call overlay is portaled to body, so teacher/student layout cannot move it */
+.compact-call-layer .compact-call-card{
+  position:fixed!important;
+  top:auto!important;
+  bottom:18px!important;
+  right:18px!important;
+  left:auto!important;
+  transform:none!important;
+  max-height:calc(100dvh - 36px)!important;
+}
+.compact-call-actions .compact-call-action,
+.compact-call-actions .video-call-decline,
+.compact-call-actions .video-call-accept,
+.compact-call-actions .call-action-icon{
+  transform:none!important;
+}
+@media(max-width:700px){
+  .compact-call-layer .compact-call-card{
+    top:auto!important;
+    bottom:calc(10px + env(safe-area-inset-bottom))!important;
+    right:10px!important;
+    left:auto!important;
+    max-height:calc(100dvh - 20px - env(safe-area-inset-bottom))!important;
+  }
+}
