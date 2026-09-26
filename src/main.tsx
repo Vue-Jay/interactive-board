@@ -36,9 +36,8 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-// v171: installed/mobile app must never remain pinned to an old application shell.
-const APP_BUILD_VERSION = "173";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v173";
+const APP_BUILD_VERSION = "174";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v174";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
@@ -47,9 +46,6 @@ async function clearLegacyAppShell() {
   await Promise.all(registrations.map((registration) => registration.unregister()));
   if ("caches" in window) {
     const keys = await caches.keys();
-    // There is intentionally no offline application shell now. Remove every cache
-    // created by previous OnlineRepetitor PWA builds, including builds that used
-    // an older cache name.
     await Promise.all(keys.map((key) => caches.delete(key)));
   }
   return hadController || registrations.length > 0;
