@@ -1,0 +1,32 @@
+/* v221 · settings interactive cursor fix
+   Settings rows themselves are clickable tiles, not only nested buttons. */
+.settings-shell .settings-row-card,
+.settings-shell .settings-plan-row,
+.settings-shell .settings-role-row,
+.settings-shell .boards-create:not(:disabled),
+.settings-shell .boards-secondary:not(:disabled),
+.settings-shell .profile-logout-button:not(:disabled),
+.settings-shell button:not(:disabled),
+.settings-shell [role="button"]:not([aria-disabled="true"]),
+.settings-shell [role="tab"]:not([aria-disabled="true"]),
+.settings-shell [role="switch"]:not([aria-disabled="true"]),
+.settings-shell input[type="checkbox"]:not(:disabled),
+.settings-shell input[type="radio"]:not(:disabled),
+.settings-shell input[type="range"]:not(:disabled),
+.settings-shell select:not(:disabled) {
+  cursor: pointer !important;
+}
+
+.settings-shell button:disabled,
+.settings-shell input:disabled,
+.settings-shell select:disabled,
+.settings-shell [aria-disabled="true"] {
+  cursor: default !important;
+}
+
+.settings-shell input[type="text"]:not(:disabled),
+.settings-shell input[type="email"]:not(:disabled),
+.settings-shell input[type="password"]:not(:disabled),
+.settings-shell textarea:not(:disabled) {
+  cursor: text !important;
+}

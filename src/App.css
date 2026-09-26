@@ -7587,3 +7587,299 @@ option{background:#fff;color:#343741}
     display:none!important;
   }
 }
+
+
+/* v188 · split profile and compact settings */
+.account-chip{cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.account-chip:hover{background:rgba(83,85,201,.07);box-shadow:0 0 0 1px rgba(83,85,201,.08)}
+.profile-compact-wrap,.settings-compact-content{width:min(920px,calc(100% - 32px));margin:22px auto}
+.profile-identity-card{display:flex;align-items:center;gap:18px;padding:20px;background:#fff;border:1px solid #e2e4ea;border-radius:16px}
+.profile-big-avatar{display:grid;place-items:center;width:68px;height:68px;border-radius:50%;background:#5355c9;color:#fff;font-size:28px;font-weight:750;flex:0 0 auto}
+.profile-identity-copy h1,.profile-identity-copy p{margin:0}.profile-identity-copy p{margin-top:4px;color:#777c88}.profile-role-pills{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.profile-role-pills span{padding:4px 8px;border-radius:999px;background:#f0f1f7;font-size:12px}
+.profile-compact-card{margin-top:12px;padding:16px;background:#fff;border:1px solid #e2e4ea;border-radius:14px}.profile-compact-card label{display:grid;gap:6px}.profile-compact-card input{height:40px;padding:0 11px;border:1px solid #d9dce5;border-radius:9px}.profile-inline-actions{display:flex;justify-content:flex-end;margin-top:12px}
+.compact-settings-header{min-height:auto}.settings-compact-content{max-width:820px}.settings-compact-grid{display:grid;gap:8px}
+.settings-row-card{min-height:58px;display:flex;align-items:center;gap:16px;padding:10px 13px;background:#fff;border:1px solid #e2e4ea;border-radius:12px}.settings-row-card>div:first-child{min-width:0;flex:1;display:grid;gap:2px}.settings-row-card small{color:#7b808d}.settings-row-card select,.settings-row-card button{height:34px;border:1px solid #d9dce5;border-radius:8px;background:#fff;padding:0 10px}.settings-row-card input[type=checkbox]{width:19px;height:19px}.settings-footer-actions{display:flex;justify-content:flex-end;margin-top:14px}
+@media(max-width:620px){.profile-compact-wrap,.settings-compact-content{width:calc(100% - 20px);margin:12px auto}.profile-identity-card{padding:14px}.profile-big-avatar{width:54px;height:54px;font-size:22px}.settings-row-card{align-items:flex-start;flex-wrap:wrap}.settings-row-card>select,.settings-row-card>button{margin-left:auto}.compact-settings-header{gap:8px}}
+
+
+/* v190 · clearer "follow teacher" visual */
+.follow-teacher-button{position:relative}
+.follow-teacher-icon-v190{width:21px;height:21px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.follow-teacher-icon-v190 .follow-teacher-head{fill:currentColor;stroke:none}
+.follow-teacher-icon-v190 .follow-teacher-body{stroke-width:1.9}
+.follow-teacher-icon-v190 .follow-teacher-trail{opacity:.48;stroke-width:1.45}
+.follow-teacher-icon-v190 .follow-teacher-focus{stroke-width:1.9}
+.follow-teacher-button.active .follow-teacher-icon-v190 .follow-teacher-trail{opacity:.9}
+.follow-teacher-button.active .follow-teacher-icon-v190{filter:drop-shadow(0 0 3px rgba(83,85,201,.18))}
+
+
+/* v191 · uncluttered follow icon for 32–36 px mobile buttons */
+.follow-teacher-icon-v191{
+  width:20px!important;
+  height:20px!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.65!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+  overflow:visible!important;
+}
+.follow-teacher-icon-v191 circle{fill:none!important}
+.follow-teacher-icon-v191 .follow-arrow{stroke-width:1.8!important}
+.follow-teacher-button.active .follow-teacher-icon-v191{filter:none!important}
+@media(max-width:430px){
+  .follow-teacher-icon-v191{width:18px!important;height:18px!important}
+  .follow-teacher-live-dot{width:6px!important;height:6px!important;right:2px!important;top:2px!important}
+}
+
+
+/* v193 · AI insertion feedback stays above board chrome */
+.notice{z-index:1200}
+
+/* v194 · final local-stage status */
+.settings-local-status{display:grid;gap:4px;margin-top:12px;padding:11px 13px;border:1px solid #dfe2ea;border-radius:11px;background:#f8f9fc}
+.settings-local-status small{color:#737985;line-height:1.4}
+
+
+/* v195 · board AI tool */
+.toolbar-ai-button,.mobile-ai-tool{position:relative;display:grid;place-items:center;border:0;background:transparent;color:inherit;cursor:pointer}
+.toolbar-ai-button{width:34px;height:34px;border-radius:9px}.toolbar-ai-button:hover,.mobile-ai-tool:hover{background:rgba(83,85,201,.09)}
+.mobile-ai-tool{width:38px;height:38px;border-radius:10px;flex:0 0 auto}
+.board-ai-overlay{position:fixed;inset:0;z-index:1800;display:grid;place-items:center;padding:16px;background:rgba(25,28,38,.28);backdrop-filter:blur(3px)}
+.board-ai-panel{width:min(560px,calc(100vw - 24px));max-height:min(720px,calc(100dvh - 24px));overflow:auto;background:#fff;border:1px solid #e0e2e8;border-radius:18px;box-shadow:0 20px 70px rgba(30,34,50,.2);padding:16px;color:#242733}
+.board-ai-panel>header{display:flex;align-items:flex-start;gap:12px}.board-ai-panel>header>button{margin-left:auto;border:0;background:#f1f2f6;width:32px;height:32px;border-radius:9px;font-size:20px;cursor:pointer}.board-ai-title{display:flex;align-items:center;gap:10px}.board-ai-title>div{display:grid;gap:2px}.board-ai-title span{font-size:12px;color:#7b808d}
+.board-ai-types{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:16px 0}.board-ai-types button{height:36px;border:1px solid #e0e2e8;background:#f7f8fb;border-radius:9px;cursor:pointer}.board-ai-types button.active{background:#5355c9;color:#fff;border-color:#5355c9}
+.board-ai-field,.board-ai-options label{display:grid;gap:5px}.board-ai-field>span,.board-ai-options span{font-size:12px;font-weight:650}.board-ai-field small{font-weight:400;color:#8a8f99}.board-ai-field input,.board-ai-options select{height:39px;border:1px solid #d9dce5;border-radius:9px;padding:0 10px;background:#fff}
+.board-ai-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.board-ai-empty{min-height:180px;margin-top:12px;display:grid;place-content:center;justify-items:center;gap:5px;border:1px dashed #d7dae3;border-radius:12px;color:#858a96}.board-ai-empty b{color:#444854}.board-ai-preview{margin-top:12px;padding:12px;background:#f8f9fc;border-radius:12px}.board-ai-preview ol{margin:8px 0 0;padding-left:24px;display:grid;gap:7px;line-height:1.35}.board-ai-panel>footer{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.board-ai-panel>footer button{height:38px;padding:0 14px;border-radius:9px;cursor:pointer}.board-ai-panel>footer .secondary{border:1px solid #d9dce5;background:#fff}.board-ai-panel>footer .primary{border:0;background:#5355c9;color:#fff}.board-ai-panel>footer .primary:disabled{opacity:.45}
+@media(max-width:620px){.board-ai-overlay{padding:8px;align-items:end}.board-ai-panel{width:100%;max-height:82dvh;border-radius:18px 18px 12px 12px}.board-ai-types{grid-template-columns:1fr 1fr}.board-ai-options{grid-template-columns:1fr 1fr}}
+
+/* v196 · richer intent-aware AI categories */
+.board-ai-types{grid-template-columns:repeat(3,1fr)}
+.board-ai-answer-toggle{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:13px;cursor:pointer}.board-ai-answer-toggle input{width:16px;height:16px}.board-ai-detected{margin-top:9px;padding:7px 9px;border-radius:8px;background:#f0f1fb;color:#666b78;font-size:12px}.board-ai-detected b{color:#4547a8}
+@media(max-width:620px){.board-ai-types{grid-template-columns:repeat(2,1fr)}}
+
+/* v197 · prompt is an instruction, not a decorative title */
+.board-ai-prompt-help{margin-top:5px;color:#858a96;font-size:11px;line-height:1.35}
+
+/* v198 · student permissions and teacher media approval */
+.student-board-mode,.teacher-approval-badge{position:fixed;top:58px;right:12px;z-index:1150;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.94);border:1px solid #dfe2ea;box-shadow:0 3px 14px rgba(30,34,50,.08);font-size:11px;color:#666b78}.teacher-approval-badge{color:#4547a8;font-weight:650}
+.student-media-pending{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:10px;background:rgba(249,249,253,.82);backdrop-filter:blur(2px);border:2px dashed #7c7ee2;border-radius:inherit;pointer-events:auto}.student-media-pending>div:first-child{display:grid;gap:2px}.student-media-pending b{color:#4547a8}.student-media-pending span{font-size:11px;color:#6f7480;overflow:hidden;text-overflow:ellipsis}.student-media-review-actions{display:flex;gap:5px;flex-wrap:wrap}.student-media-review-actions button{border:1px solid #d9dce5;background:#fff;border-radius:7px;padding:5px 7px;font-size:11px;cursor:pointer}.student-media-review-actions .approve{background:#eaf7ee;border-color:#b9dfc3;color:#176b32}.student-media-review-actions .reject{background:#fff0f0;border-color:#efc5c5;color:#a52a2a}
+@media(max-width:620px){.student-board-mode,.teacher-approval-badge{top:54px;right:8px}.student-media-pending{padding:7px}.student-media-review-actions button{padding:4px 6px}}
+
+/* v200 · attachment approval is a notification, never an on-board pending object */
+.teacher-media-request{position:fixed;z-index:1900;top:72px;right:16px;width:min(340px,calc(100vw - 24px));padding:12px;border:1px solid #dfe2ea;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 14px 42px rgba(28,32,45,.18);display:grid;gap:9px}
+.teacher-media-request-head>div{display:grid;gap:2px}.teacher-media-request-head b{font-size:13px}.teacher-media-request-head span{font-size:11px;color:#747a86;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.teacher-media-request-preview{position:relative;height:180px;overflow:hidden;border:1px solid #e3e5eb;border-radius:10px;background:#f5f6f8}.teacher-media-request-preview .media-view,.teacher-media-request-preview img,.teacher-media-request-preview canvas{width:100%!important;height:100%!important;object-fit:contain!important}
+.teacher-media-request-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.teacher-media-request-actions button{height:34px;border:1px solid #d9dce5;border-radius:8px;background:#fff;cursor:pointer;font-size:12px}.teacher-media-request-actions .approve{background:#5355c9;border-color:#5355c9;color:#fff}.teacher-media-request-actions .reject{background:#fff4f4;color:#a52a2a;border-color:#efcaca}
+@media(max-width:620px){.teacher-media-request{top:56px;right:8px;width:calc(100vw - 16px)}.teacher-media-request-preview{height:150px}}
+/* selection action bar must stay reachable when selected media touches bottom/right edges */
+.selection-toolbar-screen{max-width:min(760px,calc(100% - 20px));scrollbar-width:thin}
+
+/* v201 · realtime teacher attachment request */
+.teacher-media-request-preview img,.teacher-media-request-preview iframe{display:block;width:100%;height:100%;border:0;object-fit:contain;background:#f7f8fa}
+.teacher-media-request-loading{display:grid;place-items:center;color:#7b808c;font-size:12px}
+
+/* v202 · selected-object toolbar must be an interactive UI layer, never part of canvas gestures */
+.selection-toolbar-screen{
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+  user-select:none;
+  z-index:1850!important;
+}
+.selection-toolbar-screen button,
+.selection-toolbar-screen a,
+.selection-toolbar-screen summary,
+.selection-toolbar-screen input{
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+  cursor:pointer;
+  position:relative;
+  z-index:1;
+}
+.selection-toolbar-screen button:disabled{cursor:not-allowed}
+.selection-toolbar-screen button:active,
+.selection-toolbar-screen a:active,
+.selection-toolbar-screen summary:active{transform:translateY(1px)}
+.selection-more{position:relative;z-index:4}
+.selection-more[open]{z-index:1901}
+.selection-more-menu{z-index:1902!important;pointer-events:auto!important}
+
+/* v203 · smart hand: tap selects, drag empty/unselected space pans, drag selected object moves it */
+.board-tool-hand .board-object.selected{cursor:move}
+.board-tool-hand.board-panning{cursor:grabbing}
+
+
+/* v204 · mobile attachment dragging + compact navigation controls */
+
+/* Embedded media must never steal a touch gesture from the board.
+   The board-object wrapper owns selection/move gestures; opening/downloading
+   stays in the floating selection toolbar. This is especially important for
+   <object type="application/pdf"> on Android. */
+@media (max-width:1100px){
+  .board-object.object-image .media-image,
+  .board-object.object-pdf .media-pdf,
+  .board-object.object-image img,
+  .board-object.object-pdf object{
+    pointer-events:none!important;
+    touch-action:none!important;
+    user-select:none!important;
+    -webkit-user-drag:none!important;
+  }
+
+  /* "All" and "Selection" are icon-only navigation actions on mobile. */
+  .board-controls .fit-all-button,
+  .board-controls .fit-selection-button{
+    width:40px!important;
+    min-width:40px!important;
+    max-width:40px!important;
+    padding:0!important;
+    gap:0!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  .board-controls .fit-selection-button{
+    margin-left:6px!important;
+  }
+  .board-controls .fit-selection-button::before{
+    display:none!important;
+  }
+}
+
+/* Portrait has pinch-to-zoom, so the entire scale/navigation panel is removed.
+   Width/orientation is authoritative: do not depend on pointer:coarse because
+   Android WebViews and browser device emulation may report a fine pointer. */
+@media (max-width:1100px) and (orientation:portrait){
+  .board-controls,
+  .zoom-controls{
+    display:none!important;
+  }
+
+  .mobile-board-tools{
+    left:50%!important;
+    right:auto!important;
+    transform:translateX(-50%)!important;
+    max-width:calc(100vw - 16px)!important;
+  }
+}
+
+/* Landscape keeps compact icon-only navigation and reserves enough room for
+   the centered tool dock even when a selection exists. */
+@media (max-width:1100px) and (orientation:landscape){
+  .board-controls{
+    width:auto!important;
+    max-width:230px!important;
+  }
+  .board-controls .fit-selection-button{
+    margin-left:3px!important;
+  }
+  body .mobile-board-tools{
+    max-width:min(calc(100vw - 245px),520px)!important;
+  }
+}
+
+/* v205 · Android selected-object drag stabilization */
+@media (max-width:1100px){
+  .board-tool-hand .board-object.selected{
+    touch-action:none!important;
+    cursor:grabbing;
+  }
+  .board-tool-hand .board-object.selected,
+  .board-tool-hand .board-object.selected *{
+    -webkit-touch-callout:none!important;
+  }
+}
+
+/* v206 · student can solve teacher content without structurally editing it */
+.selection-toolbar-screen button:disabled{opacity:.38!important;pointer-events:none!important}
+.student-board-mode{white-space:nowrap}
+
+/* v208 · attachment approval queue and student pending state */
+.teacher-media-request-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.teacher-media-request-head>strong{flex:0 0 auto;font-size:12px;padding:4px 7px;border-radius:8px;background:rgba(83,85,201,.09);color:#5355c9}
+.teacher-media-request-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.teacher-media-request-nav span{font-size:12px;color:#707584}
+.teacher-media-request-nav button{width:34px;height:30px;border:1px solid #e1e3eb;border-radius:9px;background:#fff;font-size:20px;line-height:1}
+.teacher-media-request-nav button:disabled{opacity:.35}
+.student-media-pending{position:fixed;right:14px;bottom:76px;z-index:1050;display:flex;align-items:center;gap:12px;padding:9px 10px 9px 12px;border:1px solid rgba(83,85,201,.2);border-radius:13px;background:rgba(255,255,255,.96);box-shadow:0 8px 30px rgba(27,31,45,.12);backdrop-filter:blur(12px)}
+.student-media-pending>div{display:flex;align-items:center;gap:8px;min-width:0}.student-media-pending span{display:flex;flex-direction:column;min-width:0}.student-media-pending b{font-size:12px}.student-media-pending small{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#747987}
+.student-media-pending button{border:0;border-radius:9px;padding:7px 9px;background:rgba(83,85,201,.09);color:#4d4fc2;font-weight:650;white-space:nowrap}
+@media(max-width:1100px){.student-media-pending{left:10px;right:10px;bottom:70px;justify-content:space-between}.student-media-pending small{max-width:45vw}}
+@media(max-width:1100px) and (orientation:portrait){.student-media-pending{bottom:68px}}
+
+/* v210 · administrator user/subscription console */
+.admin-users-shell .students-content{max-width:1240px}
+.admin-tabs{display:flex;gap:6px;margin-bottom:18px;padding:4px;border:1px solid #e5e7ee;border-radius:12px;background:#f7f8fb;width:max-content;max-width:100%}
+.admin-tabs button{border:0;background:transparent;border-radius:9px;padding:8px 12px;font-weight:650;color:#666d7a;cursor:pointer}.admin-tabs button.active{background:#fff;color:#292d36;box-shadow:0 1px 5px rgba(20,24,35,.09)}.admin-tabs span{display:inline-grid;place-items:center;min-width:19px;height:19px;margin-left:5px;padding:0 5px;border-radius:10px;background:#eceefe;color:#5355c9;font-size:11px}
+.admin-users-toolbar{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:12px}.admin-users-toolbar>div{display:grid;gap:3px}.admin-users-toolbar h2{margin:0;font-size:20px}.admin-users-toolbar span{font-size:12px;color:#777d89}.admin-users-toolbar input{width:min(320px,38vw);height:38px;border:1px solid #dfe2e9;border-radius:10px;padding:0 12px;background:#fff}
+.admin-users-list{display:grid;gap:9px}.admin-user-card{display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(150px,.65fr) minmax(360px,1.55fr);align-items:center;gap:18px;padding:13px 14px;border:1px solid #e5e7ed;border-radius:14px;background:#fff}
+.admin-user-main{display:flex;align-items:center;gap:10px;min-width:0}.admin-user-avatar{display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;border-radius:12px;background:#eff0ff;color:#5355c9;font-weight:800}.admin-user-main>div:last-child,.admin-user-current{display:grid;gap:2px;min-width:0}.admin-user-main strong,.admin-user-main span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-user-main span,.admin-user-main small,.admin-user-current span,.admin-user-current small{font-size:11px;color:#7a808c}
+.admin-user-current strong{width:max-content}.admin-plan{padding:4px 8px;border-radius:8px;font-size:12px}.admin-plan-free{background:#f1f2f5;color:#676d78}.admin-plan-basic{background:#eef5ff;color:#2e67a7}.admin-plan-pro{background:#eeedff;color:#514bc5}
+.admin-user-grant{display:grid;grid-template-columns:1fr 1fr auto auto;align-items:end;gap:7px}.admin-user-grant label{display:grid;gap:4px;font-size:10px;color:#747a86}.admin-user-grant select,.admin-user-grant input{height:34px;min-width:0;border:1px solid #dfe2e9;border-radius:9px;background:#fff;padding:0 8px}.admin-duration-buttons{display:flex;gap:3px}.admin-duration-buttons button{height:34px;border:1px solid #dfe2e9;border-radius:8px;background:#fff;padding:0 7px;font-size:11px;white-space:nowrap}.admin-grant-button{height:34px;white-space:nowrap}
+@media(max-width:980px){.admin-user-card{grid-template-columns:1fr 1fr}.admin-user-grant{grid-column:1/-1}.admin-users-toolbar{align-items:stretch}.admin-users-toolbar input{width:300px;max-width:45vw}}
+@media(max-width:650px){.admin-tabs{width:100%}.admin-tabs button{flex:1}.admin-users-toolbar{display:grid}.admin-users-toolbar input{width:100%;max-width:none}.admin-user-card{grid-template-columns:1fr}.admin-user-grant{grid-column:auto;grid-template-columns:1fr 1fr}.admin-duration-buttons{grid-column:1/-1}.admin-grant-button{grid-column:1/-1}.admin-user-current{padding-left:48px}}
+
+
+/* v215 · mobile scrolling for every main application screen
+   The board itself keeps the document viewport locked. Every non-board screen
+   therefore owns its own vertical scroll container on mobile. */
+@media (max-width:1100px){
+  .boards-shell,
+  .students-shell,
+  .assignments-shell,
+  .progress-shell,
+  .schedule-shell,
+  .materials-shell,
+  .templates-shell,
+  .notifications-shell,
+  .profile-shell,
+  .testing-guide-shell,
+  .billing-page,
+  .ai-studio{
+    box-sizing:border-box!important;
+    width:100%!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-height:100dvh!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    touch-action:pan-y!important;
+  }
+
+  .boards-content,
+  .students-content,
+  .assignments-content,
+  .progress-content,
+  .schedule-content,
+  .materials-content,
+  .templates-content,
+  .notifications-content,
+  .profile-content,
+  .testing-guide-content{
+    min-height:max-content;
+    padding-bottom:max(88px,calc(56px + env(safe-area-inset-bottom)))!important;
+  }
+}
+
+
+/* v216 · student card: boards belong directly under the student's profile */
+.student-card{
+  display:flex;
+  flex-direction:column;
+}
+.student-card>.student-card-head{order:0}
+.student-card>.student-boards{
+  order:1;
+  margin-top:14px;
+  margin-bottom:14px;
+  padding-top:12px;
+  padding-bottom:12px;
+  border-top:1px solid #ececf2;
+  border-bottom:1px solid #ececf2;
+}
+.student-card>:not(.student-card-head):not(.student-boards):not(.student-placeholder){
+  order:2;
+}
+.student-card>.student-placeholder{order:0}
+.auth-remembered{display:grid;grid-template-columns:44px minmax(0,1fr) auto 30px;gap:10px;align-items:center;padding:10px 12px;margin:12px 0 14px;border:1px solid rgba(124,92,255,.24);border-radius:14px;background:rgba(124,92,255,.07)}.auth-remembered-avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:rgba(124,92,255,.16)}.auth-remembered-copy{min-width:0;display:flex;flex-direction:column}.auth-remembered-copy strong,.auth-remembered-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.auth-remembered-copy span{font-size:12px;opacity:.68;margin-top:2px}.auth-remembered-login{min-height:38px;padding:0 15px;border:0;border-radius:10px;font-weight:750;cursor:pointer}.auth-remembered-forget{width:30px;height:30px;border:0;border-radius:9px;background:transparent;font-size:20px;opacity:.55;cursor:pointer}@media(max-width:560px){.auth-remembered{grid-template-columns:40px minmax(0,1fr) auto 28px;padding:9px}.auth-remembered-avatar{width:40px;height:40px}.auth-remembered-login{padding:0 12px}}

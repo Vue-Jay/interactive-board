@@ -1,0 +1,84 @@
+/* v220 · universal pointer feedback for interactive UI
+   Active/clickable controls use the hand cursor.
+   Disabled controls keep the normal arrow so they do not pretend to be actionable. */
+
+button:not(:disabled),
+a[href],
+summary,
+label[for],
+label.boards-import:not(.disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="option"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="checkbox"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+[tabindex]:not([tabindex="-1"]):not(input):not(textarea):not(select):not([aria-disabled="true"]),
+.board-card-preview,
+.board-card-title,
+.student-row,
+.student-boards button,
+.account-chip,
+.settings-card button,
+.settings-tile,
+.profile-tile,
+.dashboard-nav button,
+.mobile-dashboard-menu summary,
+.mobile-dashboard-menu-grid button {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+.disabled {
+  cursor: default !important;
+}
+
+/* Preserve semantic cursors for fields and board editing mechanics. */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]),
+textarea {
+  cursor: text;
+}
+select,
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+input[type="color"],
+input[type="file"] {
+  cursor: pointer;
+}
+.board-tool-hand,
+.board-hand-active {
+  cursor: grab;
+}
+.board-panning {
+  cursor: grabbing !important;
+}
+.board-tool-pen,
+.board-tool-marker,
+.board-tool-line,
+.board-tool-shape,
+.board-tool-sticky,
+.board-tool-lasso {
+  cursor: crosshair;
+}
+.board-tool-text {
+  cursor: text;
+}
+.board-tool-eraser {
+  cursor: none;
+}
+.board-object {
+  cursor: move;
+}
+.resize-handle,
+.rotate-handle {
+  cursor: inherit;
+}
+.handle-nw,.handle-se{cursor:nwse-resize}
+.handle-ne,.handle-sw{cursor:nesw-resize}
+.handle-n,.handle-s{cursor:ns-resize}
+.handle-e,.handle-w{cursor:ew-resize}
+.rotate-handle{cursor:grab}
+.rotate-handle:active{cursor:grabbing}

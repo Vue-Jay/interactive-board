@@ -14,11 +14,16 @@ import ProgressScreen from "./ProgressScreen";
 import ScheduleScreen from "./ScheduleScreen";
 import MaterialsScreen from "./MaterialsScreen";
 import NotificationsScreen from "./NotificationsScreen";
+import { clearNotificationCache } from "./notificationsStore";
 import ProfileScreen from "./ProfileScreen";
-import { getAccountAccess,type AccountRole } from "./accountRoleStore";
+import SettingsScreen from "./SettingsScreen";
+import BillingScreen from "./BillingScreen";
+import AiStudioScreen from "./AiStudioScreen";
+import { clearAiBoardTransfer, peekAiBoardTransfer } from "./aiLocalStore";
+import { generateMathAi, type MathAiLevel, type MathAiMode } from "./aiMathGenerator";
+import { clearAccountAccessCache, getAccountAccess,type AccountRole } from "./accountRoleStore";
 import AdminScreen from "./AdminScreen";
 import TemplatesScreen from "./TemplatesScreen";
-import TestingGuideScreen from "./TestingGuideScreen";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -33,6 +38,7 @@ import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence"
 import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor } from "./boardBroadcast";
 import { connectBoardViewControl, type BoardViewControlChannel } from "./boardViewSync";
 import { connectBoardWorkChannel, type BoardWorkChannel, type RemoteWorkState } from "./boardWorkSync";
+import { connectAttachmentApprovalChannel, type AttachmentApprovalChannel, type AttachmentApprovalRequest } from "./boardAttachmentApprovalSync";
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
@@ -53,6 +59,21 @@ import { createBoardComment, listBoardComments, listBoardCommentParticipants, se
 import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
 import { safeBackupName, validatePortableBundle, type PortableBoardBundle } from "./backupStore";
+import TestingGuideScreen from "./TestingGuideScreen";
+
+const createId = (): string => {
+  const native = globalThis.crypto?.randomUUID;
+  if (typeof native === "function") {
+    try { return native.call(globalThis.crypto); } catch { /* use fallback below */ }
+  }
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0"));
+  return `${hex.slice(0,4).join("")}-${hex.slice(4,6).join("")}-${hex.slice(6,8).join("")}-${hex.slice(8,10).join("")}-${hex.slice(10).join("")}`;
+};
 
 type Tool =
   | "select"
@@ -87,7 +108,7 @@ type IconName =
   | "distribute-x" | "distribute-y" | "open" | "download" | "eye" | "eye-off"
   | "frame-contents" | "fit" | "grid" | "dots" | "plain" | "line" | "arrow-one" | "arrow-double" | "elbow" | "link" | "unlink" | "label" | "zoom-in" | "zoom-out" | "snap" | "chevron-left" | "chevron-right"
   | "templates" | "comments" | "check" | "plus" | "minus" | "presentation-order"
-  | "checklist" | "quiz" | "cover" | "flip" | "fullscreen" | "timer" | "laser" | "spotlight" | "slides" | "play" | "pause" | "reset" | "keyboard";
+  | "checklist" | "quiz" | "cover" | "flip" | "robot" | "fullscreen" | "timer" | "laser" | "spotlight" | "slides" | "play" | "pause" | "reset" | "keyboard";
 
 const iconBody = (name: IconName) => {
   switch (name) {
@@ -105,6 +126,7 @@ const iconBody = (name: IconName) => {
     case "graph": return <><path d="M4 19V5M4 12h16"/><path d="M6 16c3-1 4-8 7-8s3 5 7 3"/></>;
     case "checklist": return <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m7 9 1.5 1.5L11 8M13.5 9H17M7 14l1.5 1.5L11 13M13.5 14H17"/></>;
     case "quiz": return <><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9.2 9.1a2.9 2.9 0 1 1 4.7 2.3c-1.1.8-1.9 1.3-1.9 2.6"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></>;
+    case "robot": return <><rect x="4.5" y="7" width="15" height="12" rx="3"/><path d="M12 7V4M9.5 4h5"/><circle cx="9" cy="12" r="1.15" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.15" fill="currentColor" stroke="none"/><path d="M8.5 16h7M2.5 11v4M21.5 11v4"/></>;
     case "flashcard": return <><rect x="5" y="4" width="14" height="16" rx="2.5"/><path d="M8 8h8M8 12h5"/><path d="m15 16 2 2 3-4"/></>;
     case "cover": return <><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M7 9h10M7 12h7"/><path d="M17 15.5 20 12.5M20 12.5 17 9.5"/></>;
     case "flip": return <><path d="M6 7h9a5 5 0 0 1 5 5v1"/><path d="m16 9 4 4 4-4" transform="translate(-4 0)"/><path d="M18 17H9a5 5 0 0 1-5-5v-1"/><path d="m8 15-4-4-4 4" transform="translate(4 0)"/></>;
@@ -259,7 +281,9 @@ type Gesture = {
   restore?: Item[];
   ids: string[];
   path: Point[];
-  mode: "pan" | "drag" | "lasso" | "draw" | "erase" | "resize" | "rotate" | "connector" | "connector-end";
+  mode: "pan" | "hand-smart" | "drag" | "lasso" | "draw" | "erase" | "resize" | "rotate" | "connector" | "connector-end";
+  handHitIds?: string[];
+  handMoveSelection?: boolean;
   handle?: string;
   transformItem?: Item;
   transformItems?: Item[];
@@ -378,11 +402,11 @@ const deepItem = (item: Item): Item => ({
 
 const cloneItems = (source: Item[], offset = 24): Item[] => {
   const groups = new Map<string, string>();
-  const ids = new Map(source.map((item) => [item.id, crypto.randomUUID()] as const));
+  const ids = new Map(source.map((item) => [item.id, createId()] as const));
   return source.map((item) => {
     const groupId = item.groupId
       ? groups.get(item.groupId) ?? (() => {
-          const id = crypto.randomUUID();
+          const id = createId();
           groups.set(item.groupId!, id);
           return id;
         })()
@@ -518,7 +542,7 @@ const connectorItemFromPoints = (
   connectorStyle: ConnectorStyle,
   color: string,
   weight: number,
-  id: string = crypto.randomUUID(),
+  id: string = createId(),
   connectorRouting: ConnectorRouting = "straight",
   connectorStartBinding?: ConnectorBinding,
   connectorEndBinding?: ConnectorBinding,
@@ -666,6 +690,13 @@ function Connector({ item }: { item: Item }) {
       )}
     </svg>
   );
+}
+
+function AttachmentRequestPreview({request,boardId}:{request:AttachmentApprovalRequest;boardId:string}){
+ const [url,setUrl]=useState<string|null>(null);
+ useEffect(()=>{let active=true;let objectUrl="";void getAsset(request.assetId,boardId).then(blob=>{if(!active||!blob)return;objectUrl=URL.createObjectURL(blob);setUrl(objectUrl)});return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)}},[request.assetId,boardId]);
+ if(!url)return <div className="teacher-media-request-preview teacher-media-request-loading">Загрузка предпросмотра…</div>;
+ return <div className="teacher-media-request-preview">{request.kind==="image"?<img src={url} alt={request.name}/>:<iframe src={`${url}#page=1&toolbar=0`} title={request.name}/>}</div>;
 }
 
 function Media({ item, boardId }: { item: Item; boardId: string }) {
@@ -1047,15 +1078,67 @@ const itemIconName = (item: Item): IconName => {
   return "marker";
 };
 
-function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardChanged, initialRemoteVersion = null }: {
+function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogout, onBoardChanged, initialRemoteVersion = null }: {
   authUser: AuthUser;
   boardSummary: BoardSummary;
+  accountRole: AccountRole;
   onBackToBoards: () => void;
   onLogout: () => void;
   onBoardChanged: (board: BoardSummary) => void;
   initialRemoteVersion?: number | null;
 }) {
   const canEdit = boardSummary.role !== "viewer";
+  const isStudent = accountRole === "student";
+  const studentBlockedCreateTools = new Set<Tool>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
+  const studentProtectedKinds = new Set<Item["kind"]>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
+  const toolAllowedForRole = (id:Tool) => !isStudent || !studentBlockedCreateTools.has(id);
+  const structurallyLockedForStudent = (item:Item|undefined|null) => !!item && isStudent && studentProtectedKinds.has(item.kind);
+  const studentSelectionHasProtected = () => isStudent && selected.some(id=>structurallyLockedForStudent(itemsRef.current.find(item=>item.id===id)));
+  const rejectStudentStructuralEdit = () => {
+    if(!studentSelectionHasProtected()) return false;
+    setNotice("Ученик может выполнять задание, но не изменять его конструкцию");
+    return true;
+  };
+  const attachmentApprovalRef=useRef<AttachmentApprovalChannel|null>(null);
+  const [attachmentRequests,setAttachmentRequests]=useState<AttachmentApprovalRequest[]>([]);
+  const [pendingAttachmentRequests,setPendingAttachmentRequests]=useState<AttachmentApprovalRequest[]>([]);
+  const [attachmentRequestIndex,setAttachmentRequestIndex]=useState(0);
+  useEffect(()=>{setAttachmentRequestIndex(index=>Math.max(0,Math.min(index,attachmentRequests.length-1)))},[attachmentRequests.length]);
+  const pendingAttachmentTimers=useRef(new Map<string,ReturnType<typeof setInterval>>());
+  const pendingAttachmentStarted=useRef(new Map<string,number>());
+  const sendAttachmentRequest=(request:AttachmentApprovalRequest)=>{
+    attachmentApprovalRef.current?.request(request);
+    setPendingAttachmentRequests(current=>current.some(x=>x.requestId===request.requestId)?current:[...current,request]);
+    const old=pendingAttachmentTimers.current.get(request.requestId);if(old)clearInterval(old);
+    pendingAttachmentStarted.current.set(request.requestId,Date.now());
+    const timer=setInterval(()=>{
+      const started=pendingAttachmentStarted.current.get(request.requestId)??Date.now();
+      if(Date.now()-started>10*60*1000){
+        clearInterval(timer);
+        pendingAttachmentTimers.current.delete(request.requestId);
+        pendingAttachmentStarted.current.delete(request.requestId);
+        return;
+      }
+      attachmentApprovalRef.current?.request(request);
+    },4000);
+    pendingAttachmentTimers.current.set(request.requestId,timer);
+  };
+  const cancelPendingAttachmentRequest=(requestId:string)=>{
+    const timer=pendingAttachmentTimers.current.get(requestId);if(timer)clearInterval(timer);
+    pendingAttachmentTimers.current.delete(requestId);
+    pendingAttachmentStarted.current.delete(requestId);
+    setPendingAttachmentRequests(current=>current.filter(x=>x.requestId!==requestId));
+  };
+
+  const [boardAiOpen,setBoardAiOpen]=useState(false);
+  const [boardAiMode,setBoardAiMode]=useState<MathAiMode>("auto");
+  const [boardAiLevel,setBoardAiLevel]=useState<MathAiLevel>("basic");
+  const [boardAiCount,setBoardAiCount]=useState(6);
+  const [boardAiTopic,setBoardAiTopic]=useState("");
+  const [boardAiWithAnswers,setBoardAiWithAnswers]=useState(false);
+  const [boardAiDetected,setBoardAiDetected]=useState("");
+  const [boardAiPreview,setBoardAiPreview]=useState<string[]>([]);
+
   const publicPresentation = !canEdit && new URLSearchParams(window.location.search).get("present")==="1";
   const [sharing, setSharing] = useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
@@ -1647,7 +1730,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           if (!asset.data.startsWith("data:")) throw new Error("Некорректное вложение в копии");
           const blob = await fetch(asset.data).then(r => r.blob());
           const item = data.items.find(item => item.assetId === asset.id);
-          const id = crypto.randomUUID();
+          const id = createId();
           await putAsset(id, item?.kind === "pdf" ? blob.slice(0, blob.size, "application/pdf") : blob, boardSummary.id);
           importedIds.set(asset.id, id);
         } catch (error) {
@@ -1727,6 +1810,83 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     x: (p.x - view.x) / view.zoom,
     y: (p.y - view.y) / view.zoom,
   });
+  const generateBoardAi=()=>{
+    if(isStudent){setNotice("Создавать задания может только преподаватель");return}
+    const result=generateMathAi(boardAiMode,boardAiLevel,boardAiCount,boardAiTopic,boardAiWithAnswers);
+    setBoardAiDetected(result.detected);
+    setBoardAiPreview(boardAiWithAnswers?result.items.map((x,i)=>`${x}  •  Ответ: ${result.answers[i]}`):result.items);
+  };
+  const insertBoardAi=()=>{
+    if(isStudent){setNotice("Создавать задания может только преподаватель");return}
+    if(!canEdit||!boardAiPreview.length)return;
+    const rect=board.current?.getBoundingClientRect();if(!rect)return;
+    const center=world({x:rect.width/2,y:rect.height/2});
+    const title=boardAiDetected||"Задания";
+    const item:Item={
+      id:createId(),kind:"checklist",x:center.x-210,y:center.y-190,width:420,height:380,
+      text:title,checklistItems:boardAiPreview,checklistDone:Array(boardAiPreview.length).fill(false),
+      fontSize:16,color:"#5355c9"
+    };
+    commit([...itemsRef.current,item]);
+    setSelected([item.id]);setTool("select");setBoardAiOpen(false);setBoardAiPreview([]);
+    setNotice(`AI добавил задания на доску · ${boardAiPreview.length}`);
+  };
+
+  const aiTransferHandledRef = useRef<string|null>(null);
+  useEffect(()=>{
+    if(!canEdit)return;
+    const transfer=peekAiBoardTransfer();
+    if(!transfer||aiTransferHandledRef.current===transfer.queuedAt)return;
+    const rect=board.current?.getBoundingClientRect();
+    if(!rect)return;
+    aiTransferHandledRef.current=transfer.queuedAt;
+    const center=world({x:rect.width/2,y:rect.height/2});
+    const draft=transfer.draft;
+    const created:Item[]=[];
+    if(draft.tool==="assignment"){
+      const rows=draft.body.split(/\n+/).map(x=>x.replace(/^\s*\d+\.\s*/,"").trim()).filter(Boolean).slice(0,12);
+      created.push({
+        id:createId(),kind:"checklist",x:center.x-190,y:center.y-155,width:380,height:310,
+        text:draft.title,checklistItems:rows.length?rows:["Задание"],checklistDone:Array(Math.max(1,rows.length)).fill(false),
+        fontSize:15,color:"#5355c9"
+      });
+    }else if(draft.tool==="quiz"){
+      const blocks=draft.body.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean).slice(0,8);
+      blocks.forEach((block,indexValue)=>{
+        const lines=block.split("\n").map(x=>x.trim()).filter(Boolean);
+        const question=(lines[0]||`Вопрос ${indexValue+1}`).replace(/^\d+\.\s*/,"");
+        const options=lines.filter(x=>/^[A-DА-Г]\)/i.test(x)).map(x=>x.replace(/^[A-DА-Г]\)\s*/i,"")).slice(0,4);
+        const answerLine=lines.find(x=>/^Ответ:/i.test(x))||"Ответ: A";
+        const letter=(answerLine.split(":")[1]||"A").trim().toUpperCase();
+        const correct=Math.max(0,["A","B","C","D","А","Б","В","Г"].indexOf(letter)%4);
+        created.push({
+          id:createId(),kind:"quiz",
+          x:center.x-400+(indexValue%2)*420,y:center.y-170+Math.floor(indexValue/2)*340,width:390,height:310,
+          text:question,quizOptions:options.length>=2?options:["Вариант A","Вариант B","Вариант C","Вариант D"],
+          quizCorrect:correct,quizRevealed:false,fontSize:15,color:"#5355c9"
+        });
+      });
+    }else{
+      const blocks=draft.body.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean).slice(0,12);
+      blocks.forEach((block,indexValue)=>{
+        const q=block.match(/Вопрос:\s*(.+)/i)?.[1]?.trim()||`Вопрос ${indexValue+1}`;
+        const a=block.match(/Ответ:\s*(.+)/i)?.[1]?.trim()||"Ответ";
+        const col=indexValue%3,row=Math.floor(indexValue/3);
+        created.push({
+          id:createId(),kind:"flashcard",
+          x:center.x-420+col*290,y:center.y-150+row*220,width:260,height:190,
+          text:q,flashcardBack:a,flashcardFlipped:false,fontSize:17,color:"#5355c9"
+        });
+      });
+    }
+    if(!created.length){aiTransferHandledRef.current=null;setNotice("Не удалось разобрать AI-черновик");return}
+    commit([...itemsRef.current,...created]);
+    setSelected(created.map(x=>x.id));
+    setTool("select");
+    clearAiBoardTransfer();
+    setNotice(created.length===1?"AI-материал добавлен на доску":`AI-материалы добавлены на доску · ${created.length}`);
+  },[boardSummary.id,canEdit]);
+
   const zoom = (factor: number, anchor?: Point) => {
     if (gesture.current) return;
     const rect = board.current?.getBoundingClientRect();
@@ -1760,6 +1920,31 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       ? itemsRef.current.filter((candidate) => candidate.groupId === item.groupId).map((candidate) => candidate.id)
       : [item.id];
 
+  useEffect(()=>{
+    const channel=connectAttachmentApprovalChannel(
+      boardSummary.id,
+      {userId:authUser.id,name:authUser.name},
+      request=>{
+        if(isStudent)return;
+        setAttachmentRequests(current=>current.some(x=>x.requestId===request.requestId)?current:[...current,request]);
+        setNotice(`Новое вложение от ${request.studentName}`);
+      },
+      result=>{
+        if(result.studentId!==authUser.id)return;
+        cancelPendingAttachmentRequest(result.requestId);
+        setNotice(result.approved?`Преподаватель одобрил «${result.name}»`:`Преподаватель отклонил «${result.name}»`);
+      },
+    );
+    attachmentApprovalRef.current=channel;
+    return()=>{
+      channel.close();
+      if(attachmentApprovalRef.current===channel)attachmentApprovalRef.current=null;
+      for(const timer of pendingAttachmentTimers.current.values())clearInterval(timer);
+      pendingAttachmentTimers.current.clear();
+      pendingAttachmentStarted.current.clear();
+    };
+  },[boardSummary.id,authUser.id,authUser.name,isStudent]);
+
   const addMediaFile = async (file: File, position?: Point, offset = 0) => {
     if (!canEdit) throw new Error("У вас доступ только для просмотра");
     if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name}: файл больше 50 МБ`);
@@ -1786,12 +1971,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       }
     }
 
-    const id = crypto.randomUUID();
+    const id = createId();
     await putAsset(id, isPdf ? file.slice(0, file.size, "application/pdf") : file, boardSummary.id);
     const rect = board.current?.getBoundingClientRect();
     const center = position ?? world({ x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 });
     const item: Item = {
-      id: crypto.randomUUID(),
+      id: createId(),
       kind: isPdf ? "pdf" : "image",
       x: center.x - width / 2 + offset,
       y: center.y - height / 2 + offset,
@@ -1801,17 +1986,57 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       assetId: id,
       name: file.name,
       mime: file.type || (isPdf ? "application/pdf" : "image/*"),
+      notes: isStudent ? `student-media-request:${authUser.id}:${authUser.name}` : undefined,
+      hidden: isStudent ? true : undefined,
     };
-    commit([...itemsRef.current, item]);
+    if(isStudent){
+      const approvalRequest:AttachmentApprovalRequest={
+        requestId:createId(),studentId:authUser.id,studentName:authUser.name,
+        assetId:id,name:file.name,mime:item.mime||file.type||"application/octet-stream",
+        kind:isPdf?"pdf":"image",width,height,sentAt:Date.now(),
+      };
+      sendAttachmentRequest(approvalRequest);
+      setSelected([]);
+      setTool("select");
+      setNotice("Вложение отправлено преподавателю на согласование");
+      return item;
+    }
+    commit([...itemsRef.current,{...item,notes:undefined,hidden:undefined}]);
     setSelected([item.id]);
     setTool("select");
     return item;
   };
 
   const openLinkMediaEditor=(item?:Item)=>{setLinkMediaEditId(item?.kind==="linkmedia"?item.id:null);setLinkMediaUrl(item?.kind==="linkmedia"?item.mediaUrl??"":"");setLinkMediaTitle(item?.kind==="linkmedia"?item.mediaTitle??"":"");setLinkMediaOpen(true)};
-  const saveLinkMedia=()=>{if(!canEdit)return;const info=resolveLinkMedia(linkMediaUrl);if(!info){setNotice("Нужна корректная ссылка http/https");return}const title=linkMediaTitle.trim()||({youtube:"YouTube",vimeo:"Vimeo",audio:"Аудио",video:"Видео",web:"Медиа по ссылке"} as const)[info.kind];if(linkMediaEditId){commit(itemsRef.current.map(i=>i.id===linkMediaEditId?{...i,mediaUrl:info.sourceUrl,mediaTitle:title}:i));setNotice("Ссылка мультимедиа обновлена")}else{const rect=board.current?.getBoundingClientRect();const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});const audio=info.kind==="audio";const item:Item={id:crypto.randomUUID(),kind:"linkmedia",x:center.x-240,y:center.y-(audio?70:150),width:480,height:audio?140:300,text:"",mediaUrl:info.sourceUrl,mediaTitle:title};commit([...itemsRef.current,item]);setSelected([item.id]);setNotice("Мультимедиа добавлено без загрузки файла в хранилище")}setLinkMediaOpen(false);setLinkMediaEditId(null);setTool("select")};
+  const saveLinkMedia=()=>{if(!canEdit)return;const info=resolveLinkMedia(linkMediaUrl);if(!info){setNotice("Нужна корректная ссылка http/https");return}const title=linkMediaTitle.trim()||({youtube:"YouTube",vimeo:"Vimeo",audio:"Аудио",video:"Видео",web:"Медиа по ссылке"} as const)[info.kind];if(linkMediaEditId){commit(itemsRef.current.map(i=>i.id===linkMediaEditId?{...i,mediaUrl:info.sourceUrl,mediaTitle:title}:i));setNotice("Ссылка мультимедиа обновлена")}else{const rect=board.current?.getBoundingClientRect();const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});const audio=info.kind==="audio";const item:Item={id:createId(),kind:"linkmedia",x:center.x-240,y:center.y-(audio?70:150),width:480,height:audio?140:300,text:"",mediaUrl:info.sourceUrl,mediaTitle:title};commit([...itemsRef.current,item]);setSelected([item.id]);setNotice("Мультимедиа добавлено без загрузки файла в хранилище")}setLinkMediaOpen(false);setLinkMediaEditId(null);setTool("select")};
 
   useEffect(()=>{if(!canEdit)return;let raw=sessionStorage.getItem("onlinerepetitor.material.pick");if(!raw)return;sessionStorage.removeItem("onlinerepetitor.material.pick");(async()=>{try{const picked=JSON.parse(raw) as Pick<Material,"id"|"title"|"fileName"|"mime"|"storagePath">;if(!picked.id||!(picked.mime.startsWith("image/")||picked.mime==="application/pdf")){setNotice("На доску сейчас можно вставить изображение или PDF");return}const blob=await materialBlob(picked as Material);const file=new File([blob],picked.fileName,{type:picked.mime});await addMediaFile(file);await markMaterialUsed(picked.id);setNotice(`Материал «${picked.title}» добавлен на доску`)}catch(e){setNotice(e instanceof Error?e.message:"Не удалось добавить материал")}})()},[boardSummary.id,canEdit]);
+
+  const approveAttachmentRequest=(request:AttachmentApprovalRequest)=>{
+    if(isStudent)return;
+    const rect=board.current?.getBoundingClientRect();
+    const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});
+    const item:Item={
+      id:createId(),kind:request.kind,x:center.x-request.width/2,y:center.y-request.height/2,
+      width:request.width,height:request.height,text:"",assetId:request.assetId,name:request.name,mime:request.mime,
+    };
+    commit([...itemsRef.current,item]);
+    setSelected([item.id]);setTool("select");
+    setAttachmentRequests(current=>current.filter(x=>x.requestId!==request.requestId));
+    attachmentApprovalRef.current?.result({requestId:request.requestId,studentId:request.studentId,approved:true,name:request.name});
+    setNotice(`Вложение «${request.name}» одобрено и добавлено на доску`);
+  };
+  const rejectAttachmentRequest=(request:AttachmentApprovalRequest)=>{
+    if(isStudent)return;
+    setAttachmentRequests(current=>current.filter(x=>x.requestId!==request.requestId));
+    attachmentApprovalRef.current?.result({requestId:request.requestId,studentId:request.studentId,approved:false,name:request.name});
+    setNotice(`Вложение «${request.name}» отклонено`);
+  };
+  const openAttachmentRequest=async(request:AttachmentApprovalRequest)=>{
+    const blob=await getAsset(request.assetId,boardSummary.id);
+    if(!blob){setNotice("Не удалось загрузить вложение для предпросмотра");return}
+    const url=URL.createObjectURL(blob);window.open(request.kind==="pdf"?`${url}#page=1`:url,"_blank","noopener,noreferrer");window.setTimeout(()=>URL.revokeObjectURL(url),60000);
+  };
 
   const openMediaAsset = async (item: Item) => {
     if ((item.kind !== "image" && item.kind !== "pdf") || !item.assetId) return;
@@ -1848,7 +2073,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     if (item.kind !== "pdf" || item.locked) return;
     const copy: Item = {
       ...deepItem(item),
-      id: crypto.randomUUID(),
+      id: createId(),
       x: item.x + item.width + 28,
       y: item.y,
       pdfPage: Math.max(1, (item.pdfPage ?? 1) + 1),
@@ -1866,7 +2091,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const copies: Item[] = [];
     for (let n = 1; n < count; n++) {
       const col = n % cols, row = Math.floor(n / cols);
-      copies.push({ ...deepItem(item), id: crypto.randomUUID(), x: item.x + col * (item.width + gap), y: item.y + row * (item.height + gap), pdfPage: Math.max(1, (item.pdfPage ?? 1) + n), groupId: undefined, locked: false });
+      copies.push({ ...deepItem(item), id: createId(), x: item.x + col * (item.width + gap), y: item.y + row * (item.height + gap), pdfPage: Math.max(1, (item.pdfPage ?? 1) + n), groupId: undefined, locked: false });
     }
     commit([...itemsRef.current, ...copies]);
     setSelected([item.id, ...copies.map((copy) => copy.id)]);
@@ -1906,6 +2131,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     if (cancel) {
       display(g.restore ?? g.before);
       setView(g.view);
+    } else if (g.mode === "hand-smart") {
+      if (g.dragging) {
+        if (g.handMoveSelection) commit(itemsRef.current);
+      } else {
+        setSelected(g.handHitIds ?? []);
+      }
     } else if (g.mode === "drag" || g.mode === "erase" || g.mode === "resize" || g.mode === "rotate" || g.mode === "connector-end")
       commit(itemsRef.current);
     else if (g.mode === "draw" && g.ink)
@@ -1917,7 +2148,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       const startPoint = g.path[0];
       const endPoint = g.path[g.path.length - 1] ?? startPoint;
       if (Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 5 / g.view.zoom) {
-        const connector = connectorItemFromPoints(startPoint, endPoint, connectorStyle, color, connectorWeight, crypto.randomUUID(), connectorRouting, g.connectorStartBinding, g.connectorEndBinding);
+        const connector = connectorItemFromPoints(startPoint, endPoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, g.connectorStartBinding, g.connectorEndBinding);
         commit([...g.before, connector]);
         setSelected([connector.id]);
         setTool("select");
@@ -1999,7 +2230,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const hit = itemsRef.current.find((i) => i.id === id);
     const handleEl = target.closest<HTMLElement>("[data-transform-handle]");
     const transformHandle = handleEl?.dataset.transformHandle;
-    if (transformHandle && hit && !hit.locked && selected.length === 1 && selected[0] === hit.id) {
+    if (transformHandle && hit && !hit.locked && !structurallyLockedForStudent(hit) && selected.length === 1 && selected[0] === hit.id) {
       e.preventDefault();
       e.stopPropagation();
       gesture.current = {
@@ -2031,7 +2262,59 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     }
     let mode: Gesture["mode"] = "drag";
     let ids = selected;
-    if (e.button === 1 || tool === "hand" || space) {
+    if (tool === "hand" && !space && e.button === 0) {
+      const family = hit ? familyIdsFor(hit) : [];
+      const hitIsSelected = !!hit && family.every((member) => selected.includes(member));
+      const movableIds = hitIsSelected
+        ? selected.filter((member) => {
+            const candidate=itemsRef.current.find((item) => item.id === member);
+            return !!candidate && !candidate.locked && !structurallyLockedForStudent(candidate);
+          })
+        : [];
+
+      /* Touch needs capture immediately. Waiting for the movement threshold on
+         Android can produce pointercancel/retargeting, which made selected
+         attachments jump a few pixels and then snap back. For an already
+         selected object use the proven normal drag path from pointerdown. */
+      if (e.pointerType === "touch" && hitIsSelected && movableIds.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        gesture.current = {
+          pointer:e.pointerId,
+          mode:"drag",
+          start,
+          view,
+          before:itemsRef.current.map(deepItem),
+          ids:movableIds,
+          path:[p],
+          additive:false,
+          dragging:true,
+        };
+        board.current?.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      gesture.current = {
+        pointer:e.pointerId,
+        mode:"hand-smart",
+        start,
+        view,
+        before:itemsRef.current.map(deepItem),
+        ids:movableIds,
+        path:[p],
+        additive:false,
+        handHitIds:family,
+        handMoveSelection:hitIsSelected && movableIds.length>0,
+      };
+      /* Capture a single touch as well: board has touch-action:none, so this
+         does not break panning, while keeping the same pointer stream alive. */
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+        board.current?.setPointerCapture(e.pointerId);
+      }
+      return;
+    }
+    if (e.button === 1 || space) {
       mode = "pan";
       setPanning(true);
     } else if (tool === "lasso") {
@@ -2051,7 +2334,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     } else if (tool === "frame") {
       e.preventDefault();
       const item: Item = {
-        id: crypto.randomUUID(), kind: "frame",
+        id: createId(), kind: "frame",
         x: p.x - 320, y: p.y - 210, width: 640, height: 420,
         text: "Новый фрейм", color: "#8b8f9a", presentationOrder: Math.max(-1, ...itemsRef.current.filter((candidate) => candidate.kind === "frame").map((candidate, indexValue) => candidate.presentationOrder ?? indexValue)) + 1,
       };
@@ -2064,7 +2347,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       e.preventDefault();
       const targetId = hit && hit.kind !== "comment" ? hit.id : undefined;
       const item: Item = {
-        id: crypto.randomUUID(), kind: "comment",
+        id: createId(), kind: "comment",
         x: p.x + 18, y: p.y + 18, width: 250, height: 132,
         text: "", color: "#fff8d6", resolved: false,
         ...(targetId ? { commentTargetId: targetId } : {}),
@@ -2078,7 +2361,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       e.preventDefault();
       const rows = 3, cols = 3;
       const cells = ["Заголовок 1", "Заголовок 2", "Заголовок 3", "", "", "", "", "", ""];
-      const item: Item = { id: crypto.randomUUID(), kind: "table", x: p.x - 220, y: p.y - 130, width: 440, height: 260, text: "", tableRows: rows, tableCols: cols, tableCells: cells, tableHeader: true, fontSize: 13 };
+      const item: Item = { id: createId(), kind: "table", x: p.x - 220, y: p.y - 130, width: 440, height: 260, text: "", tableRows: rows, tableCols: cols, tableCells: cells, tableHeader: true, fontSize: 13 };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
@@ -2086,10 +2369,10 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       setTableDraft({ rows, cols, cells: [...cells], header: true, fontSize: 13, align: "left", stripe: false, compact: false });
       return;
     } else if (tool === "graph") {
-      e.preventDefault(); const item: Item={id:crypto.randomUUID(),kind:"graph",x:p.x-260,y:p.y-170,width:520,height:340,text:"",graphType:"quadratic",graphA:1,graphB:0,graphC:0,graphXMin:-10,graphXMax:10,graphYMin:-10,graphYMax:10,graphGrid:true,graphPoints:[],graphShowLabels:true,graphSnap:true,graphAxisLabels:true,graphGridStep:1,graphShowCurve:true,graphProjections:false,graphSegments:[],graphAngles:[],graphCircles:[],graphPolygons:[],graphMidpoints:[],color:"#5355c9"}; commit([...itemsRef.current,item]);setSelected([item.id]);setTool("select");window.setTimeout(()=>openGraphEditor(item),0);return;
+      e.preventDefault(); const item: Item={id:createId(),kind:"graph",x:p.x-260,y:p.y-170,width:520,height:340,text:"",graphType:"quadratic",graphA:1,graphB:0,graphC:0,graphXMin:-10,graphXMax:10,graphYMin:-10,graphYMax:10,graphGrid:true,graphPoints:[],graphShowLabels:true,graphSnap:true,graphAxisLabels:true,graphGridStep:1,graphShowCurve:true,graphProjections:false,graphSegments:[],graphAngles:[],graphCircles:[],graphPolygons:[],graphMidpoints:[],color:"#5355c9"}; commit([...itemsRef.current,item]);setSelected([item.id]);setTool("select");window.setTimeout(()=>openGraphEditor(item),0);return;
     } else if (tool === "formula") {
       e.preventDefault();
-      const item: Item = { id: crypto.randomUUID(), kind: "formula", x: p.x - 190, y: p.y - 70, width: 380, height: 140, text: "x^2 + y^2 = r^2", fontSize: 28, color: "#20242c" };
+      const item: Item = { id: createId(), kind: "formula", x: p.x - 190, y: p.y - 70, width: 380, height: 140, text: "x^2 + y^2 = r^2", fontSize: 28, color: "#20242c" };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
@@ -2097,7 +2380,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       return;
     } else if (tool === "checklist") {
       e.preventDefault();
-      const item: Item = { id: crypto.randomUUID(), kind: "checklist", x: p.x - 170, y: p.y - 130, width: 340, height: 260, text: "Задание", checklistItems: ["Первый пункт", "Второй пункт", "Третий пункт"], checklistDone: [false, false, false], fontSize: 15, color: "#5355c9" };
+      const item: Item = { id: createId(), kind: "checklist", x: p.x - 170, y: p.y - 130, width: 340, height: 260, text: "Задание", checklistItems: ["Первый пункт", "Второй пункт", "Третий пункт"], checklistDone: [false, false, false], fontSize: 15, color: "#5355c9" };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
@@ -2106,7 +2389,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     } else if (tool === "quiz") {
       e.preventDefault();
       const item: Item = {
-        id: crypto.randomUUID(), kind: "quiz",
+        id: createId(), kind: "quiz",
         x: p.x - 190, y: p.y - 155, width: 380, height: 310,
         text: "Какой ответ правильный?",
         quizOptions: ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
@@ -2120,7 +2403,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     } else if (tool === "flashcard") {
       e.preventDefault();
       const item: Item = {
-        id: crypto.randomUUID(), kind: "flashcard",
+        id: createId(), kind: "flashcard",
         x: p.x - 180, y: p.y - 125, width: 360, height: 250,
         text: "Вопрос", flashcardBack: "Ответ", flashcardFlipped: false, fontSize: 18, color: "#5355c9",
       };
@@ -2131,7 +2414,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       return;
     } else if (tool === "cover") {
       e.preventDefault();
-      const item: Item = { id: crypto.randomUUID(), kind: "cover", x: p.x - 170, y: p.y - 90, width: 340, height: 180, text: "Открыть ответ", coverOpen: false, fontSize: 17, color: "#5355c9" };
+      const item: Item = { id: createId(), kind: "cover", x: p.x - 170, y: p.y - 90, width: 340, height: 180, text: "Открыть ответ", coverOpen: false, fontSize: 17, color: "#5355c9" };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
@@ -2142,7 +2425,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       const width = tool === "text" ? 260 : 220,
         height = tool === "text" ? 100 : 170;
       const item: Item = {
-        id: crypto.randomUUID(),
+        id: createId(),
         kind: tool,
         x: p.x - width / 2,
         y: p.y - height / 2,
@@ -2169,6 +2452,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         ids = family.every((member) => selected.includes(member)) ? selected : family;
       }
       setSelected(ids);
+      if (structurallyLockedForStudent(hit)) return;
       if (!ids.includes(id) || ids.some((member) => itemsRef.current.find((item) => item.id === member)?.locked)) return;
     } else {
       setSelected([]);
@@ -2184,6 +2468,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     let gestureBefore = itemsRef.current;
     let restoreBefore: Item[] | undefined;
     if (mode === "drag" && e.altKey && ids.length) {
+      if(isStudent && ids.some(member=>structurallyLockedForStudent(itemsRef.current.find(item=>item.id===member)))) return;
       const original = itemsRef.current;
       const copies = cloneItems(original.filter((item) => ids.includes(item.id)), 0);
       if (copies.length) {
@@ -2216,7 +2501,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       ink:
         tool === "pen" || tool === "marker"
           ? {
-              id: crypto.randomUUID(),
+              id: createId(),
               kind: tool,
               color,
               weight: tool === "marker" ? markerWeight : weight,
@@ -2228,7 +2513,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       setPreview(stroke(ink.id, ink.kind, [p], ink.color, ink.weight));
     }
     if (mode === "connector") {
-      setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, crypto.randomUUID(), connectorRouting, connectorStartHit?.binding));
+      setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, connectorStartHit?.binding));
     }
     if (mode === "erase") display(eraseInk(gesture.current.before, gesture.current.path, eraserSize / 2 / view.zoom));
     // Keep plain clicks on the object: early capture retargets dblclick to the board.
@@ -2241,12 +2526,22 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const p = local(e.clientX, e.clientY);
     const dx = p.x - g.start.x,
       dy = p.y - g.start.y;
-    if (g.mode === "drag" && !g.dragging) {
-      if (Math.hypot(dx, dy) < 4) return;
+    if ((g.mode === "drag" || g.mode === "hand-smart") && !g.dragging) {
+      if (Math.hypot(dx, dy) < 5) return;
       g.dragging = true;
       board.current?.setPointerCapture(e.pointerId);
+      if (g.mode === "hand-smart" && !g.handMoveSelection) setPanning(true);
     }
-    if (g.mode === "pan") {
+    if (g.mode === "hand-smart") {
+      if (!g.dragging) return;
+      if (g.handMoveSelection && g.ids.length) {
+        const worldDx=dx/g.view.zoom, worldDy=dy/g.view.zoom;
+        display(g.before.map(item=>g.ids.includes(item.id)?{...item,x:item.x+worldDx,y:item.y+worldDy}:item));
+      } else {
+        setGuides({});
+        setView({...g.view,x:g.view.x+dx,y:g.view.y+dy});
+      }
+    } else if (g.mode === "pan") {
       setGuides({});
       setView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
     } else if (g.mode === "drag") {
@@ -2367,7 +2662,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       const point = magnetic?.point ?? snappedConnectorEnd(g.path[0], raw, e.shiftKey);
       g.connectorEndBinding = magnetic?.binding;
       g.path = [g.path[0], point];
-      setPreview(connectorItemFromPoints(g.path[0], point, connectorStyle, color, connectorWeight, crypto.randomUUID(), connectorRouting, g.connectorStartBinding, g.connectorEndBinding));
+      setPreview(connectorItemFromPoints(g.path[0], point, connectorStyle, color, connectorWeight, createId(), connectorRouting, g.connectorStartBinding, g.connectorEndBinding));
     } else if (g.mode === "erase") {
       const point = world(p), last = g.path[g.path.length - 1];
       if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 2) return;
@@ -2523,7 +2818,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       }
       if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.code) && selected.length) {
         e.preventDefault();
-        if (selectionLocked) return;
+        if (selectionLocked || rejectStudentStructuralEdit()) return;
         const step=e.shiftKey?10:1;
         const dx=e.code==="ArrowLeft"?-step:e.code==="ArrowRight"?step:0;
         const dy=e.code==="ArrowUp"?-step:e.code==="ArrowDown"?step:0;
@@ -2537,7 +2832,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       }
       if (!mod && !e.altKey && keyTools[e.code]) {
         e.preventDefault();
-        setTool(keyTools[e.code]);
+        const shortcutTool=keyTools[e.code];
+        if(!toolAllowedForRole(shortcutTool)){setNotice("Этот инструмент доступен преподавателю");return}
+        setTool(shortcutTool);
       }
     };
     const keyUp = (e: KeyboardEvent) => {
@@ -2583,7 +2880,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       const center = world({ x: rect.width / 2, y: rect.height / 2 });
       const text = pastedText.slice(0, 20000);
       const item: Item = {
-        id: crypto.randomUUID(), kind: "text", x: center.x - 170, y: center.y - 60, width: 340, height: 120, text, fontSize: 20,
+        id: createId(), kind: "text", x: center.x - 170, y: center.y - 60, width: 340, height: 120, text, fontSize: 20,
       };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
@@ -2619,6 +2916,25 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     width: selectionBounds.width * view.zoom,
     height: selectionBounds.height * view.zoom,
   } : null;
+  const selectionToolbarTop = selectionScreenBounds
+    ? (() => {
+        const boardHeight=board.current?.clientHeight ?? window.innerHeight;
+        const below=selectionScreenBounds.top+selectionScreenBounds.height+12;
+        const above=selectionScreenBounds.top-48;
+        return below>boardHeight-54 ? Math.max(8,above) : Math.max(8,below);
+      })()
+    : 0;
+  const selectionToolbarLeft = selectionScreenBounds
+    ? Math.max(54,Math.min((board.current?.clientWidth??window.innerWidth)-54,selectionScreenBounds.left+selectionScreenBounds.width/2))
+    : 0;
+
+  const selectionToolbarPointerDown=(event:React.PointerEvent<HTMLDivElement>)=>{
+    event.stopPropagation();
+  };
+  const selectionToolbarClick=(event:React.MouseEvent<HTMLDivElement>)=>{
+    event.stopPropagation();
+  };
+
   const selectedConnectorEndpoints = singleSelected?.kind === "connector" && singleSelected.connectorStart && singleSelected.connectorEnd ? {
     start: { x: (singleSelected.x + singleSelected.connectorStart.x) * view.zoom + view.x, y: (singleSelected.y + singleSelected.connectorStart.y) * view.zoom + view.y },
     end: { x: (singleSelected.x + singleSelected.connectorEnd.x) * view.zoom + view.x, y: (singleSelected.y + singleSelected.connectorEnd.y) * view.zoom + view.y },
@@ -2884,6 +3200,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const duplicateSelected = () => {
+    if (rejectStudentStructuralEdit()) return;
     if (!selected.length) return;
     const ids = expandedIdsForFrameSelection(selected);
     const copies = cloneItems(itemsRef.current.filter((item) => ids.includes(item.id)));
@@ -2900,7 +3217,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     setSelected(copies.map((item) => item.id));
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = () => { 
+    if(isStudent && selected.some(id=>structurallyLockedForStudent(itemsRef.current.find(item=>item.id===id)))){
+      setNotice("Ученик может выполнять задание, но не изменять его конструкцию");
+      return;
+    }
     if (!selected.length) return;
     const lockedIds = new Set(itemsRef.current.filter((item) => selected.includes(item.id) && item.locked).map((item) => item.id));
     const deletable = selected.filter((id) => !lockedIds.has(id));
@@ -2913,6 +3234,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const moveLayer = (front: boolean) => {
+    if (rejectStudentStructuralEdit()) return;
     if (!selected.length || selectionLocked) return;
     const chosen = itemsRef.current.filter((item) => selected.includes(item.id));
     const rest = itemsRef.current.filter((item) => !selected.includes(item.id));
@@ -2920,6 +3242,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const moveLayerStep = (forward: boolean) => {
+    if (rejectStudentStructuralEdit()) return;
     if (!selected.length || selectionLocked) return;
     const next = [...itemsRef.current];
     const chosen = new Set(selected);
@@ -2940,13 +3263,15 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const groupSelected = () => {
+    if (rejectStudentStructuralEdit()) return;
     if (selected.length < 2 || selectionLocked) return;
-    const groupId = crypto.randomUUID();
+    const groupId = createId();
     commit(itemsRef.current.map((item) => selected.includes(item.id) ? { ...item, groupId } : item));
     setNotice(`Сгруппировано объектов: ${selected.length}`);
   };
 
   const ungroupSelected = () => {
+    if (rejectStudentStructuralEdit()) return;
     const groupIds = new Set(
       itemsRef.current
         .filter((item) => selected.includes(item.id) && item.groupId)
@@ -2958,6 +3283,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const toggleLockSelected = () => {
+    if (rejectStudentStructuralEdit()) return;
     if (!selected.length) return;
     const shouldLock = selectedItems.some((item) => !item.locked);
     commit(itemsRef.current.map((item) => selected.includes(item.id) ? { ...item, locked: shouldLock } : item));
@@ -2965,6 +3291,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const alignSelected = (mode: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") => {
+    if (rejectStudentStructuralEdit()) return;
     if (selectionLocked) return;
     const chosen = itemsRef.current.filter((i) => selected.includes(i.id));
     const bounds = boundsOf(chosen);
@@ -3019,6 +3346,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   };
 
   const rotateSelected = (degrees: number) => {
+    if (rejectStudentStructuralEdit()) return;
     if (!selected.length || selectionLocked) return;
     const chosen = itemsRef.current.filter((item) => selected.includes(item.id));
     const bounds = boundsOf(chosen);
@@ -3121,7 +3449,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     const padBottom = 52;
     const count = itemsRef.current.filter((item) => item.kind === "frame").length + 1;
     const frame: Item = {
-      id: crypto.randomUUID(),
+      id: createId(),
       kind: "frame",
       x: chosenBounds.x - padX,
       y: chosenBounds.y - titleSpace,
@@ -3461,7 +3789,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
     if (selectedItems.length !== 1) { setTool("comment"); setNotice("Щёлкните по объекту или пустому месту, чтобы добавить комментарий"); return; }
     const target = selectedItems[0];
     const item: Item = {
-      id: crypto.randomUUID(), kind: "comment",
+      id: createId(), kind: "comment",
       x: target.x + target.width + 28, y: target.y + 18,
       width: 250, height: 132, text: "", color: "#fff8d6", resolved: false,
       commentTargetId: target.id,
@@ -3481,13 +3809,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
 
   const insertTemplate = (template: "lesson" | "mindmap" | "compare" | "brainstorm" | "checklist" | "quiz" | "cards") => {
     const center = viewportCenterWorld();
-    const frameId = crypto.randomUUID();
+    const frameId = createId();
     const order = nextPresentationOrder();
     const addSticky = (x: number, y: number, w: number, h: number, text: string, colorValue: string): Item => ({
-      id: crypto.randomUUID(), kind: "sticky", x, y, width: w, height: h, text, color: colorValue, fontSize: 18,
+      id: createId(), kind: "sticky", x, y, width: w, height: h, text, color: colorValue, fontSize: 18,
     });
     const addText = (x: number, y: number, w: number, h: number, text: string, size = 28): Item => ({
-      id: crypto.randomUUID(), kind: "text", x, y, width: w, height: h, text, fontSize: size,
+      id: createId(), kind: "text", x, y, width: w, height: h, text, fontSize: size,
     });
     let frame: Item;
     let content: Item[] = [];
@@ -3520,7 +3848,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       frame = { id: frameId, kind: "frame", x: center.x - 430, y: center.y - 300, width: 860, height: 600, text: "Проверка понимания", color: "#73798a", presentationOrder: order };
       content = [
         addText(frame.x + 52, frame.y + 64, 740, 52, "Что уже получилось?", 30),
-        { id: crypto.randomUUID(), kind: "checklist", x: frame.x + 54, y: frame.y + 145, width: 470, height: 350, text: "Чек-лист урока", fontSize: 16, color: "#5355c9", checklistItems: ["Я могу объяснить главную идею своими словами", "Я выполнил основное задание", "Я понимаю, где допустил ошибку", "У меня остался вопрос по теме"], checklistDone: [false, false, false, false] },
+        { id: createId(), kind: "checklist", x: frame.x + 54, y: frame.y + 145, width: 470, height: 350, text: "Чек-лист урока", fontSize: 16, color: "#5355c9", checklistItems: ["Я могу объяснить главную идею своими словами", "Я выполнил основное задание", "Я понимаю, где допустил ошибку", "У меня остался вопрос по теме"], checklistDone: [false, false, false, false] },
         addSticky(frame.x + 565, frame.y + 145, 235, 170, "Мой вопрос\nЧто ещё хочется уточнить?", "#fff3a6"),
         addSticky(frame.x + 565, frame.y + 345, 235, 150, "Следующий шаг\nЧто попробовать дальше?", "#dff5c8"),
       ];
@@ -3528,7 +3856,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       frame = { id: frameId, kind: "frame", x: center.x - 430, y: center.y - 300, width: 860, height: 600, text: "Быстрый вопрос", color: "#73798a", presentationOrder: order };
       content = [
         addText(frame.x + 52, frame.y + 58, 750, 48, "Проверим понимание", 30),
-        { id: crypto.randomUUID(), kind: "quiz", x: frame.x + 70, y: frame.y + 135, width: 520, height: 360, text: "Какой вариант лучше всего отвечает на вопрос?", fontSize: 16, color: "#5355c9", quizOptions: ["Вариант A", "Вариант B", "Вариант C", "Вариант D"], quizCorrect: 0, quizRevealed: false },
+        { id: createId(), kind: "quiz", x: frame.x + 70, y: frame.y + 135, width: 520, height: 360, text: "Какой вариант лучше всего отвечает на вопрос?", fontSize: 16, color: "#5355c9", quizOptions: ["Вариант A", "Вариант B", "Вариант C", "Вариант D"], quizCorrect: 0, quizRevealed: false },
         addSticky(frame.x + 625, frame.y + 150, 180, 150, "Обсуждение\nПочему этот ответ верный?", "#fff3a6"),
         addSticky(frame.x + 625, frame.y + 335, 180, 150, "Вывод\nЧто запомним?", "#dff5c8"),
       ];
@@ -3538,22 +3866,22 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
       const colors = ["#5355c9", "#2f855a", "#d97706", "#8b5cf6", "#dc4c64", "#475569"];
       for (let n = 0; n < 6; n++) {
         const col = n % 3, row = Math.floor(n / 3);
-        content.push({ id: crypto.randomUUID(), kind: "flashcard", x: frame.x + 52 + col * 300, y: frame.y + 135 + row * 220, width: 260, height: 180, text: `Вопрос ${n + 1}`, flashcardBack: `Ответ ${n + 1}`, flashcardFlipped: false, fontSize: 17, color: colors[n] });
+        content.push({ id: createId(), kind: "flashcard", x: frame.x + 52 + col * 300, y: frame.y + 135 + row * 220, width: 260, height: 180, text: `Вопрос ${n + 1}`, flashcardBack: `Ответ ${n + 1}`, flashcardFlipped: false, fontSize: 17, color: colors[n] });
       }
     } else {
       frame = { id: frameId, kind: "frame", x: center.x - 520, y: center.y - 330, width: 1040, height: 660, text: "Карта идей", color: "#73798a", presentationOrder: order };
-      const centerNode: Item = { id: crypto.randomUUID(), kind: "shape", x: center.x - 120, y: center.y - 60, width: 240, height: 120, text: "", shapeType: "rounded", color: "#5355c9" };
+      const centerNode: Item = { id: createId(), kind: "shape", x: center.x - 120, y: center.y - 60, width: 240, height: 120, text: "", shapeType: "rounded", color: "#5355c9" };
       const nodes: Item[] = [
-        { id: crypto.randomUUID(), kind: "sticky", x: center.x - 440, y: center.y - 230, width: 210, height: 140, text: "Ветка 1", color: "#dcecff", fontSize: 18 },
-        { id: crypto.randomUUID(), kind: "sticky", x: center.x + 230, y: center.y - 230, width: 210, height: 140, text: "Ветка 2", color: "#dff5c8", fontSize: 18 },
-        { id: crypto.randomUUID(), kind: "sticky", x: center.x - 440, y: center.y + 100, width: 210, height: 140, text: "Ветка 3", color: "#ffd9de", fontSize: 18 },
-        { id: crypto.randomUUID(), kind: "sticky", x: center.x + 230, y: center.y + 100, width: 210, height: 140, text: "Ветка 4", color: "#eadcff", fontSize: 18 },
+        { id: createId(), kind: "sticky", x: center.x - 440, y: center.y - 230, width: 210, height: 140, text: "Ветка 1", color: "#dcecff", fontSize: 18 },
+        { id: createId(), kind: "sticky", x: center.x + 230, y: center.y - 230, width: 210, height: 140, text: "Ветка 2", color: "#dff5c8", fontSize: 18 },
+        { id: createId(), kind: "sticky", x: center.x - 440, y: center.y + 100, width: 210, height: 140, text: "Ветка 3", color: "#ffd9de", fontSize: 18 },
+        { id: createId(), kind: "sticky", x: center.x + 230, y: center.y + 100, width: 210, height: 140, text: "Ветка 4", color: "#eadcff", fontSize: 18 },
       ];
       const label: Item = addText(center.x - 95, center.y - 22, 190, 55, "Главная тема", 24);
       const connectors = nodes.map((node) => connectorItemFromPoints(
         { x: centerNode.x + centerNode.width / 2, y: centerNode.y + centerNode.height / 2 },
         { x: node.x + node.width / 2, y: node.y + node.height / 2 },
-        "arrow", "#7379d6", 2.5, crypto.randomUUID(), "straight",
+        "arrow", "#7379d6", 2.5, createId(), "straight",
         { itemId: centerNode.id, nx: node.x < centerNode.x ? 0 : 1, ny: .5 },
         { itemId: node.id, nx: node.x < centerNode.x ? 1 : 0, ny: .5 },
       ));
@@ -4236,11 +4564,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             }}
             aria-label={guidedFollow ? "Преподаватель включил следование" : followTeacher ? "Следование за преподавателем включено" : "Следовать за преподавателем"}
           >
-            <svg className="follow-teacher-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 12h10"/>
-              <path d="m11 8 4 4-4 4"/>
-              <path d="M17.5 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
-              <path d="M14.5 21v-4.5c0-2 1.3-3.5 3-3.5s3 1.5 3 3.5V21"/>
+            <svg className="follow-teacher-icon follow-teacher-icon-v191" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="8.25" cy="8" r="2.35"/>
+              <path d="M4.25 17.25c.45-2.85 1.8-4.35 4-4.35s3.55 1.5 4 4.35"/>
+              <path className="follow-arrow" d="M13.8 9.25h5.15"/>
+              <path className="follow-arrow" d="m17.15 6.95 2.35 2.3-2.35 2.3"/>
             </svg>
             {(followTeacher || guidedFollow) && <span className="follow-teacher-live-dot" aria-hidden="true"/>}
           </button>}
@@ -4424,19 +4752,19 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </div>
         )}
         {commandPaletteOpen && (() => {
-          const commands = [
-            ["Рука","Навигация",() => setTool("hand")],["Выделение","Инструмент",() => setTool("select")],["Петля","Инструмент",() => setTool("lasso")],
-            ["Карандаш","Рисование",() => setTool("pen")],["Маркер","Рисование",() => setTool("marker")],["Ластик","Рисование",() => setTool("eraser")],
-            ["Текст","Создание",() => setTool("text")],["Стикер","Создание",() => setTool("sticky")],["Фигура","Создание",() => setTool("shape")],
-            ["Связь","Создание",() => setTool("connector")],["Фрейм","Создание",() => setTool("frame")],["Таблица","Интерактив",() => setTool("table")],
-            ["Формула","Интерактив",() => setTool("formula")],["График","Интерактив",() => setTool("graph")],["Чек-лист","Задание",() => setTool("checklist")],
-            ["Мини-тест","Задание",() => setTool("quiz")],["Карточка вопрос–ответ","Задание",() => setTool("flashcard")],["Шторка","Интерактив",() => setTool("cover")],
-            ["Фото / PDF","Материалы",() => setTool("media")],["Поиск по доске","Панель",() => setSearchOpen(true)],["Шаблоны","Панель",() => setTemplatesOpen(true)],
+          const commands: [string,string,()=>void,Tool?][] = [
+            ["Рука","Навигация",() => setTool("hand"),"hand"],["Выделение","Инструмент",() => setTool("select"),"select"],["Петля","Инструмент",() => setTool("lasso"),"lasso"],
+            ["Карандаш","Рисование",() => setTool("pen"),"pen"],["Маркер","Рисование",() => setTool("marker"),"marker"],["Ластик","Рисование",() => setTool("eraser"),"eraser"],
+            ["Текст","Создание",() => setTool("text"),"text"],["Стикер","Создание",() => setTool("sticky"),"sticky"],["Фигура","Создание",() => setTool("shape"),"shape"],
+            ["Связь","Создание",() => setTool("connector"),"connector"],["Фрейм","Создание",() => setTool("frame"),"frame"],["Таблица","Интерактив",() => setTool("table"),"table"],
+            ["Формула","Интерактив",() => setTool("formula"),"formula"],["График","Интерактив",() => setTool("graph"),"graph"],["Чек-лист","Задание",() => setTool("checklist"),"checklist"],
+            ["Мини-тест","Задание",() => setTool("quiz"),"quiz"],["Карточка вопрос–ответ","Задание",() => setTool("flashcard"),"flashcard"],["Шторка","Интерактив",() => setTool("cover"),"cover"],
+            ["Фото / PDF","Материалы",() => setTool("media"),"media"],["Поиск по доске","Панель",() => setSearchOpen(true)],["Шаблоны","Панель",() => setTemplatesOpen(true)],
             ["Комментарии","Панель",() => setCommentsOpen(true)],["Слои","Панель",() => setLayersOpen(true)],["Горячие клавиши","Справка",() => setShortcutsOpen(true)],
             ["Режим показа","Презентация",() => { setPresentation(true); setPresentationFrameIndex(0); }],
-          ] as const;
+          ];
           const q = commandPaletteQuery.trim().toLocaleLowerCase("ru");
-          const filtered = commands.filter(([label,hint]) => !q || `${label} ${hint}`.toLocaleLowerCase("ru").includes(q));
+          const filtered = commands.filter(([label,hint,,toolId]) => (!toolId || toolAllowedForRole(toolId)) && (!q || `${label} ${hint}`.toLocaleLowerCase("ru").includes(q)));
           const execute = (run: () => void) => { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); run(); };
           return <div className="command-palette-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); } }}>
             <section className="command-palette" role="dialog" aria-modal="true" aria-label="Быстрые команды">
@@ -4976,12 +5304,13 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
+          {!isStudent&&<button type="button" className="mobile-ai-tool" aria-label="AI-помощник" title="AI-помощник" onClick={()=>{finishEdit();setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}}><Icon name="robot" size={20}/></button>}
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
         </nav>
         {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
           <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions"><button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
-            {mobileToolGroups.map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
+            {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
           </div>
         </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
@@ -4990,7 +5319,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </div>
           <span className="toolbar-section-line" aria-hidden="true"/>
           <div className="toolbar-list">
-            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand"&&t.id!=="lasso").map((t)=>{
+            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand"&&t.id!=="lasso"&&toolAllowedForRole(t.id)).map((t)=>{
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
@@ -5002,10 +5331,41 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           <button type="button" className="toolbar-more" title={desktopToolsExpanded?"Скрыть дополнительные инструменты":"Показать дополнительные инструменты"} onClick={()=>setDesktopToolsExpanded(v=>!v)} aria-expanded={desktopToolsExpanded}>
             <Icon name={desktopToolsExpanded?"chevron-left":"plus"} size={16}/><span className="tool-tooltip">{desktopToolsExpanded?"Свернуть":"Ещё инструменты"}</span>
           </button>
+          {!isStudent&&<button type="button" className="toolbar-ai-button" title="AI-помощник" aria-label="AI-помощник" onClick={()=>{finishEdit();setBoardAiOpen(true);setBoardAiPreview([])}}>
+            <Icon name="robot" size={18}/><span className="tool-tooltip">AI-помощник</span>
+          </button>}
           <button type="button" className="toolbar-command-search" title="Найти инструмент · Ctrl+K" aria-label="Найти инструмент" onClick={()=>{setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}}>
             <Icon name="search" size={17}/><span className="tool-tooltip">Найти инструмент</span>
           </button>
         </aside>
+        {isStudent&&<div className="student-board-mode" title="Можно писать и решать задания. Создание заданий доступно преподавателю.">Режим ученика</div>}
+        {!isStudent&&attachmentRequests.length>0&&(()=>{
+          const request=attachmentRequests[Math.min(attachmentRequestIndex,attachmentRequests.length-1)];
+          return <aside className="teacher-media-request" onPointerDown={e=>e.stopPropagation()}>
+            <div className="teacher-media-request-head"><div><b>Ученик хочет добавить вложение</b><span>{request.studentName} · {request.name}</span></div><strong>{attachmentRequestIndex+1}/{attachmentRequests.length}</strong></div>
+            <AttachmentRequestPreview request={request} boardId={boardSummary.id}/>
+            {attachmentRequests.length>1&&<div className="teacher-media-request-nav"><button disabled={attachmentRequestIndex<=0} onClick={()=>setAttachmentRequestIndex(i=>Math.max(0,i-1))}>‹</button><span>Запросы на согласование</span><button disabled={attachmentRequestIndex>=attachmentRequests.length-1} onClick={()=>setAttachmentRequestIndex(i=>Math.min(attachmentRequests.length-1,i+1))}>›</button></div>}
+            <div className="teacher-media-request-actions"><button onClick={()=>void openAttachmentRequest(request)}>Открыть</button><button className="reject" onClick={()=>rejectAttachmentRequest(request)}>Отклонить</button><button className="approve" onClick={()=>approveAttachmentRequest(request)}>Одобрить</button></div>
+          </aside>
+        })()}
+        {isStudent&&pendingAttachmentRequests.length>0&&<aside className="student-media-pending" onPointerDown={e=>e.stopPropagation()}>
+          <div><Icon name="media" size={17}/><span><b>На согласовании</b><small>{pendingAttachmentRequests.length===1?pendingAttachmentRequests[0].name:`Вложений: ${pendingAttachmentRequests.length}`}</small></span></div>
+          <button onClick={()=>{for(const request of pendingAttachmentRequests)sendAttachmentRequest(request);setNotice("Запрос повторно отправлен преподавателю")}}>Отправить снова</button>
+        </aside>}
+        {boardAiOpen&&!isStudent&&<div className="board-ai-overlay" onPointerDown={e=>{if(e.target===e.currentTarget)setBoardAiOpen(false)}}>
+          <section className="board-ai-panel" role="dialog" aria-modal="true" aria-label="AI-помощник">
+            <header><div className="board-ai-title"><Icon name="robot" size={22}/><div><strong>AI-помощник</strong><span>Создать материал прямо на доске</span></div></div><button onClick={()=>setBoardAiOpen(false)} aria-label="Закрыть">×</button></header>
+            <div className="board-ai-types">
+              {([["auto","По запросу"],["arithmetic","Примеры"],["equations","Уравнения"],["fractions","Дроби"],["geometry","Геометрия"],["functions","Функции"],["percent","Проценты"],["word","Текстовые задачи"],["mixed","Смешанное"]] as [MathAiMode,string][]).map(([id,label])=><button key={id} className={boardAiMode===id?"active":""} onClick={()=>{setBoardAiMode(id);setBoardAiPreview([]);setBoardAiDetected("")}}>{label}</button>)}
+            </div>
+            <label className="board-ai-field"><span>Что нужно создать? <small>ИИ учитывает этот запрос</small></span><input value={boardAiTopic} onChange={e=>setBoardAiTopic(e.target.value)} placeholder="Например: создай кубические уравнения с целыми корнями"/></label><div className="board-ai-prompt-help">Запрос задаёт содержание: например «кубические уравнения», «задачи по теореме Пифагора», «дроби на сложение». Кнопки выше задают только общий раздел.</div>
+            <div className="board-ai-options"><label><span>Уровень</span><select value={boardAiLevel} onChange={e=>{setBoardAiLevel(e.target.value as MathAiLevel);setBoardAiPreview([])}}><option value="primary">Начальный</option><option value="basic">Средний</option><option value="advanced">Повышенный</option></select></label><label><span>Количество</span><select value={boardAiCount} onChange={e=>{setBoardAiCount(Number(e.target.value));setBoardAiPreview([])}}><option value={3}>3</option><option value={5}>5</option><option value={6}>6</option><option value={8}>8</option><option value={10}>10</option><option value={15}>15</option></select></label></div>
+            <label className="board-ai-answer-toggle"><input type="checkbox" checked={boardAiWithAnswers} onChange={e=>{setBoardAiWithAnswers(e.target.checked);setBoardAiPreview([])}}/><span>Показывать ответы</span></label>
+            {boardAiDetected&&<div className="board-ai-detected">Распознано: <b>{boardAiDetected}</b></div>}
+            {!boardAiPreview.length?<div className="board-ai-empty"><Icon name="robot" size={30}/><b>Что подготовить?</b><span>Выберите тип материала и нажмите «Сгенерировать».</span></div>:<div className="board-ai-preview"><strong>Предпросмотр</strong><ol>{boardAiPreview.map((x,i)=><li key={`${i}-${x}`}>{x}</li>)}</ol></div>}
+            <footer><button className="secondary" onClick={generateBoardAi}>{boardAiPreview.length?"Сгенерировать заново":"Сгенерировать"}</button><button className="primary" disabled={!boardAiPreview.length||!canEdit} onClick={insertBoardAi}>Добавить на доску</button></footer>
+          </section>
+        </div>}
         <section
           ref={board}
           aria-label="Доска"
@@ -5364,10 +5724,11 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             <div
               className="selection-toolbar-screen"
               style={{
-                left: selectionScreenBounds.left + selectionScreenBounds.width / 2,
-                top: selectionScreenBounds.top + selectionScreenBounds.height + 12,
+                left: selectionToolbarLeft,
+                top: selectionToolbarTop,
               }}
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={selectionToolbarPointerDown}
+              onClick={selectionToolbarClick}
             >
               <span className="selection-toolbar-info">
                 {selectedItems.length === 1
@@ -5375,148 +5736,148 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   : `${selectedItems.length} объектов`}
               </span>
 
-              {singleSelected?.kind === "linkmedia" && !selectionLocked && (<span className="linkmedia-selection-controls"><button onClick={()=>openLinkMediaEditor(singleSelected)} title="Изменить ссылку"><Icon name="rename" size={15}/><span>Ссылка</span></button><a href={singleSelected.mediaUrl} target="_blank" rel="noreferrer" onPointerDown={e=>e.stopPropagation()} title="Открыть источник"><Icon name="open" size={15}/></a></span>)}
+              {singleSelected?.kind === "linkmedia" && !selectionLocked && (<span className="linkmedia-selection-controls"><button type="button" onClick={()=>openLinkMediaEditor(singleSelected)} title="Изменить ссылку"><Icon name="rename" size={15}/><span>Ссылка</span></button><a href={singleSelected.mediaUrl} target="_blank" rel="noreferrer" onPointerDown={e=>e.stopPropagation()} title="Открыть источник"><Icon name="open" size={15}/></a></span>)}
               {singleSelected?.kind === "frame" && !selectionLocked && (
-                <button className="frame-name-action" onClick={renameSelectedFrame} title="Переименовать фрейм · Enter / F2">
+                <button type="button" className="frame-name-action" onClick={renameSelectedFrame} title="Переименовать фрейм · Enter / F2">
                   <Icon name="rename" size={15} />
                   <span>{singleSelected.text.trim() || "Без названия"}</span>
                 </button>
               )}
               {singleSelected?.kind === "comment" && !selectionLocked && (
                 <span className="comment-selection-controls">
-                  <button className={singleSelected.resolved ? "active" : ""} onClick={toggleSelectedCommentResolved} title={singleSelected.resolved ? "Открыть комментарий снова" : "Отметить комментарий решённым"}><Icon name="check" size={15}/></button>
-                  <button onClick={() => startEdit(singleSelected)} title="Редактировать комментарий"><Icon name="rename" size={15}/></button>
-                  {singleSelected.commentTargetId && <button onClick={detachSelectedComment} title="Отвязать комментарий от объекта"><Icon name="unlink" size={15}/></button>}
+                  <button type="button" className={singleSelected.resolved ? "active" : ""} onClick={toggleSelectedCommentResolved} title={singleSelected.resolved ? "Открыть комментарий снова" : "Отметить комментарий решённым"}><Icon name="check" size={15}/></button>
+                  <button type="button" onClick={() => startEdit(singleSelected)} title="Редактировать комментарий"><Icon name="rename" size={15}/></button>
+                  {singleSelected.commentTargetId && <button type="button" onClick={detachSelectedComment} title="Отвязать комментарий от объекта"><Icon name="unlink" size={15}/></button>}
                 </span>
               )}
-              {singleSelected?.kind === "table" && !selectionLocked && (
-                <button className="table-edit-action" onClick={() => openTableEditor(singleSelected)} title="Редактировать таблицу">
+              {singleSelected?.kind === "table" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <button type="button" className="table-edit-action" onClick={() => openTableEditor(singleSelected)} title="Редактировать таблицу">
                   <Icon name="table" size={15}/><span>{singleSelected.tableRows ?? 3}×{singleSelected.tableCols ?? 3}</span>
                 </button>
               )}
-              {singleSelected?.kind === "checklist" && !selectionLocked && (
-                <button className="checklist-edit-action" onClick={() => openChecklistEditor(singleSelected)} title="Редактировать чек-лист"><Icon name="checklist" size={15}/><span>{singleSelected.checklistDone?.filter(Boolean).length ?? 0}/{singleSelected.checklistItems?.length ?? 1}</span></button>
+              {singleSelected?.kind === "checklist" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <button type="button" className="checklist-edit-action" onClick={() => openChecklistEditor(singleSelected)} title="Редактировать чек-лист"><Icon name="checklist" size={15}/><span>{singleSelected.checklistDone?.filter(Boolean).length ?? 0}/{singleSelected.checklistItems?.length ?? 1}</span></button>
               )}
-              {singleSelected?.kind === "quiz" && !selectionLocked && (
+              {singleSelected?.kind === "quiz" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="quiz-selection-controls">
-                  <button className="quiz-edit-action" onClick={() => openQuizEditor(singleSelected)} title="Редактировать мини-тест"><Icon name="quiz" size={15}/><span>{singleSelected.quizOptions?.length ?? 2}</span></button>
-                  <button className={singleSelected.quizRevealed ? "active" : ""} onClick={() => toggleQuizReveal(singleSelected)} title={singleSelected.quizRevealed ? "Скрыть правильный ответ" : "Показать правильный ответ"}><Icon name={singleSelected.quizRevealed ? "eye-off" : "eye"} size={15}/></button>
-                  <button onClick={() => resetQuizAnswer(singleSelected)} title="Сбросить выбранный ответ"><Icon name="reset" size={15}/></button>
+                  <button type="button" className="quiz-edit-action" onClick={() => openQuizEditor(singleSelected)} title="Редактировать мини-тест"><Icon name="quiz" size={15}/><span>{singleSelected.quizOptions?.length ?? 2}</span></button>
+                  <button type="button" className={singleSelected.quizRevealed ? "active" : ""} onClick={() => toggleQuizReveal(singleSelected)} title={singleSelected.quizRevealed ? "Скрыть правильный ответ" : "Показать правильный ответ"}><Icon name={singleSelected.quizRevealed ? "eye-off" : "eye"} size={15}/></button>
+                  <button type="button" onClick={() => resetQuizAnswer(singleSelected)} title="Сбросить выбранный ответ"><Icon name="reset" size={15}/></button>
                 </span>
               )}
-              {singleSelected?.kind === "flashcard" && !selectionLocked && (
+              {singleSelected?.kind === "flashcard" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="flashcard-selection-controls">
-                  <button onClick={() => openFlashcardEditor(singleSelected)} title="Редактировать карточку"><Icon name="flashcard" size={15}/><span>Редактировать</span></button>
-                  <button className={singleSelected.flashcardFlipped ? "active" : ""} onClick={() => flipFlashcard(singleSelected)} title="Перевернуть карточку"><Icon name="flip" size={15}/><span>{singleSelected.flashcardFlipped ? "Вопрос" : "Ответ"}</span></button>
+                  <button type="button" onClick={() => openFlashcardEditor(singleSelected)} title="Редактировать карточку"><Icon name="flashcard" size={15}/><span>Редактировать</span></button>
+                  <button type="button" className={singleSelected.flashcardFlipped ? "active" : ""} onClick={() => flipFlashcard(singleSelected)} title="Перевернуть карточку"><Icon name="flip" size={15}/><span>{singleSelected.flashcardFlipped ? "Вопрос" : "Ответ"}</span></button>
                 </span>
               )}
-              {singleSelected?.kind === "cover" && !selectionLocked && (
+              {singleSelected?.kind === "cover" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="cover-selection-controls">
-                  <button onClick={() => startEdit(singleSelected)} title="Изменить подпись шторки"><Icon name="rename" size={15}/><span>Подпись</span></button>
-                  <button className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title={singleSelected.coverOpen ? "Закрыть шторку" : "Открыть шторку"}><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Открыть"}</span></button>
+                  <button type="button" onClick={() => startEdit(singleSelected)} title="Изменить подпись шторки"><Icon name="rename" size={15}/><span>Подпись</span></button>
+                  <button type="button" className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title={singleSelected.coverOpen ? "Закрыть шторку" : "Открыть шторку"}><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Открыть"}</span></button>
                 </span>
               )}
-              {singleSelected?.kind === "graph" && !selectionLocked && (<span className="graph-selection-controls"><button onClick={()=>openGraphEditor(singleSelected)} title="Параметры графика"><Icon name="graph" size={15}/><span>График</span></button></span>)}
-              {singleSelected?.kind === "formula" && !selectionLocked && (
+              {singleSelected?.kind === "graph" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (<span className="graph-selection-controls"><button type="button" onClick={()=>openGraphEditor(singleSelected)} title="Параметры графика"><Icon name="graph" size={15}/><span>График</span></button></span>)}
+              {singleSelected?.kind === "formula" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="formula-selection-controls">
-                  <button className="formula-edit-action" onClick={() => openFormulaEditor(singleSelected)} title="Редактировать формулу"><Icon name="formula" size={15}/><span>{singleSelected.fontSize ?? 28}px</span></button>
-                  <button className="formula-fit-action" onClick={fitSelectedFormula} title="Подогнать рамку по формуле"><Icon name="fit" size={15}/></button>
+                  <button type="button" className="formula-edit-action" onClick={() => openFormulaEditor(singleSelected)} title="Редактировать формулу"><Icon name="formula" size={15}/><span>{singleSelected.fontSize ?? 28}px</span></button>
+                  <button type="button" className="formula-fit-action" onClick={fitSelectedFormula} title="Подогнать рамку по формуле"><Icon name="fit" size={15}/></button>
                 </span>
               )}
 
               {singleSelected?.kind === "sticky" && !selectionLocked && (
                 <span className="sticky-colors" title="Цвет стикера">
                   {["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff"].map((value) => (
-                    <button key={value} className="sticky-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет стикера ${value}`} />
+                    <button type="button" key={value} className="sticky-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет стикера ${value}`} />
                   ))}
                 </span>
               )}
-              {(singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && (
+              {(singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="object-colors" title="Цвет объекта">
                   {["#6064d4","#2f855a","#d97706","#dc4c64","#475569","#8b5cf6"].map((value) => (
-                    <button key={value} className="object-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет объекта ${value}`} />
+                    <button type="button" key={value} className="object-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет объекта ${value}`} />
                   ))}
                 </span>
               )}
-              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && (
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : singleSelected.kind === "cover" ? "Размер текста шторки" : "Размер текста"}>
-                  <button onClick={() => changeFontSize(-2)} aria-label="Уменьшить размер">A−</button>
+                  <button type="button" onClick={() => changeFontSize(-2)} aria-label="Уменьшить размер">A−</button>
                   <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20)}</span>
-                  <button onClick={() => changeFontSize(2)} aria-label="Увеличить размер">A+</button>
+                  <button type="button" onClick={() => changeFontSize(2)} aria-label="Увеличить размер">A+</button>
                 </span>
               )}
               {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky") && !selectionLocked && (
                 <span className="text-format-controls" title="Форматирование текста">
-                  <button className={singleSelected.fontWeight === "bold" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontWeight: singleSelected.fontWeight === "bold" ? "normal" : "bold" })} title="Полужирный"><b>B</b></button>
-                  <button className={singleSelected.fontStyle === "italic" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontStyle: singleSelected.fontStyle === "italic" ? "normal" : "italic" })} title="Курсив"><i>I</i></button>
-                  <button className={singleSelected.textDecoration === "underline" ? "active" : ""} onClick={() => setSelectedTextStyle({ textDecoration: singleSelected.textDecoration === "underline" ? "none" : "underline" })} title="Подчёркивание"><u>U</u></button>
+                  <button type="button" className={singleSelected.fontWeight === "bold" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontWeight: singleSelected.fontWeight === "bold" ? "normal" : "bold" })} title="Полужирный"><b>B</b></button>
+                  <button type="button" className={singleSelected.fontStyle === "italic" ? "active" : ""} onClick={() => setSelectedTextStyle({ fontStyle: singleSelected.fontStyle === "italic" ? "normal" : "italic" })} title="Курсив"><i>I</i></button>
+                  <button type="button" className={singleSelected.textDecoration === "underline" ? "active" : ""} onClick={() => setSelectedTextStyle({ textDecoration: singleSelected.textDecoration === "underline" ? "none" : "underline" })} title="Подчёркивание"><u>U</u></button>
                   <span className="connector-control-separator" />
-                  <button className={(singleSelected.textAlign ?? "left") === "left" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "left" })} title="По левому краю">≡</button>
-                  <button className={singleSelected.textAlign === "center" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "center" })} title="По центру">≣</button>
-                  <button className={singleSelected.textAlign === "right" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "right" })} title="По правому краю">≡</button>
+                  <button type="button" className={(singleSelected.textAlign ?? "left") === "left" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "left" })} title="По левому краю">≡</button>
+                  <button type="button" className={singleSelected.textAlign === "center" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "center" })} title="По центру">≣</button>
+                  <button type="button" className={singleSelected.textAlign === "right" ? "active" : ""} onClick={() => setSelectedTextStyle({ textAlign: "right" })} title="По правому краю">≡</button>
                   <span className="connector-control-separator" />
-                  <button className={(singleSelected.textList??"none")==="bullet"?"active":""} onClick={()=>setSelectedTextStyle({textList:(singleSelected.textList??"none")==="bullet"?"none":"bullet"})} title="Маркированный список">•≡</button>
-                  <button className={singleSelected.textList==="number"?"active":""} onClick={()=>setSelectedTextStyle({textList:singleSelected.textList==="number"?"none":"number"})} title="Нумерованный список">1≡</button>
+                  <button type="button" className={(singleSelected.textList??"none")==="bullet"?"active":""} onClick={()=>setSelectedTextStyle({textList:(singleSelected.textList??"none")==="bullet"?"none":"bullet"})} title="Маркированный список">•≡</button>
+                  <button type="button" className={singleSelected.textList==="number"?"active":""} onClick={()=>setSelectedTextStyle({textList:singleSelected.textList==="number"?"none":"number"})} title="Нумерованный список">1≡</button>
                   <select className="text-line-height" value={singleSelected.lineHeight??1.45} onChange={e=>setSelectedTextStyle({lineHeight:Number(e.target.value)})} title="Межстрочный интервал"><option value={1}>1,0</option><option value={1.2}>1,2</option><option value={1.45}>1,45</option><option value={1.75}>1,75</option><option value={2}>2,0</option></select>
-                  {singleSelected.kind==="text"&&<span className="text-color-palette">{["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6"].map(value=><button key={value} className="text-color-button" style={{background:value}} onClick={()=>recolorSelected(value)} aria-label={`Цвет текста ${value}`}/>)}</span>}
+                  {singleSelected.kind==="text"&&<span className="text-color-palette">{["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6"].map(value=><button type="button" key={value} className="text-color-button" style={{background:value}} onClick={()=>recolorSelected(value)} aria-label={`Цвет текста ${value}`}/>)}</span>}
                 </span>
               )}
               {singleSelected?.kind === "connector" && !selectionLocked && (
                 <span className="connector-selection-controls">
-                  <button className={singleSelected.connectorStyle === "line" ? "active" : ""} onClick={() => setSelectedConnectorStyle("line")} title="Линия"><Icon name="line" size={16} /></button>
-                  <button className={(singleSelected.connectorStyle ?? "arrow") === "arrow" ? "active" : ""} onClick={() => setSelectedConnectorStyle("arrow")} title="Стрелка"><Icon name="arrow-one" size={16} /></button>
-                  <button className={singleSelected.connectorStyle === "double" ? "active" : ""} onClick={() => setSelectedConnectorStyle("double")} title="Двусторонняя стрелка"><Icon name="arrow-double" size={16} /></button>
+                  <button type="button" className={singleSelected.connectorStyle === "line" ? "active" : ""} onClick={() => setSelectedConnectorStyle("line")} title="Линия"><Icon name="line" size={16} /></button>
+                  <button type="button" className={(singleSelected.connectorStyle ?? "arrow") === "arrow" ? "active" : ""} onClick={() => setSelectedConnectorStyle("arrow")} title="Стрелка"><Icon name="arrow-one" size={16} /></button>
+                  <button type="button" className={singleSelected.connectorStyle === "double" ? "active" : ""} onClick={() => setSelectedConnectorStyle("double")} title="Двусторонняя стрелка"><Icon name="arrow-double" size={16} /></button>
                   <span className="connector-control-separator" />
-                  <button className={(singleSelected.connectorRouting ?? "straight") === "straight" ? "active" : ""} onClick={() => setSelectedConnectorRouting("straight")} title="Прямая"><Icon name="line" size={16} /></button>
-                  <button className={singleSelected.connectorRouting === "elbow" ? "active" : ""} onClick={() => setSelectedConnectorRouting("elbow")} title="Ломаная"><Icon name="elbow" size={16} /></button>
-                  <button onClick={renameSelectedConnector} title="Подпись линии"><Icon name="label" size={16} /></button>
-                  <button className={(singleSelected.connectorStartBinding || singleSelected.connectorEndBinding) ? "linked" : ""} onClick={detachSelectedConnector} title="Отвязать концы от объектов"><Icon name={(singleSelected.connectorStartBinding || singleSelected.connectorEndBinding) ? "link" : "unlink"} size={16} /></button>
+                  <button type="button" className={(singleSelected.connectorRouting ?? "straight") === "straight" ? "active" : ""} onClick={() => setSelectedConnectorRouting("straight")} title="Прямая"><Icon name="line" size={16} /></button>
+                  <button type="button" className={singleSelected.connectorRouting === "elbow" ? "active" : ""} onClick={() => setSelectedConnectorRouting("elbow")} title="Ломаная"><Icon name="elbow" size={16} /></button>
+                  <button type="button" onClick={renameSelectedConnector} title="Подпись линии"><Icon name="label" size={16} /></button>
+                  <button type="button" className={(singleSelected.connectorStartBinding || singleSelected.connectorEndBinding) ? "linked" : ""} onClick={detachSelectedConnector} title="Отвязать концы от объектов"><Icon name={(singleSelected.connectorStartBinding || singleSelected.connectorEndBinding) ? "link" : "unlink"} size={16} /></button>
                   {["#5355c9","#2f855a","#d97706","#dc4c64","#1f2937"].map((value) => (
-                    <button key={value} className="connector-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет линии ${value}`} />
+                    <button type="button" key={value} className="connector-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет линии ${value}`} />
                   ))}
-                  <button onClick={() => changeSelectedConnectorWeight(-1)} title="Тоньше">−</button>
+                  <button type="button" onClick={() => changeSelectedConnectorWeight(-1)} title="Тоньше">−</button>
                   <span className="connector-weight-value">{singleSelected.weight ?? 3}px</span>
-                  <button onClick={() => changeSelectedConnectorWeight(1)} title="Толще">+</button>
+                  <button type="button" onClick={() => changeSelectedConnectorWeight(1)} title="Толще">+</button>
                 </span>
               )}
               {(singleSelected?.kind === "image" || singleSelected?.kind === "pdf") && (
                 <span className="media-selection-controls">
                   {singleSelected.kind === "pdf" && (
                     <span className="pdf-page-controls" title="Навигация по PDF">
-                      <button disabled={selectionLocked || (singleSelected.pdfPage ?? 1) <= 1} onClick={() => changePdfPage(singleSelected, -5)} aria-label="На 5 страниц назад">«</button>
-                      <button disabled={selectionLocked || (singleSelected.pdfPage ?? 1) <= 1} onClick={() => changePdfPage(singleSelected, -1)} aria-label="Предыдущая страница PDF">‹</button>
+                      <button type="button" disabled={selectionLocked || (singleSelected.pdfPage ?? 1) <= 1} onClick={() => changePdfPage(singleSelected, -5)} aria-label="На 5 страниц назад">«</button>
+                      <button type="button" disabled={selectionLocked || (singleSelected.pdfPage ?? 1) <= 1} onClick={() => changePdfPage(singleSelected, -1)} aria-label="Предыдущая страница PDF">‹</button>
                       <input key={`pdf-page-${singleSelected.id}-${singleSelected.pdfPage ?? 1}`} type="number" min="1" max="10000" defaultValue={singleSelected.pdfPage ?? 1} aria-label="Номер страницы PDF" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => setPdfPage(singleSelected, Number(e.currentTarget.value))}/>
-                      <button disabled={selectionLocked} onClick={() => changePdfPage(singleSelected, 1)} aria-label="Следующая страница PDF">›</button>
-                      <button disabled={selectionLocked} onClick={() => changePdfPage(singleSelected, 5)} aria-label="На 5 страниц вперёд">»</button>
-                      <button disabled={selectionLocked} onClick={() => duplicateNextPdfPage(singleSelected)} aria-label="Добавить следующую страницу PDF рядом" title="Создать рядом копию с следующей страницей"><Icon name="duplicate" size={13}/></button>
+                      <button type="button" disabled={selectionLocked} onClick={() => changePdfPage(singleSelected, 1)} aria-label="Следующая страница PDF">›</button>
+                      <button type="button" disabled={selectionLocked} onClick={() => changePdfPage(singleSelected, 5)} aria-label="На 5 страниц вперёд">»</button>
+                      <button type="button" disabled={selectionLocked} onClick={() => duplicateNextPdfPage(singleSelected)} aria-label="Добавить следующую страницу PDF рядом" title="Создать рядом копию с следующей страницей"><Icon name="duplicate" size={13}/></button>
                     </span>
                   )}
-                  <button onClick={() => void openMediaAsset(singleSelected)} title={singleSelected.kind === "pdf" ? "Открыть PDF отдельно" : "Открыть изображение отдельно"}><Icon name="open" size={16} /></button>
-                  <button onClick={() => void downloadMediaAsset(singleSelected)} title="Скачать исходный файл"><Icon name="download" size={16} /></button>
+                  <button type="button" onClick={() => void openMediaAsset(singleSelected)} title={singleSelected.kind === "pdf" ? "Открыть PDF отдельно" : "Открыть изображение отдельно"}><Icon name="open" size={16} /></button>
+                  <button type="button" onClick={() => void downloadMediaAsset(singleSelected)} title="Скачать исходный файл"><Icon name="download" size={16} /></button>
                 </span>
               )}
 
               <span className="selection-toolbar-separator" />
-              <button className="icon-action" onClick={duplicateSelected} title="Дублировать · Ctrl+D"><Icon name="duplicate" size={16} /></button>
-              <button className="icon-action" onClick={toggleLockSelected} title={selectionLocked ? "Разблокировать" : "Заблокировать"}><Icon name={selectionLocked ? "unlock" : "lock"} size={16} /></button>
+              <button type="button" className="icon-action" onClick={duplicateSelected} title="Дублировать · Ctrl+D"><Icon name="duplicate" size={16} /></button>
+              <button type="button" className="icon-action" onClick={toggleLockSelected} disabled={structurallyLockedForStudent(singleSelected)} title={structurallyLockedForStudent(singleSelected)?"Доступно преподавателю":selectionLocked ? "Разблокировать" : "Заблокировать"}><Icon name={selectionLocked ? "unlock" : "lock"} size={16} /></button>
               {singleSelected?.kind !== "connector" && (
                 <>
-                  <button className="icon-action" disabled={selectionLocked} onClick={() => rotateSelected(-90)} title="Повернуть на 90° влево · Alt+←"><Icon name="rotate-left" size={16} /></button>
-                  <button className="icon-action" disabled={selectionLocked} onClick={() => rotateSelected(90)} title="Повернуть на 90° вправо · Alt+→"><Icon name="rotate-right" size={16} /></button>
+                  <button type="button" className="icon-action" disabled={selectionLocked} onClick={() => rotateSelected(-90)} title="Повернуть на 90° влево · Alt+←"><Icon name="rotate-left" size={16} /></button>
+                  <button type="button" className="icon-action" disabled={selectionLocked} onClick={() => rotateSelected(90)} title="Повернуть на 90° вправо · Alt+→"><Icon name="rotate-right" size={16} /></button>
                 </>
               )}
 
               <details className="selection-more">
                 <summary title="Ещё действия" aria-label="Ещё действия"><Icon name="more" size={17} /></summary>
                 <div className="selection-more-menu">
-                  <button onClick={copySelected}><Icon name="copy" size={16} /><span>Копировать</span><kbd>Ctrl+C</kbd></button>
-                  {selectedItems.length === 1 && singleSelected?.kind !== "comment" && <button onClick={addCommentToSelection}><Icon name="comment" size={16}/><span>Добавить комментарий</span></button>}
-                  <button onClick={() => void exportItemsToPng("selection")}><Icon name="download" size={16} /><span>Скачать выделение PNG</span><kbd>Ctrl+Shift+E</kbd></button>
+                  <button type="button" onClick={copySelected}><Icon name="copy" size={16} /><span>Копировать</span><kbd>Ctrl+C</kbd></button>
+                  {selectedItems.length === 1 && singleSelected?.kind !== "comment" && <button type="button" onClick={addCommentToSelection}><Icon name="comment" size={16}/><span>Добавить комментарий</span></button>}
+                  <button type="button" onClick={() => void exportItemsToPng("selection")}><Icon name="download" size={16} /><span>Скачать выделение PNG</span><kbd>Ctrl+Shift+E</kbd></button>
                   {singleSelected?.kind === "frame" && !selectionLocked && (
                     <>
-                      <button onClick={renameSelectedFrame}><Icon name="rename" size={16} /><span>Переименовать</span><kbd>F2</kbd></button>
-                      <button onClick={() => openFrameNotesEditor(singleSelected)}><Icon name="label" size={16}/><span>Заметки к фрейму</span></button>
-                      <button onClick={selectFrameContents}><Icon name="frame-contents" size={16} /><span>Выбрать содержимое</span></button>
+                      <button type="button" onClick={renameSelectedFrame}><Icon name="rename" size={16} /><span>Переименовать</span><kbd>F2</kbd></button>
+                      <button type="button" onClick={() => openFrameNotesEditor(singleSelected)}><Icon name="label" size={16}/><span>Заметки к фрейму</span></button>
+                      <button type="button" onClick={selectFrameContents}><Icon name="frame-contents" size={16} /><span>Выбрать содержимое</span></button>
                       <button onClick={fitSelectedFrameToContents}><Icon name="fit" size={16} /><span>Подогнать по содержимому</span></button>
                       <button onClick={() => void exportItemsToPng("frame")}><Icon name="download" size={16}/><span>Экспортировать этот фрейм PNG</span></button>
                       <button onClick={() => moveSelectedFrameInPresentation(-1)}><Icon name="chevron-left" size={16}/><span>Раньше в показе</span></button>
@@ -5605,12 +5966,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   {singleSelected?.kind === "table" && !selectionLocked && <button onClick={() => { openTableEditor(singleSelected); setContextMenu(null); }}>Редактировать таблицу</button>}
                   {singleSelected?.kind === "formula" && !selectionLocked && <button onClick={() => { openFormulaEditor(singleSelected); setContextMenu(null); }}>Редактировать формулу</button>}
                   {singleSelected?.kind === "checklist" && !selectionLocked && <button onClick={() => { openChecklistEditor(singleSelected); setContextMenu(null); }}>Редактировать чек-лист</button>}
-                  {singleSelected?.kind === "quiz" && !selectionLocked && (<>
+                  {singleSelected?.kind === "quiz" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (<>
                     <button onClick={() => { openQuizEditor(singleSelected); setContextMenu(null); }}>Редактировать мини-тест</button>
                     <button onClick={() => { toggleQuizReveal(singleSelected); setContextMenu(null); }}>{singleSelected.quizRevealed ? "Скрыть правильный ответ" : "Показать правильный ответ"}</button>
                     <button onClick={() => { resetQuizAnswer(singleSelected); setContextMenu(null); }}>Сбросить ответ</button>
                   </>)}
-                  {singleSelected?.kind === "flashcard" && !selectionLocked && (<>
+                  {singleSelected?.kind === "flashcard" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (<>
                     <button onClick={() => { openFlashcardEditor(singleSelected); setContextMenu(null); }}>Редактировать карточку</button>
                     <button onClick={() => { flipFlashcard(singleSelected); setContextMenu(null); }}>{singleSelected.flashcardFlipped ? "Показать вопрос" : "Показать ответ"}</button>
                   </>)}
@@ -5640,12 +6001,12 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                   {selectionHasGroup && !selectionLocked && (
                     <button onClick={() => { ungroupSelected(); setContextMenu(null); }}>Разгруппировать <span>Ctrl+Shift+G</span></button>
                   )}
-                  <button onClick={() => { toggleLockSelected(); setContextMenu(null); }}>{selectionLocked ? "Разблокировать" : "Заблокировать"}</button>
+                  <button disabled={studentSelectionHasProtected()} onClick={() => { toggleLockSelected(); setContextMenu(null); }}>{selectionLocked ? "Разблокировать" : "Заблокировать"}</button>
                   <div className="context-separator" />
-                  <button disabled={selectionLocked} onClick={() => { moveLayerStep(true); setContextMenu(null); }}>На слой вперёд <span>Ctrl+]</span></button>
-                  <button disabled={selectionLocked} onClick={() => { moveLayerStep(false); setContextMenu(null); }}>На слой назад <span>Ctrl+[</span></button>
-                  <button disabled={selectionLocked} onClick={() => { moveLayer(true); setContextMenu(null); }}>На передний план</button>
-                  <button disabled={selectionLocked} onClick={() => { moveLayer(false); setContextMenu(null); }}>На задний план</button>
+                  <button disabled={selectionLocked||studentSelectionHasProtected()} onClick={() => { moveLayerStep(true); setContextMenu(null); }}>На слой вперёд <span>Ctrl+]</span></button>
+                  <button disabled={selectionLocked||studentSelectionHasProtected()} onClick={() => { moveLayerStep(false); setContextMenu(null); }}>На слой назад <span>Ctrl+[</span></button>
+                  <button disabled={selectionLocked||studentSelectionHasProtected()} onClick={() => { moveLayer(true); setContextMenu(null); }}>На передний план</button>
+                  <button disabled={selectionLocked||studentSelectionHasProtected()} onClick={() => { moveLayer(false); setContextMenu(null); }}>На задний план</button>
                   {singleSelected?.kind !== "connector" && (
                     <>
                       <button disabled={selectionLocked} onClick={() => { rotateSelected(-90); setContextMenu(null); }}>Повернуть на 90° влево <span>Alt+←</span></button>
@@ -5715,19 +6076,21 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </button>
           <button
             className="fit-button fit-all-button"
+            aria-label="Показать всю доску"
             disabled={!items.length}
             onClick={() => fitToBounds(boundsOf(itemsRef.current.filter((item) => !item.hidden)))}
             title="Показать всю доску"
           >
-            <Icon name="fit" size={15} /><span>Все</span>
+            <Icon name="fit" size={16} />
           </button>
           <button
             className="fit-button fit-selection-button"
+            aria-label="Приблизить выделение"
             disabled={!selectionBounds}
             onClick={() => fitToBounds(selectionBounds, 120)}
             title="Приблизить выделение"
           >
-            <Icon name="select" size={14} /><span>Выбор</span>
+            <Icon name="select" size={16} />
           </button>
         </div>
         {items.length > 0 && (
@@ -5845,10 +6208,15 @@ export default function App() {
 
   const logout = () => {
     clearPendingShare();
+    clearAccountAccessCache();
+    clearNotificationCache();
+    clearAiBoardTransfer();
     navigate("/", true);
     setAuthUser(null);
     setActiveBoard(null);
     void logoutUser().finally(() => {
+      clearAccountAccessCache();
+      clearNotificationCache();
       setActiveBoard(null);
       setAuthUser(null);
     });
@@ -5941,6 +6309,32 @@ export default function App() {
 
   useEffect(()=>{if(!authUser)return;let alive=true;const refresh=()=>void getAccountAccess().then(x=>{if(alive){setAccountRoleState(x.role);setIsAppAdmin(x.isAdmin)}}).catch(()=>{});refresh();const listener=()=>refresh();window.addEventListener("onlinerepetitor:account-access",listener);return()=>{alive=false;window.removeEventListener("onlinerepetitor:account-access",listener)}},[authUser?.id]);
 
+  useEffect(()=>{
+    const openSection=(section:string)=>{
+      window.history.pushState({}, "", `/?section=${section}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    };
+    const onDashboardClick=(event:MouseEvent)=>{
+      const target=event.target as HTMLElement|null;
+      if(!target)return;
+      const profile=target.closest(".account-chip");
+      if(profile){
+        event.preventDefault();
+        event.stopPropagation();
+        openSection("profile");
+        return;
+      }
+      const button=target.closest("button");
+      if(button?.textContent?.trim().includes("Настройки")){
+        event.preventDefault();
+        event.stopPropagation();
+        openSection("settings");
+      }
+    };
+    document.addEventListener("click",onDashboardClick,true);
+    return()=>document.removeEventListener("click",onDashboardClick,true);
+  },[]);
+
   if (!authReady) {
     return <main className="auth-shell"><section className="auth-card"><div className="auth-brand-row"><div className="auth-logo">B</div><div><div className="auth-brand">Учебная доска</div><div className="auth-subtitle">Проверяем сессию…</div></div></div></section></main>;
   }
@@ -5948,7 +6342,7 @@ export default function App() {
 
 
   if (!authUser) {
-    return <AuthScreen onAuthenticated={(user) => { setAuthUser(user); setActiveBoard(null); }} />;
+    return <AuthScreen onAuthenticated={(user) => { clearAccountAccessCache(); clearNotificationCache(); setAuthUser(user); setActiveBoard(null); }} />;
   }
 
   if (!activeBoard) {
@@ -5969,7 +6363,13 @@ export default function App() {
           : section==="notifications"
           ? <NotificationsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="profile"
-          ? <ProfileScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onLogout={logout} installAvailable={Boolean(globalInstallPrompt)} isInstalled={globalStandalone} onInstall={()=>void installGlobalApp()} />
+          ? <ProfileScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="settings"
+          ? <SettingsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onLogout={logout} installAvailable={Boolean(globalInstallPrompt)} isInstalled={globalStandalone} onInstall={()=>void installGlobalApp()} onBilling={()=>{window.history.pushState({}, "", "/?section=billing");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="billing"
+          ? <BillingScreen onBack={()=>{window.history.pushState({}, "", "/?section=settings");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          : section==="ai"
+          ? <AiStudioScreen onBack={()=>{window.history.pushState({}, "", "/?section=settings");window.dispatchEvent(new PopStateEvent("popstate"))}} onTariffs={()=>{window.history.pushState({}, "", "/?section=billing");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="guide"
           ? <TestingGuideScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="templates" && accountRole==="teacher"
@@ -5987,6 +6387,7 @@ export default function App() {
       key={`${activeBoard.id}:${boardMountKey}`}
       authUser={authUser}
       boardSummary={activeBoard}
+      accountRole={accountRole}
       initialRemoteVersion={remoteVersion}
       onBoardChanged={boardChanged}
       onBackToBoards={() => { setActiveBoard(null); navigate("/"); }}

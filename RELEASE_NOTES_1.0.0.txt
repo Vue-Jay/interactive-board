@@ -1,0 +1,19 @@
+OnlineRepetitor 1.0.0
+
+Production release cleanup:
+- removed visible development/prototype/QA wording from Settings, tariffs and AI Studio;
+- removed the internal tester guide route and hid its dashboard navigation;
+- removed subscription QA simulator and fake local tariff switching;
+- tariff screen no longer pretends to perform payment before a payment provider exists;
+- removed the QA-only AI usage reset;
+- included remembered-account login fixes;
+- included pointer cursor feedback, including Settings;
+- internal cache/update build marker: 222.
+
+No SQL migration is required.
+
+Release gate:
+npm run build
+
+After a clean build, smoke-test login, logout + one-tap return, Settings, tariffs,
+AI Studio and dashboard. Then commit and push main.

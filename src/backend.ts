@@ -13,6 +13,7 @@ export type BackendSession = {
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().replace(/\/$/, "") || "";
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
 const SESSION_KEY = "lesson-board.supabase.session.v1";
+const REMEMBERED_SESSION_KEY = "lesson-board.supabase.remembered-session.v1";
 const NETWORK_TIMEOUT_MS = 12000;
 
 let refreshInFlight: Promise<BackendSession | null> | null = null;
@@ -55,6 +56,13 @@ const saveSession = (session: BackendSession | null) => {
   if (!session) localStorage.removeItem(SESSION_KEY);
   else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 };
+const loadRememberedSession=():BackendSession|null=>{try{const raw=localStorage.getItem(REMEMBERED_SESSION_KEY);if(!raw)return null;const value=JSON.parse(raw) as BackendSession;return value?.access_token&&value?.refresh_token&&value?.user?.id&&value?.user?.email?value:null}catch{return null}};
+const saveRememberedSession=(session:BackendSession|null)=>{if(!session)localStorage.removeItem(REMEMBERED_SESSION_KEY);else localStorage.setItem(REMEMBERED_SESSION_KEY,JSON.stringify(session))};
+export const getRememberedRemoteAccount=()=>{const session=loadRememberedSession();if(!session?.user?.email)return null;const meta=session.user.user_metadata||{};return{id:session.user.id,email:session.user.email,name:String(meta.display_name||meta.full_name||session.user.email.split("@")[0]||"Пользователь")}};
+export const clearRememberedRemoteAccount=()=>saveRememberedSession(null);
+export const resumeRememberedRemoteAccount=async():Promise<BackendSession>=>{const remembered=loadRememberedSession();if(!remembered)throw new Error("Сохранённый вход больше недоступен.");saveSession(remembered);const current=await getRemoteSession();if(!current){saveRememberedSession(null);throw new Error("Сохранённая сессия истекла. Введите пароль ещё раз.")}saveRememberedSession(current);return current};
+export const leaveRemoteAccountRemembered=()=>{const session=loadSession();if(session?.user?.email)saveRememberedSession(session);saveSession(null);refreshInFlight=null;getInFlight.clear()};
+
 
 const authHeaders = (token?: string) => ({
   apikey: anonKey,
@@ -115,6 +123,7 @@ export const signInRemote = async (email: string, password: string) => {
   if (!response.ok) throw new Error(await errorMessage(response));
   const session = normalizeSession(await response.json());
   saveSession(session);
+  if(session.user?.email)saveRememberedSession(session);
   return session;
 };
 
@@ -130,6 +139,7 @@ const doRefreshRemoteSession = async (session: BackendSession): Promise<BackendS
   }
   const next = normalizeSession(await response.json());
   saveSession(next);
+  if(next.user?.email)saveRememberedSession(next);
   return next;
 };
 

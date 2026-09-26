@@ -1,0 +1,14 @@
+.billing-page{min-height:100vh;padding:28px;background:#f7f8fb;color:#242733}.billing-head{display:flex;align-items:flex-start;gap:18px;max-width:1180px;margin:auto}.billing-head button,.billing-qa button{border:1px solid #dfe2ea;background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer}.billing-head h1{margin:0}.billing-head p{margin:5px 0;color:#747987}.billing-current{max-width:1180px;margin:24px auto 14px;display:flex;gap:12px;align-items:center;padding:14px 16px;background:#fff;border:1px solid #e2e4ea;border-radius:14px}.billing-current span{color:#777c88}.billing-current em{font-style:normal;margin-left:auto}.billing-grid{max-width:1180px;margin:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.billing-card{display:flex;flex-direction:column;gap:14px;padding:20px;background:#fff;border:1px solid #e1e3e9;border-radius:16px}.billing-card.current{outline:2px solid #5355c9}.billing-card h2,.billing-card p{margin:0}.billing-card p{color:#777c88}.billing-card ul{padding:0;list-style:none;line-height:1.9;flex:1}.billing-card button{height:40px;border:0;border-radius:10px;background:#5355c9;color:#fff;cursor:pointer}.billing-card button:disabled{background:#e4e5eb;color:#777;cursor:default}.billing-qa{max-width:1180px;margin:18px auto;padding:18px;background:#fff;border:1px dashed #cfd2dc;border-radius:14px}.billing-qa div{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:760px){.billing-page{padding:16px}.billing-grid{grid-template-columns:1fr}.billing-current{align-items:flex-start;flex-wrap:wrap}.billing-current em{margin-left:0;width:100%}}.billing-limit-strip{display:grid;gap:4px;padding:9px 10px;background:#f7f8fb;border-radius:9px;font-size:12px;color:#6f7480}.billing-limit-strip span{display:flex;justify-content:space-between;gap:10px}.billing-limit-strip b{color:#343743}
+@media(max-width:1100px){
+  .billing-page{
+    box-sizing:border-box;
+    height:100dvh;
+    min-height:100dvh;
+    max-height:100dvh;
+    overflow-x:hidden;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+    padding-bottom:max(88px,calc(56px + env(safe-area-inset-bottom)));
+  }
+}

@@ -1,4 +1,4 @@
-import { claimRemoteInvitations, getCachedRemoteSession, getRemoteSession, isRemoteBackendEnabled, signInRemote, signInAnonymousRemote, signOutRemote, signUpRemote } from "./backend";
+import { claimRemoteInvitations, getCachedRemoteSession, getRemoteSession, isRemoteBackendEnabled, signInRemote, signInAnonymousRemote, signOutRemote, signUpRemote, getRememberedRemoteAccount, resumeRememberedRemoteAccount, leaveRemoteAccountRemembered, clearRememberedRemoteAccount } from "./backend";
 
 export type BoardRole = "owner" | "editor" | "viewer";
 export const BOARD_ROLE_LABELS: Record<BoardRole, string> = { owner:"Владелец", editor:"Редактор", viewer:"Просмотр" };
@@ -18,27 +18,40 @@ const remoteUser=(s:Awaited<ReturnType<typeof getRemoteSession>>):AuthUser|null=
  if(!s)return null; const meta=s.user.user_metadata||{}; const name=String(meta.display_name||meta.full_name||s.user.email?.split("@")[0]||"Пользователь");
  return {id:s.user.id,name,email:s.user.email||"",createdAt:s.user.created_at||new Date().toISOString(),isGuest:Boolean(meta.is_guest)||!s.user.email};
 };
+
 export const getCachedCurrentUser=():AuthUser|null=>{
  if(isRemoteBackendEnabled())return remoteUser(getCachedRemoteSession());
  try{const raw=localStorage.getItem(SESSION_KEY);if(!raw)return null;const id=JSON.parse(raw)?.userId;const u=loadUsers().find(x=>x.id===id);return u?publicUser(u):null}catch{return null}
 };
+
 export const getCurrentUser=async():Promise<AuthUser|null>=>{
  const cached=getCachedCurrentUser();
  if(cached)return cached;
  if(isRemoteBackendEnabled())return remoteUser(await getRemoteSession());
  return null;
 };
+
 export const registerUser=async(input:{name:string;email:string;password:string}):Promise<AuthUser>=>{
  const name=input.name.trim(),email=normalizeEmail(input.email),password=input.password;
- if(name.length<2)throw new Error("Введите имя не короче 2 символов"); if(!/^\S+@\S+\.\S+$/.test(email))throw new Error("Введите корректный email"); if(password.length<6)throw new Error("Пароль должен содержать минимум 6 символов");
+ if(name.length<2)throw new Error("Введите имя не короче 2 символов");
+ if(!/^\S+@\S+\.\S+$/.test(email))throw new Error("Введите корректный email");
+ if(password.length<6)throw new Error("Пароль должен содержать минимум 6 символов");
  if(isRemoteBackendEnabled()){const s=await signUpRemote(email,password,name);await claimRemoteInvitations();return remoteUser(s)!}
- const users=loadUsers();if(users.some(u=>u.email===email))throw new Error("Пользователь с таким email уже зарегистрирован");const salt=randomSalt();const user:StoredUser={id:crypto.randomUUID(),name,email,createdAt:new Date().toISOString(),passwordHash:await hashPassword(password,salt),passwordSalt:salt};saveUsers([...users,user]);saveSession(user.id);return publicUser(user)
+ const users=loadUsers();
+ if(users.some(u=>u.email===email))throw new Error("Пользователь с таким email уже зарегистрирован");
+ const salt=randomSalt();
+ const user:StoredUser={id:crypto.randomUUID(),name,email,createdAt:new Date().toISOString(),passwordHash:await hashPassword(password,salt),passwordSalt:salt};
+ saveUsers([...users,user]);saveSession(user.id);return publicUser(user)
 };
+
 export const loginUser=async(input:{email:string;password:string}):Promise<AuthUser>=>{
  const email=normalizeEmail(input.email);
  if(isRemoteBackendEnabled()){const s=await signInRemote(email,input.password);await claimRemoteInvitations();return remoteUser(s)!}
- const u=loadUsers().find(x=>x.email===email);if(!u||await hashPassword(input.password,u.passwordSalt)!==u.passwordHash)throw new Error("Неверный email или пароль");saveSession(u.id);return publicUser(u)
+ const u=loadUsers().find(x=>x.email===email);
+ if(!u||await hashPassword(input.password,u.passwordSalt)!==u.passwordHash)throw new Error("Неверный email или пароль");
+ saveSession(u.id);return publicUser(u)
 };
+
 export const loginGuest=async(name:string):Promise<AuthUser>=>{
  const guestName=name.trim();
  if(guestName.length<2)throw new Error("Введите имя гостя не короче 2 символов");
@@ -47,7 +60,32 @@ export const loginGuest=async(name:string):Promise<AuthUser>=>{
  const s=await signInAnonymousRemote(guestName);
  return remoteUser(s)!;
 };
-export const logoutUser=async()=>{if(isRemoteBackendEnabled())await signOutRemote();else localStorage.removeItem(SESSION_KEY)};
+
+export const getRememberedAccount=()=>isRemoteBackendEnabled()?getRememberedRemoteAccount():null;
+
+export const resumeRememberedAccount=async():Promise<AuthUser>=>{
+ if(!isRemoteBackendEnabled())throw new Error("Быстрый вход доступен только в серверной версии.");
+ const s=await resumeRememberedRemoteAccount();
+ await claimRemoteInvitations();
+ return remoteUser(s)!;
+};
+
+export const forgetRememberedAccount=async()=>{
+ if(!isRemoteBackendEnabled())return;
+ clearRememberedRemoteAccount();
+ await signOutRemote();
+};
+
+export const logoutUser=async()=>{
+ if(isRemoteBackendEnabled()){
+   const current=getCachedRemoteSession();
+   if(current?.user?.email)leaveRemoteAccountRemembered();
+   else await signOutRemote();
+ }else{
+   localStorage.removeItem(SESSION_KEY);
+ }
+};
+
 export const getUserById=(id:string):AuthUser|null=>{const u=loadUsers().find(x=>x.id===id);return u?publicUser(u):null};
 export const getUserByEmail=(email:string):AuthUser|null=>{const e=normalizeEmail(email);const u=loadUsers().find(x=>x.email===e);return u?publicUser(u):null};
 export { isRemoteBackendEnabled } from "./backend";
