@@ -298,7 +298,7 @@ const toolShortLabel: Record<Tool, string> = {
   table:"Таблица",formula:"Формула",graph:"График",checklist:"Чек-лист",quiz:"Тест",flashcard:"Карточка",
   cover:"Шторка",media:"Фото / PDF",linkmedia:"Видео / аудио",
 };
-const primaryDesktopTools = new Set<Tool>(["select","hand","pen","marker","eraser","connector","text","sticky","shape","media"]);
+const primaryDesktopTools = new Set<Tool>(["select","hand","lasso","pen","marker","eraser","connector","text","sticky","shape","media"]);
 const mobileToolGroups: { label:string; tools:Tool[] }[] = [
   { label:"Навигация", tools:["hand","select","lasso"] },
   { label:"Рисование", tools:["pen","marker","eraser"] },
@@ -1170,6 +1170,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
   const [preview, setPreview] = useState<Item | null>(null);
   const [tool, setTool] = useState<Tool>("hand");
   const [view, setView] = useState<View>(() => {
@@ -1201,7 +1204,14 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
   const touchPoints = useRef(new Map<number, Point>());
   const pinchState = useRef<{ distance:number; center:Point; view:View } | null>(null);
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
-  const [desktopToolsExpanded,setDesktopToolsExpanded]=useState(false);
+  const [desktopToolsExpanded,setDesktopToolsExpanded]=useState(()=>{
+    try { return localStorage.getItem("onlinerepetitor.desktopToolsExpanded") === "1"; }
+    catch { return false; }
+  });
+  useEffect(()=>{
+    try { localStorage.setItem("onlinerepetitor.desktopToolsExpanded", desktopToolsExpanded ? "1" : "0"); }
+    catch {/* Private browsing/storage restrictions: keep session state only. */}
+  },[desktopToolsExpanded]);
   const [isCoarsePointer,setIsCoarsePointer]=useState(()=>window.matchMedia?.("(pointer: coarse)").matches===true);
   useEffect(()=>{const mq=window.matchMedia?.("(pointer: coarse)");if(!mq)return;const sync=()=>setIsCoarsePointer(mq.matches);sync();mq.addEventListener?.("change",sync);return()=>mq.removeEventListener?.("change",sync)},[]);
   useEffect(()=>{
@@ -2399,6 +2409,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         if (quizEditorId) { setQuizEditorId(null); setQuizDraft(null); return; }
         if (flashcardEditorId) { setFlashcardEditorId(null); setFlashcardDraft(null); return; }
         if (tableEditorId) { setTableEditorId(null); setTableDraft(null); return; }
+        if (commandPaletteOpen) { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); return; }
         if (shortcutsOpen) { setShortcutsOpen(false); return; }
         if (templatesOpen) { setTemplatesOpen(false); return; }
         if (commentsOpen) { setCommentsOpen(false); return; }
@@ -2439,6 +2450,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
         return;
       }
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.code === "KeyK") { e.preventDefault(); setCommandPaletteOpen((value) => !value); setCommandPaletteQuery(""); setCommandPaletteIndex(0); return; }
       if (mod && e.code === "KeyZ") {
         e.preventDefault();
         undo(e.shiftKey ? 1 : -1);
@@ -4411,6 +4423,34 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
             <p>{activePresentationFrame.notes?.trim() || "Для этого фрейма заметки ещё не добавлены."}</p>
           </div>
         )}
+        {commandPaletteOpen && (() => {
+          const commands = [
+            ["Рука","Навигация",() => setTool("hand")],["Выделение","Инструмент",() => setTool("select")],["Петля","Инструмент",() => setTool("lasso")],
+            ["Карандаш","Рисование",() => setTool("pen")],["Маркер","Рисование",() => setTool("marker")],["Ластик","Рисование",() => setTool("eraser")],
+            ["Текст","Создание",() => setTool("text")],["Стикер","Создание",() => setTool("sticky")],["Фигура","Создание",() => setTool("shape")],
+            ["Связь","Создание",() => setTool("connector")],["Фрейм","Создание",() => setTool("frame")],["Таблица","Интерактив",() => setTool("table")],
+            ["Формула","Интерактив",() => setTool("formula")],["График","Интерактив",() => setTool("graph")],["Чек-лист","Задание",() => setTool("checklist")],
+            ["Мини-тест","Задание",() => setTool("quiz")],["Карточка вопрос–ответ","Задание",() => setTool("flashcard")],["Шторка","Интерактив",() => setTool("cover")],
+            ["Фото / PDF","Материалы",() => setTool("media")],["Поиск по доске","Панель",() => setSearchOpen(true)],["Шаблоны","Панель",() => setTemplatesOpen(true)],
+            ["Комментарии","Панель",() => setCommentsOpen(true)],["Слои","Панель",() => setLayersOpen(true)],["Горячие клавиши","Справка",() => setShortcutsOpen(true)],
+            ["Режим показа","Презентация",() => { setPresentation(true); setPresentationFrameIndex(0); }],
+          ] as const;
+          const q = commandPaletteQuery.trim().toLocaleLowerCase("ru");
+          const filtered = commands.filter(([label,hint]) => !q || `${label} ${hint}`.toLocaleLowerCase("ru").includes(q));
+          const execute = (run: () => void) => { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); run(); };
+          return <div className="command-palette-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); } }}>
+            <section className="command-palette" role="dialog" aria-modal="true" aria-label="Быстрые команды">
+              <div className="command-palette-search"><Icon name="search" size={18}/><input autoFocus value={commandPaletteQuery} onChange={(e) => { setCommandPaletteQuery(e.target.value); setCommandPaletteIndex(0); }} placeholder="Найти инструмент или действие…" onKeyDown={(e) => {
+                if (e.key === "Escape") { e.preventDefault(); setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); return; }
+                if (e.key === "ArrowDown" && filtered.length) { e.preventDefault(); setCommandPaletteIndex((value) => (value + 1) % filtered.length); return; }
+                if (e.key === "ArrowUp" && filtered.length) { e.preventDefault(); setCommandPaletteIndex((value) => (value - 1 + filtered.length) % filtered.length); return; }
+                if (e.key === "Enter" && filtered[commandPaletteIndex]) { e.preventDefault(); execute(filtered[commandPaletteIndex][2]); }
+              }}/><kbd>Esc</kbd></div>
+              <div className="command-palette-list">{filtered.length ? filtered.map(([label,hint,run],index) => <button key={`${label}:${hint}`} className={index === commandPaletteIndex ? "suggested" : ""} onMouseEnter={() => setCommandPaletteIndex(index)} onClick={() => execute(run)}><span><strong>{label}</strong><small>{hint}</small></span>{index === commandPaletteIndex && <kbd>Enter</kbd>}</button>) : <div className="command-palette-empty">Ничего не найдено</div>}</div>
+              <div className="command-palette-footer"><span className="command-palette-desktop-hint">Ctrl K</span><span>Начните вводить название инструмента · коснитесь результата для выбора</span></div>
+            </section>
+          </div>;
+        })()}
         {notice && (
           <div className="notice" role="status">
             {notice}
@@ -4433,7 +4473,7 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
                 {[["V / М","Выделение"],["H / Р","Рука"],["Q / Й","Петля"],["P / З","Карандаш"],["M / Ь","Маркер"],["E / У","Ластик"],["C / С","Связь"],["F / А","Фрейм"],["T / Е","Текст"],["S / Ы","Стикер"],["R / К","Фигуры"],["B / И","Таблица"],["X / Ч","Формула"],["K / Л","Чек-лист"],["G / П","Мини-тест"],["J / О","Карточка вопрос–ответ"],["U / Г","Шторка / открыть ответ"],["I / Ш","Фото / PDF"]].map(([key,label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
               </section>
               <section><strong>Редактирование</strong>
-                {[["Ctrl+Z","Отменить"],["Ctrl+Y","Повторить"],["Ctrl+C / V","Копировать / вставить"],["Ctrl+D","Дублировать"],["Ctrl+G","Сгруппировать"],["Ctrl+Shift+G","Разгруппировать"],["Delete","Удалить"],["Enter / F2","Редактировать"],["Alt+← / →","Повернуть на 90°"],["Shift+стрелки","Сдвиг на 10 px"],["Ctrl+F","Поиск"],["Ctrl+Shift+E","Экспорт PNG"]].map(([key,label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
+                {[["Ctrl+Z","Отменить"],["Ctrl+Y","Повторить"],["Ctrl+C / V","Копировать / вставить"],["Ctrl+D","Дублировать"],["Ctrl+G","Сгруппировать"],["Ctrl+Shift+G","Разгруппировать"],["Delete","Удалить"],["Enter / F2","Редактировать"],["Alt+← / →","Повернуть на 90°"],["Shift+стрелки","Сдвиг на 10 px"],["Ctrl+F","Поиск"],["Ctrl+K","Быстрые команды"],["Ctrl+Shift+E","Экспорт PNG"]].map(([key,label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
               </section>
               <section><strong>Режим показа</strong>
                 {[["← / →","Предыдущий / следующий слайд"],["Home / End","Первый / последний"],["L","Лазер"],["O","Прожектор"],["[ / ]","Размер прожектора"],["P","Пауза таймера"],["T","Секундомер / отсчёт"],["B","Затемнить экран"],["R","Сбросить задания слайда"],["Esc","Выйти из показа"],["F1","Эта памятка"]].map(([key,label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
@@ -4939,18 +4979,18 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
         </nav>
         {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
-          <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div>
+          <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions"><button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
             {mobileToolGroups.map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
           </div>
         </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
-          <div className="toolbar-pinned" aria-label="Навигация">
-            {(["select","hand"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
+          <div className="toolbar-pinned" aria-label="Навигация: выбор, рука, петля">
+            {(["select","hand","lasso"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
           </div>
           <span className="toolbar-section-line" aria-hidden="true"/>
           <div className="toolbar-list">
-            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand").map((t)=>{
+            {tools.filter((t)=>t.id!=="select"&&t.id!=="hand"&&t.id!=="lasso").map((t)=>{
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
@@ -4961,6 +5001,9 @@ function BoardApp({ authUser, boardSummary, onBackToBoards, onLogout, onBoardCha
           </div>
           <button type="button" className="toolbar-more" title={desktopToolsExpanded?"Скрыть дополнительные инструменты":"Показать дополнительные инструменты"} onClick={()=>setDesktopToolsExpanded(v=>!v)} aria-expanded={desktopToolsExpanded}>
             <Icon name={desktopToolsExpanded?"chevron-left":"plus"} size={16}/><span className="tool-tooltip">{desktopToolsExpanded?"Свернуть":"Ещё инструменты"}</span>
+          </button>
+          <button type="button" className="toolbar-command-search" title="Найти инструмент · Ctrl+K" aria-label="Найти инструмент" onClick={()=>{setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}}>
+            <Icon name="search" size={17}/><span className="tool-tooltip">Найти инструмент</span>
           </button>
         </aside>
         <section
