@@ -1,7 +1,7 @@
 import { isRemoteBackendEnabled,remoteRequest } from "./backend";
 export type AccountRole="teacher"|"student";
 export type TeacherStatus="none"|"pending"|"approved"|"rejected";
-export type SubscriptionPlan="free"|"basic"|"pro";
+export type SubscriptionPlan="free"|"teacher"|"pro";
 export type AccountAccess={role:AccountRole;teacherStatus:TeacherStatus;isAdmin:boolean;requestedAt:string|null;reviewedAt:string|null;subscriptionPlan:SubscriptionPlan;subscriptionUntil:string|null};
 export type TeacherRequest={userId:string;name:string;email:string;status:TeacherStatus;requestedAt:string|null;reviewedAt:string|null};
 export type AdminUser={userId:string;name:string;email:string;role:AccountRole;teacherStatus:TeacherStatus;isAdmin:boolean;subscriptionPlan:SubscriptionPlan;subscriptionUntil:string|null;createdAt:string|null};
@@ -9,7 +9,7 @@ export type AdminUser={userId:string;name:string;email:string;role:AccountRole;t
 const KEY="onlinerepetitor.account-role.v81",CACHE_MS=30_000;
 let cache:{at:number;value:AccountAccess}|null=null;
 let inFlight:Promise<AccountAccess>|null=null;
-const plan=(x:any):SubscriptionPlan=>x==="pro"?"pro":x==="basic"?"basic":"free";
+const plan=(x:any):SubscriptionPlan=>x==="pro"?"pro":x==="teacher"||x==="basic"?"teacher":"free";
 const localAccess=():AccountAccess=>({role:localStorage.getItem(KEY)==="student"?"student":"teacher",teacherStatus:"approved",isAdmin:false,requestedAt:null,reviewedAt:null,subscriptionPlan:"free",subscriptionUntil:null});
 const mapAccess=(x:any):AccountAccess=>({role:x?.role==="teacher"?"teacher":"student",teacherStatus:["pending","approved","rejected"].includes(x?.teacher_status)?x.teacher_status:"none",isAdmin:!!x?.is_admin,requestedAt:x?.requested_at??null,reviewedAt:x?.reviewed_at??null,subscriptionPlan:plan(x?.subscription_plan),subscriptionUntil:x?.subscription_until??null});
 const remember=(v:AccountAccess)=>{cache={at:Date.now(),value:v};return v};
