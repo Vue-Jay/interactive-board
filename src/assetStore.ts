@@ -4,15 +4,29 @@ import type { DocumentData } from "./boardModel";
 const DB_NAME = "lesson-board.assets.v1";
 const STORE = "assets";
 
+let databasePromise: Promise<IDBDatabase> | null = null;
+
 function db(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  // Opening IndexedDB is surprisingly expensive on mobile WebView/Chrome. Reuse one
+  // connection instead of opening and closing the database for every image/PDF read.
+  if (databasePromise) return databasePromise;
+  databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        databasePromise = null;
+      };
+      resolve(database);
+    };
+    request.onerror = () => { databasePromise = null; reject(request.error); };
+    request.onblocked = () => { /* existing connection will resolve/close via versionchange */ };
   });
+  return databasePromise;
 }
 
 async function putLocalAsset(id: string, blob: Blob) {
@@ -23,7 +37,6 @@ async function putLocalAsset(id: string, blob: Blob) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
-  database.close();
 }
 
 async function getLocalAsset(id: string): Promise<Blob | null> {
@@ -34,7 +47,6 @@ async function getLocalAsset(id: string): Promise<Blob | null> {
     request.onsuccess = () => resolve(request.result as Blob | undefined);
     request.onerror = () => reject(request.error);
   });
-  database.close();
   return result ?? null;
 }
 

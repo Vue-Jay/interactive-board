@@ -38,20 +38,8 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-
-// The board owns zoom. Prevent browser/page zoom from moving the surrounding UI.
-const preventPageZoom = (event: WheelEvent) => {
-  if (event.ctrlKey || event.metaKey) event.preventDefault();
-};
-const preventZoomShortcut = (event: KeyboardEvent) => {
-  if (!(event.ctrlKey || event.metaKey)) return;
-  if (["+", "=", "-", "0"].includes(event.key)) event.preventDefault();
-};
-window.addEventListener("wheel", preventPageZoom, { passive: false, capture: true });
-window.addEventListener("keydown", preventZoomShortcut, { capture: true });
-
-const APP_BUILD_VERSION = "225";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v225";
+const APP_BUILD_VERSION = "231";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v231";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
@@ -65,42 +53,49 @@ async function clearLegacyAppShell() {
   return hadController || registrations.length > 0;
 }
 
-async function checkForNewBuild() {
+let lastBuildCheckAt = 0;
+let buildCheckInFlight: Promise<void> | null = null;
+
+function checkForNewBuild(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && now - lastBuildCheckAt < 60_000) return buildCheckInFlight ?? Promise.resolve();
+  if (buildCheckInFlight) return buildCheckInFlight;
+  lastBuildCheckAt = now;
+  buildCheckInFlight = (async () => {
   try {
-    const response = await fetch(`/version.json?t=${Date.now()}`, {
+    const response = await fetch(`/version.json?t=${now}`, {
       cache: "no-store",
       headers: { "Cache-Control": "no-cache" },
     });
     if (!response.ok) return;
     const payload = await response.json() as { version?: string };
     if (payload.version && payload.version !== APP_BUILD_VERSION) {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("_appv") !== payload.version) {
-        url.searchParams.set("_appv", payload.version);
-        window.location.replace(url.toString());
-      }
+      window.dispatchEvent(new CustomEvent("or-build-available", { detail: { version: payload.version } }));
     }
   } catch {
     // Offline/temporary network failure should not interrupt an active lesson.
+  } finally {
+    buildCheckInFlight = null;
   }
+  })();
+  return buildCheckInFlight;
 }
 
 window.addEventListener("load", () => {
+  // Clean up obsolete service workers/caches without force-reloading an active lesson.
+  // The next normal navigation will naturally use the clean app shell.
   void clearLegacyAppShell()
     .then((hadLegacyShell) => {
-      if (hadLegacyShell && sessionStorage.getItem(UPDATE_RELOAD_GUARD) !== "1") {
-        sessionStorage.setItem(UPDATE_RELOAD_GUARD, "1");
-        window.location.reload();
-        return;
-      }
-      sessionStorage.removeItem(UPDATE_RELOAD_GUARD);
-      void checkForNewBuild();
+      if (hadLegacyShell) sessionStorage.setItem(UPDATE_RELOAD_GUARD, "1");
+      void checkForNewBuild(true);
     })
     .catch((error) => console.warn("Legacy app-shell cleanup failed", error));
 });
 
+// Build checks are deliberately sparse and never reload the current page.
+// An online lesson must not jump/restart just because a deployment happened.
 window.addEventListener("focus", () => { void checkForNewBuild(); });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") void checkForNewBuild();
 });
-window.setInterval(() => { void checkForNewBuild(); }, 60_000);
+window.setInterval(() => { void checkForNewBuild(); }, 5 * 60_000);

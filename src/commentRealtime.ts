@@ -2,9 +2,10 @@ import { getRealtimeSocketUrl, getRemoteSession, isRemoteBackendEnabled } from "
 
 export function subscribeBoardComments(boardId:string,onChange:()=>void):()=>void{
  if(!isRemoteBackendEnabled())return()=>{};
- let stopped=false,socket:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|undefined,heartbeat:ReturnType<typeof setInterval>|undefined,seq=0,attempt=0;
+ let stopped=false,socket:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|undefined,notifyTimer:ReturnType<typeof setTimeout>|undefined,heartbeat:ReturnType<typeof setInterval>|undefined,seq=0,attempt=0;
  const topic=`realtime:comments:${boardId}`;
- const close=()=>{clearTimeout(retry);clearInterval(heartbeat);if(socket){socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;try{socket.close()}catch{}socket=null}};
+ const close=()=>{clearTimeout(retry);clearTimeout(notifyTimer);clearInterval(heartbeat);if(socket){socket.onopen=socket.onmessage=socket.onerror=socket.onclose=null;try{socket.close()}catch{}socket=null}};
+ const notify=()=>{clearTimeout(notifyTimer);notifyTimer=setTimeout(()=>{notifyTimer=undefined;if(!stopped)onChange()},120)};
  const connect=async()=>{
   if(stopped)return;
   try{
@@ -12,7 +13,7 @@ export function subscribeBoardComments(boardId:string,onChange:()=>void):()=>voi
    const ws=new WebSocket(getRealtimeSocketUrl());socket=ws;const joinRef=String(++seq);
    const send=(event:string,payload:unknown,channel=topic,ref=String(++seq))=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({topic:channel,event,payload,ref,join_ref:channel===topic?joinRef:null}));return ref};
    ws.onopen=()=>{attempt=0;send("phx_join",{access_token:session.access_token,config:{broadcast:{self:false,ack:false},presence:{enabled:false},postgres_changes:["INSERT","UPDATE","DELETE"].map(event=>({event,schema:"public",table:"board_comments",filter:`board_id=eq.${boardId}`}))}},topic,joinRef);heartbeat=setInterval(()=>{try{send("heartbeat",{},"phoenix")}catch{schedule()}},25000)};
-   ws.onmessage=e=>{try{const m=JSON.parse(String(e.data));if(m.topic===topic&&m.event==="postgres_changes")onChange();if(m.topic===topic&&m.event==="phx_reply"&&m.payload?.status==="error")schedule()}catch{}};
+   ws.onmessage=e=>{try{const m=JSON.parse(String(e.data));if(m.topic===topic&&m.event==="postgres_changes")notify();if(m.topic===topic&&m.event==="phx_reply"&&m.payload?.status==="error")schedule()}catch{}};
    ws.onerror=ws.onclose=()=>schedule();
   }catch{schedule()}
  };

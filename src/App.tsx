@@ -1,6 +1,9 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as PE,
@@ -8,22 +11,23 @@ import {
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import BoardsScreen from "./BoardsScreen";
-import StudentsScreen from "./StudentsScreen";
-import AssignmentsScreen from "./AssignmentsScreen";
-import ProgressScreen from "./ProgressScreen";
-import ScheduleScreen from "./ScheduleScreen";
-import MaterialsScreen from "./MaterialsScreen";
-import NotificationsScreen from "./NotificationsScreen";
+const StudentsScreen = lazy(() => import("./StudentsScreen"));
+const AssignmentsScreen = lazy(() => import("./AssignmentsScreen"));
+const ProgressScreen = lazy(() => import("./ProgressScreen"));
+const ScheduleScreen = lazy(() => import("./ScheduleScreen"));
+const MaterialsScreen = lazy(() => import("./MaterialsScreen"));
+const NotificationsScreen = lazy(() => import("./NotificationsScreen"));
+const ProfileScreen = lazy(() => import("./ProfileScreen"));
+const SettingsScreen = lazy(() => import("./SettingsScreen"));
+const BillingScreen = lazy(() => import("./BillingScreen"));
+const AiStudioScreen = lazy(() => import("./AiStudioScreen"));
+const AdminScreen = lazy(() => import("./AdminScreen"));
+const TemplatesScreen = lazy(() => import("./TemplatesScreen"));
+const TestingGuideScreen = lazy(() => import("./TestingGuideScreen"));
 import { clearNotificationCache } from "./notificationsStore";
-import ProfileScreen from "./ProfileScreen";
-import SettingsScreen from "./SettingsScreen";
-import BillingScreen from "./BillingScreen";
-import AiStudioScreen from "./AiStudioScreen";
 import { clearAiBoardTransfer, peekAiBoardTransfer } from "./aiLocalStore";
 import { generateMathAi, type MathAiLevel, type MathAiMode } from "./aiMathGenerator";
 import { clearAccountAccessCache, getAccountAccess,type AccountRole } from "./accountRoleStore";
-import AdminScreen from "./AdminScreen";
-import TemplatesScreen from "./TemplatesScreen";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -59,7 +63,6 @@ import { createBoardComment, listBoardComments, listBoardCommentParticipants, se
 import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
 import { safeBackupName, validatePortableBundle, type PortableBoardBundle } from "./backupStore";
-import TestingGuideScreen from "./TestingGuideScreen";
 
 const createId = (): string => {
   const native = globalThis.crypto?.randomUUID;
@@ -328,6 +331,8 @@ const mobileToolGroups: { label:string; tools:Tool[] }[] = [
   { label:"Интерактив", tools:["table","formula","graph","cover","comment"] },
 ];
 const mobileDockTools: Tool[] = ["hand","select","lasso","pen","eraser","sticky","text","shape"];
+const STUDENT_BLOCKED_CREATE_TOOLS = new Set<Tool>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
+const STUDENT_PROTECTED_KINDS = new Set<Item["kind"]>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
 
 
 const keyTools: Record<string, Tool> = {
@@ -692,14 +697,14 @@ function AttachmentRequestPreview({request,boardId}:{request:AttachmentApprovalR
  const [url,setUrl]=useState<string|null>(null);
  useEffect(()=>{let active=true;let objectUrl="";void getAsset(request.assetId,boardId).then(blob=>{if(!active||!blob)return;objectUrl=URL.createObjectURL(blob);setUrl(objectUrl)});return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)}},[request.assetId,boardId]);
  if(!url)return <div className="teacher-media-request-preview teacher-media-request-loading">Загрузка предпросмотра…</div>;
- return <div className="teacher-media-request-preview">{request.kind==="image"?<img src={url} alt={request.name}/>:<iframe src={`${url}#page=1&toolbar=0`} title={request.name}/>}</div>;
+ return <div className="teacher-media-request-preview">{request.kind==="image"?<img src={url} alt={request.name} loading="lazy" decoding="async"/>:<iframe src={`${url}#page=1&toolbar=0`} title={request.name}/>}</div>;
 }
 
 function Media({ item, boardId }: { item: Item; boardId: string }) {
   const [src, setSrc] = useState("");
   useEffect(() => { let url=""; let alive=true; setSrc(""); if(!item.assetId)return; getAsset(item.assetId, boardId).then(blob=>{if(blob&&alive){url=URL.createObjectURL(blob);setSrc(url)}}).catch(()=>{}); return()=>{alive=false;if(url)URL.revokeObjectURL(url)} },[item.assetId, boardId]);
   if(!src) return <div className="media-missing">Файл недоступен</div>;
-  if (item.kind === "image") return <img className="media-image" src={src} alt={item.name??"Изображение"}/>;
+  if (item.kind === "image") return <img className="media-image" src={src} alt={item.name??"Изображение"} loading="lazy" decoding="async"/>;
   const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
   return <object key={`${item.assetId}-${item.pdfPage ?? 1}`} className="media-pdf" data={pdfSrc} type="application/pdf"><div className="media-missing">PDF: {item.name}</div></object>;
 }
@@ -893,8 +898,8 @@ function GraphView({ item, onPointMove, onAddPoint }: { item: Item; onPointMove?
     {item.graphGrid!==false&&<g className="graph-grid">{gridX.map(x=><line key={`x${x}`} x1={sx(x)} x2={sx(x)} y1="0" y2={H}/>)}{gridY.map(y=><line key={`y${y}`} x1="0" x2={W} y1={sy(y)} y2={sy(y)}/>)}</g>}
     <g className="graph-axes">{xMin<=0&&xMax>=0&&<line x1={sx(0)} x2={sx(0)} y1="0" y2={H}/>} {yMin<=0&&yMax>=0&&<line x1="0" x2={W} y1={sy(0)} y2={sy(0)}/>}</g>
     {item.graphAxisLabels!==false&&<g className="graph-axis-labels">{gridX.filter(x=>x!==0).map(x=><text key={`xl${x}`} x={sx(x)+2} y={Math.min(H-4,Math.max(12,sy(0)+14))}>{x}</text>)}{gridY.filter(y=>y!==0).map(y=><text key={`yl${y}`} x={Math.min(W-22,Math.max(3,sx(0)+5))} y={sy(y)-3}>{y}</text>)}</g>}
-    {expression&&path&&<path className="graph-curve" d={path}/>} {item.graphConnectPoints!==false&&gp.length>1&&<polyline className="graph-point-line" points={gp.map(p=>`${sx(p.x)},${sy(p.y)}`).join(" ")}/>}
-    {gp.map((p,i)=><g className={`graph-point ${onPointMove?"draggable":""}`} key={i} onPointerDown={onPointMove?(e)=>{e.stopPropagation();const svg=e.currentTarget.ownerSVGElement;if(!svg)return;e.currentTarget.setPointerCapture?.(e.pointerId);const move=(ev:PointerEvent)=>{const q=coord(ev.clientX,ev.clientY,svg);onPointMove(i,q.x,q.y)};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up)}:undefined}><circle cx={sx(p.x)} cy={sy(p.y)} r={onPointMove?"4.5":"3.5"} fill={p.color??"#111111"}/>{item.graphShowLabels!==false&&p.label&&<text x={sx(p.x)+7} y={sy(p.y)-7}>{p.label}</text>}</g>)}
+    {expression&&path&&<path className="graph-curve" d={path}/>} {item.graphConnectPoints!==false&&gp.length>1&&<polyline className="graph-point-line" points={gp.map(p=>`${sx(p.x)},${sy(p.y)}`).join(" ")}/>} 
+    {gp.map((p,i)=>{const pointColor=p.color??"#111111";return <g className={`graph-point ${onPointMove?"draggable":""}`} key={i} onPointerDown={onPointMove?(e)=>{e.stopPropagation();const svg=e.currentTarget.ownerSVGElement;if(!svg)return;e.currentTarget.setPointerCapture?.(e.pointerId);const move=(ev:PointerEvent)=>{const q=coord(ev.clientX,ev.clientY,svg);onPointMove(i,q.x,q.y)};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up)}:undefined}><circle cx={sx(p.x)} cy={sy(p.y)} r={onPointMove?"4.5":"3.5"} style={{fill:pointColor,stroke:pointColor}}/>{item.graphShowLabels!==false&&p.label&&<text x={sx(p.x)+7} y={sy(p.y)-7} style={{fill:pointColor}}>{p.label}</text>}</g>})}
   </svg></div>;
 }
 
@@ -1000,10 +1005,9 @@ function FlashcardView({ item, onFlip }: { item: Item; onFlip?: () => void }) {
 }
 
 function CoverView({ item, onToggle }: { item: Item; onToggle?: () => void }) {
-  const accent=item.color??"#5355c9";
-  const open=item.coverOpen===true;
-  return <div className={`cover-view ${open?"open":"closed"}`} style={{background:open?"transparent":accent}}>
-    {onToggle&&<button type="button" className="cover-toggle" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onToggle()}} title={open?"Закрыть шторку":"Открыть шторку"}><Icon name={open?"eye-off":"eye"} size={15}/></button>}
+  const accent=item.color??"#5355c9", opacity=item.coverOpen?0:Math.max(0,Math.min(1,item.coverOpacity??1));
+  return <div className={`cover-view ${opacity===0?"open":"closed"}`} style={{borderColor:accent,background:accent,opacity}}>
+    {onToggle&&<button type="button" className="cover-toggle" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onToggle()}} title={opacity===0?"Закрыть шторку":"Сделать прозрачной"}><Icon name={opacity===0?"eye-off":"eye"} size={14}/></button>}
   </div>;
 }
 
@@ -1090,10 +1094,8 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 }) {
   const canEdit = boardSummary.role !== "viewer";
   const isStudent = accountRole === "student";
-  const studentBlockedCreateTools = new Set<Tool>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
-  const studentProtectedKinds = new Set<Item["kind"]>(["frame","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"]);
-  const toolAllowedForRole = (id:Tool) => !isStudent || !studentBlockedCreateTools.has(id);
-  const structurallyLockedForStudent = (item:Item|undefined|null) => !!item && isStudent && studentProtectedKinds.has(item.kind);
+  const toolAllowedForRole = (id:Tool) => !isStudent || !STUDENT_BLOCKED_CREATE_TOOLS.has(id);
+  const structurallyLockedForStudent = (item:Item|undefined|null) => !!item && isStudent && STUDENT_PROTECTED_KINDS.has(item.kind);
   const studentSelectionHasProtected = () => isStudent && selected.some(id=>structurallyLockedForStudent(itemsRef.current.find(item=>item.id===id)));
   const rejectStudentStructuralEdit = () => {
     if(!studentSelectionHasProtected()) return false;
@@ -1164,6 +1166,8 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [lessonPanelOpen,setLessonPanelOpen]=useState(false);
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+  const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
+  const remoteCursorFrame = useRef<number | null>(null);
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
   const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
   const [followTeacher, setFollowTeacher] = useState(false);
@@ -1174,6 +1178,11 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [remoteWork, setRemoteWork] = useState<Record<string, RemoteWorkState>>({});
   const workChannel = useRef<BoardWorkChannel | null>(null);
   const board = useRef<HTMLElement>(null);
+  const [boardViewportSize,setBoardViewportSize]=useState({width:0,height:0});
+  const globalHandlersRef = useRef<{
+    keyDown:(event:KeyboardEvent)=>void; keyUp:(event:KeyboardEvent)=>void; blur:()=>void;
+    pointerUp:()=>void; pointerCancel:()=>void; closeContextMenu:(event:PointerEvent)=>void; pasteFromSystem:(event:ClipboardEvent)=>void;
+  } | null>(null);
   const storageKey = boardStorageKey(boardSummary.id);
   const viewStorageKey = `${storageKey}.view`;
   const [initial] = useState(() => loadInitial(storageKey));
@@ -1275,10 +1284,25 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   });
   const viewRef = useRef(view);
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastViewSerialized = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
+  const displayFrame = useRef<number | null>(null);
+  const pendingDisplayItems = useRef<Item[] | null>(null);
+  const gesturePaintFrame = useRef<number | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const objectEditorOpen = Boolean(
+    editing ||
+    linkMediaOpen ||
+    tableEditorId ||
+    checklistEditorId ||
+    quizEditorId ||
+    flashcardEditorId ||
+    graphEditorId ||
+    formulaEditorId ||
+    frameNotesEditorId
+  );
   const [draft, setDraft] = useState("");
   const draftRef = useRef("");
   const editor = useRef<HTMLTextAreaElement>(null);
@@ -1299,6 +1323,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   },[desktopToolsExpanded]);
   const [isCoarsePointer,setIsCoarsePointer]=useState(()=>window.matchMedia?.("(pointer: coarse)").matches===true);
   useEffect(()=>{const mq=window.matchMedia?.("(pointer: coarse)");if(!mq)return;const sync=()=>setIsCoarsePointer(mq.matches);sync();mq.addEventListener?.("change",sync);return()=>mq.removeEventListener?.("change",sync)},[]);
+  useEffect(()=>{
+    const element=board.current;if(!element)return;
+    const update=()=>{const rect=element.getBoundingClientRect();setBoardViewportSize(current=>Math.abs(current.width-rect.width)<1&&Math.abs(current.height-rect.height)<1?current:{width:rect.width,height:rect.height})};
+    update();
+    if(typeof ResizeObserver==="undefined"){window.addEventListener("resize",update);return()=>window.removeEventListener("resize",update)}
+    const observer=new ResizeObserver(update);observer.observe(element);return()=>observer.disconnect();
+  },[boardSummary.id]);
   useEffect(()=>{
     if(!isCoarsePointer)return;
     // Never force browser fullscreen: Android/Chrome may create a persistent
@@ -1327,9 +1358,12 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const clipboard = useRef<Item[]>([]);
   const history = useRef<Item[][]>([initial.data.items]);
   const index = useRef(0);
-  const [, refresh] = useState(0);
+
   const snapshot = useRef<DocumentData | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLocalSerialized = useRef<string | null>(null);
+  const lastBoardTouchAt = useRef(0);
+  const lastBoardTouchTitle = useRef(title);
   const remoteVersion = useRef<number | null>(initialRemoteVersion);
   const remoteSaveInFlight = useRef(false);
   const queuedRemoteSnapshot = useRef<DocumentData | null>(null);
@@ -1349,6 +1383,11 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     return () => {
       boardMounted.current = false;
       if (remoteRetryTimer.current) clearTimeout(remoteRetryTimer.current);
+      if (displayFrame.current != null) cancelAnimationFrame(displayFrame.current);
+      if (gesturePaintFrame.current != null) cancelAnimationFrame(gesturePaintFrame.current);
+      displayFrame.current = null;
+      gesturePaintFrame.current = null;
+      pendingDisplayItems.current = null;
     };
   }, []);
   useEffect(() => {
@@ -1363,9 +1402,14 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
     viewSaveTimer.current = setTimeout(() => {
       viewSaveTimer.current = null;
-      try { localStorage.setItem(viewStorageKey, JSON.stringify(viewRef.current)); }
-      catch {/* Board content saving still works if viewport persistence is unavailable. */}
-    }, 120);
+      try {
+        const serialized = JSON.stringify(viewRef.current);
+        if (serialized !== lastViewSerialized.current) {
+          localStorage.setItem(viewStorageKey, serialized);
+          lastViewSerialized.current = serialized;
+        }
+      } catch {/* Board content saving still works if viewport persistence is unavailable. */}
+    }, 350);
     return () => {
       if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
     };
@@ -1373,8 +1417,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 
   useEffect(() => {
     const saveViewNow = () => {
-      try { localStorage.setItem(viewStorageKey, JSON.stringify(viewRef.current)); }
-      catch {/* Ignore storage failures during navigation. */}
+      try {
+        const serialized = JSON.stringify(viewRef.current);
+        if (serialized !== lastViewSerialized.current) {
+          localStorage.setItem(viewStorageKey, serialized);
+          lastViewSerialized.current = serialized;
+        }
+      } catch {/* Ignore storage failures during navigation. */}
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") saveViewNow();
@@ -1406,9 +1455,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     return () => window.clearInterval(id);
   }, [presentation, presentationTimerRunning, presentationTimerMode]);
 
-  const pushRemoteSnapshot = useCallback(async (data: DocumentData) => {
+  const pushRemoteSnapshot = useCallback(async (data: DocumentData, knownFingerprint?: string) => {
     if (!isRemoteBackendEnabled() || !canEdit || !boardMounted.current || pendingRemote.current) return;
-    if (documentFingerprint(data) === acknowledgedDocument.current) return;
+    const fingerprint = knownFingerprint ?? documentFingerprint(data);
+    if (fingerprint === acknowledgedDocument.current) return;
     if (remoteSaveInFlight.current) {
       queuedRemoteSnapshot.current = data;
       return;
@@ -1418,7 +1468,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       await ensureBoardAssets(boardSummary.id, data);
       if (!boardMounted.current) return;
       const expectedVersion = remoteVersion.current ?? 0;
-      lastAttempt.current = { version: expectedVersion + 1, fingerprint: documentFingerprint(data) };
+      lastAttempt.current = { version: expectedVersion + 1, fingerprint };
       const result = await saveRemoteBoardDocument(boardSummary.id, data, expectedVersion);
       if (!boardMounted.current) return;
       if (result.conflict) {
@@ -1427,7 +1477,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         return;
       }
       remoteVersion.current = result.version;
-      acknowledgedDocument.current = documentFingerprint(data);
+      acknowledgedDocument.current = fingerprint;
       remoteSaveFailures.current = 0;
       if (remoteRetryTimer.current) {
         clearTimeout(remoteRetryTimer.current);
@@ -1467,15 +1517,32 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     if (!snapshot.current) return;
     try {
       const data = snapshot.current;
-      localStorage.setItem(storageKey, JSON.stringify(data));
+      // Serialize once per flush. Large boards used to be stringified repeatedly for
+      // local save, fingerprint checks and metadata touches, which caused visible stalls.
+      const serialized = JSON.stringify(data);
+      if (serialized !== lastLocalSerialized.current) {
+        localStorage.setItem(storageKey, serialized);
+        lastLocalSerialized.current = serialized;
+      }
       if (!boardMounted.current) return;
-      if (isRemoteBackendEnabled() && (pendingRemote.current || documentFingerprint(data) === acknowledgedDocument.current)) return;
-      void touchBoard(authUser.id, boardSummary.id, data.title).then((updatedBoard) => {
-        if (updatedBoard) onBoardChanged(updatedBoard);
-      }).catch(() => {});
+      const fingerprint = documentFingerprint(data);
+      if (isRemoteBackendEnabled() && (pendingRemote.current || fingerprint === acknowledgedDocument.current)) return;
+
+      // Board-list metadata does not need a PATCH on every board edit. Throttling this
+      // removes a second request (and for collaborators sometimes a role lookup) from
+      // the hot autosave path while still keeping recent boards ordered correctly.
+      const now = Date.now();
+      const titleChanged = lastBoardTouchTitle.current !== data.title;
+      if (titleChanged || now - lastBoardTouchAt.current >= 15_000) {
+        lastBoardTouchAt.current = now;
+        lastBoardTouchTitle.current = data.title;
+        void touchBoard(authUser.id, boardSummary.id, data.title, boardSummary.role).then((updatedBoard) => {
+          if (updatedBoard && boardMounted.current) onBoardChanged(updatedBoard);
+        }).catch(() => {});
+      }
       if (isRemoteBackendEnabled()) {
         setSaveStatus("Сохранение на сервер…");
-        void pushRemoteSnapshot(data);
+        void pushRemoteSnapshot(data, fingerprint);
       } else {
         setSaveStatus("Сохранено в браузере");
       }
@@ -1490,29 +1557,23 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     const data: DocumentData = {
       version: 1,
       title,
-      view,
+      view: viewRef.current,
       items: editing
         ? items.map((i) => (i.id === editing ? { ...i, text: draft } : i))
         : items,
     };
     snapshot.current = data;
-    if (pendingRemote.current) {
-      try { localStorage.setItem(storageKey, JSON.stringify(data)); }
-      catch { setSaveStatus("Не удалось сохранить локальную копию — скачайте её"); }
-      return;
-    }
-    if (isRemoteBackendEnabled() && (!canEdit || pendingRemote.current || documentFingerprint(data) === acknowledgedDocument.current)) return;
+    if (!canEdit) return;
+    // Do not hash/stringify the entire board on every keystroke or React update.
+    // The debounced flush performs both operations once after editing settles.
     setSaveStatus("Сохранение…");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 250);
+    saveTimer.current = setTimeout(flushSave, 550);
   }, [
     items,
     title,
     editing,
     draft,
-    path,
-    panning,
-    preview,
     saveBlocked,
     flushSave,
   ]);
@@ -1654,8 +1715,17 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 
   const display = (next: Item[]) => {
     const synced = syncBoundConnectors(next);
+    // Keep model state synchronous for pointer math, but paint at most once per frame.
+    // This prevents 100+ React renders/sec on fast mouse/touch drags.
     itemsRef.current = synced;
-    setItems(synced);
+    pendingDisplayItems.current = synced;
+    if (displayFrame.current != null) return;
+    displayFrame.current = requestAnimationFrame(() => {
+      displayFrame.current = null;
+      const pending = pendingDisplayItems.current;
+      pendingDisplayItems.current = null;
+      if (pending) setItems(pending);
+    });
   };
   const currentDocument = (): DocumentData => ({
     version: 1,
@@ -1765,10 +1835,14 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       return;
     history.current = history.current.slice(0, index.current + 1);
     history.current.push(normalized);
-    if (history.current.length > 101) history.current.shift();
+    // Full snapshots are convenient for undo but can consume hundreds of MB on boards
+    // with many ink points. Keep a larger history for normal boards and automatically
+    // lower the cap for heavy documents to avoid mobile tab crashes.
+    const inkPoints = normalized.reduce((sum, item) => sum + (item.points?.length ?? 0), 0);
+    const historyLimit = normalized.length > 1200 || inkPoints > 120_000 ? 30 : normalized.length > 500 || inkPoints > 50_000 ? 50 : 80;
+    while (history.current.length > historyLimit) history.current.shift();
     index.current = history.current.length - 1;
     display(normalized);
-    refresh((n) => n + 1);
   };
   const finishEdit = () => {
     if (!editing) return;
@@ -1802,7 +1876,6 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     index.current = next;
     display(history.current[next]);
     setSelected([]);
-    refresh((n) => n + 1);
   };
   const local = (x: number, y: number): Point => {
     const rect = board.current!.getBoundingClientRect();
@@ -2415,10 +2488,11 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       return;
     } else if (tool === "cover") {
       e.preventDefault();
-      const item: Item = { id: createId(), kind: "cover", x: p.x - 170, y: p.y - 90, width: 340, height: 180, text: "Шторка", coverOpen: false, coverOpacity: 1, fontSize: 17, color: "#5355c9" };
+      const item: Item = { id: createId(), kind: "cover", x: p.x - 85, y: p.y - 90, width: 170, height: 180, text: "", coverOpen: false, coverOpacity: 1, fontSize: 17, color: "#5355c9" };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
+      window.setTimeout(() => startEdit(item), 0);
       return;
     } else if (tool === "sticky" || tool === "text" || tool === "shape") {
       e.preventDefault();
@@ -2480,7 +2554,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         setNotice("Создана копия · продолжайте перетаскивать");
       }
     }
-    e.preventDefault();
+    if (mode !== "drag") e.preventDefault();
     const connectorStartHit = mode === "connector"
       ? connectorAnchor(p, itemsRef.current, 18 / view.zoom)
       : null;
@@ -2516,9 +2590,28 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, connectorStartHit?.binding));
     }
     if (mode === "erase") display(eraseInk(gesture.current.before, gesture.current.path, eraserSize / 2 / view.zoom));
-    // Keep plain clicks on the object: early capture retargets dblclick to the board.
-    if (mode !== "drag") board.current!.setPointerCapture(e.pointerId);
+    // Desktop mouse drag keeps double-click semantics. Touch must be captured immediately,
+    // otherwise Android may retarget/cancel the pointer before selection drag starts.
+    if (mode !== "drag" || e.pointerType === "touch") board.current!.setPointerCapture(e.pointerId);
   };
+  const scheduleGesturePaint = () => {
+    if (gesturePaintFrame.current != null) return;
+    gesturePaintFrame.current = requestAnimationFrame(() => {
+      gesturePaintFrame.current = null;
+      const active = gesture.current;
+      if (!active) return;
+      if (active.mode === "draw" && active.ink) {
+        setPreview(stroke(active.ink.id, active.ink.kind, active.path, active.ink.color, active.ink.weight));
+      } else if (active.mode === "lasso") {
+        setPath([...active.path]);
+      } else if (active.mode === "connector") {
+        const startPoint = active.path[0];
+        const endPoint = active.path[active.path.length - 1] ?? startPoint;
+        setPreview(connectorItemFromPoints(startPoint, endPoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, active.connectorStartBinding, active.connectorEndBinding));
+      }
+    });
+  };
+
   const move = (e: PE<HTMLElement>) => {
     if (tool === "eraser") setEraserCursor(local(e.clientX, e.clientY));
     const g = gesture.current;
@@ -2662,7 +2755,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       const point = magnetic?.point ?? snappedConnectorEnd(g.path[0], raw, e.shiftKey);
       g.connectorEndBinding = magnetic?.binding;
       g.path = [g.path[0], point];
-      setPreview(connectorItemFromPoints(g.path[0], point, connectorStyle, color, connectorWeight, createId(), connectorRouting, g.connectorStartBinding, g.connectorEndBinding));
+      scheduleGesturePaint();
     } else if (g.mode === "erase") {
       const point = world(p), last = g.path[g.path.length - 1];
       if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 2) return;
@@ -2674,11 +2767,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 3)
         return;
       g.path.push(point);
-      if (g.mode === "draw" && g.ink)
-        setPreview(
-          stroke(g.ink.id, g.ink.kind, g.path, g.ink.color, g.ink.weight),
-        );
-      else setPath([...g.path]);
+      scheduleGesturePaint();
     }
   };
 
@@ -2733,7 +2822,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       if (gesture.current) return;
       if ((e.code === "Enter" || e.code === "F2") && selected.length === 1) {
         const item = itemsRef.current.find((i) => i.id === selected[0]);
-        if (item && !item.locked && (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "formula" || item.kind === "table" || item.kind === "checklist" || item.kind === "quiz" || item.kind === "flashcard" || item.kind === "linkmedia")) {
+        if (item && !item.locked && (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "formula" || item.kind === "table" || item.kind === "checklist" || item.kind === "quiz" || item.kind === "flashcard" || item.kind === "cover" || item.kind === "linkmedia")) {
           e.preventDefault();
           if (item.kind === "table") openTableEditor(item); else if (item.kind === "formula") openFormulaEditor(item); else if (item.kind === "checklist") openChecklistEditor(item); else if (item.kind === "quiz") openQuizEditor(item); else if (item.kind === "flashcard") openFlashcardEditor(item); else if (item.kind === "linkmedia") openLinkMediaEditor(item); else startEdit(item);
           return;
@@ -2887,6 +2976,20 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       setTool("select");
       setNotice("Текст вставлен на доску");
     };
+    globalHandlersRef.current = { keyDown, keyUp, blur, pointerUp, pointerCancel, closeContextMenu, pasteFromSystem };
+  });
+
+  // Attach global listeners once. The ref above always points at handlers from the
+  // latest render, so keyboard/paste behavior stays fresh without tearing down and
+  // rebuilding seven window listeners on every cursor/timer/UI render.
+  useEffect(() => {
+    const keyDown = (event:KeyboardEvent) => globalHandlersRef.current?.keyDown(event);
+    const keyUp = (event:KeyboardEvent) => globalHandlersRef.current?.keyUp(event);
+    const blur = () => globalHandlersRef.current?.blur();
+    const pointerUp = () => globalHandlersRef.current?.pointerUp();
+    const pointerCancel = () => globalHandlersRef.current?.pointerCancel();
+    const closeContextMenu = (event:PointerEvent) => globalHandlersRef.current?.closeContextMenu(event);
+    const pasteFromSystem = (event:ClipboardEvent) => globalHandlersRef.current?.pasteFromSystem(event);
     window.addEventListener("pointerup", pointerUp);
     window.addEventListener("pointerdown", closeContextMenu);
     window.addEventListener("pointercancel", pointerCancel);
@@ -2903,9 +3006,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       window.removeEventListener("pointercancel", pointerCancel);
       window.removeEventListener("paste", pasteFromSystem);
     };
-  });
+  }, []);
 
-  const selectedItems = items.filter((item) => selected.includes(item.id));
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item] as const)), [items]);
+  const selectedItems = useMemo(() => selected.map((id) => itemById.get(id)).filter((item): item is Item => Boolean(item)), [selected, itemById]);
   const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
   const selectionBounds = boundsOf(selectedItems);
   const selectionLocked = selectedItems.some((item) => item.locked);
@@ -2927,7 +3031,6 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const selectionToolbarLeft = selectionScreenBounds
     ? Math.max(54,Math.min((board.current?.clientWidth??window.innerWidth)-54,selectionScreenBounds.left+selectionScreenBounds.width/2))
     : 0;
-  const objectEditorOpen = !!(tableEditorId || checklistEditorId || quizEditorId || flashcardEditorId || graphEditorId || formulaEditorId || frameNotesEditorId || linkMediaOpen);
 
   const selectionToolbarPointerDown=(event:React.PointerEvent<HTMLDivElement>)=>{
     event.stopPropagation();
@@ -3730,13 +3833,23 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     commit(itemsRef.current.map((candidate) => candidate.id === item.id ? { ...candidate, flashcardFlipped: !item.flashcardFlipped } : candidate));
   };
 
-  const quizItems = items.filter((item) => item.kind === "quiz");
-  const flashcardItems = items.filter((item) => item.kind === "flashcard");
-  const answeredQuizItems = quizItems.filter((item) => item.quizSelected != null);
-  const checkedQuizItems = quizItems.filter((item) => item.quizRevealed && item.quizSelected != null);
-  const correctQuizItems = checkedQuizItems.filter((item) => item.quizSelected === item.quizCorrect);
-  const knownFlashcards = flashcardItems.filter((item) => item.flashcardMastery === "known").length;
-  const againFlashcards = flashcardItems.filter((item) => item.flashcardMastery === "again").length;
+  const studyItems = useMemo(() => {
+    const quizItems: Item[] = [];
+    const flashcardItems: Item[] = [];
+    for (const item of items) {
+      if (item.kind === "quiz") quizItems.push(item);
+      else if (item.kind === "flashcard") flashcardItems.push(item);
+    }
+    const answeredQuizItems = quizItems.filter((item) => item.quizSelected != null);
+    const checkedQuizItems = quizItems.filter((item) => item.quizRevealed && item.quizSelected != null);
+    return {
+      quizItems, flashcardItems, answeredQuizItems, checkedQuizItems,
+      correctQuizItems: checkedQuizItems.filter((item) => item.quizSelected === item.quizCorrect),
+      knownFlashcards: flashcardItems.filter((item) => item.flashcardMastery === "known").length,
+      againFlashcards: flashcardItems.filter((item) => item.flashcardMastery === "again").length,
+    };
+  }, [items]);
+  const { quizItems, flashcardItems, answeredQuizItems, checkedQuizItems, correctQuizItems, knownFlashcards, againFlashcards } = studyItems;
   const currentStudyCard = flashcardItems.length ? flashcardItems[Math.min(studyCardIndex, flashcardItems.length - 1)] : null;
   const checkQuizResults = () => {
     commit(itemsRef.current.map((item) => item.kind === "quiz" && item.quizSelected != null ? { ...item, quizRevealed: true } : item));
@@ -3914,13 +4027,14 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     setNotice(direction < 0 ? "Фрейм поднят в порядке показа" : "Фрейм опущен в порядке показа");
   };
 
-  const searchResults = searchQuery.trim()
-    ? items.filter((item) => {
-        if (item.hidden) return false;
-        const q = searchQuery.trim().toLocaleLowerCase("ru");
-        return `${item.text} ${item.name ?? ""} ${(item.tableCells ?? []).join(" ")} ${(item.checklistItems ?? []).join(" ")} ${(item.quizOptions ?? []).join(" ")} ${item.quizExplanation ?? ""} ${item.flashcardBack ?? ""} ${itemLabel(item)}`.toLocaleLowerCase("ru").includes(q);
-      })
-    : [];
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLocaleLowerCase("ru");
+    if (!q) return [] as Item[];
+    return items.filter((item) => {
+      if (item.hidden) return false;
+      return `${item.text} ${item.name ?? ""} ${(item.tableCells ?? []).join(" ")} ${(item.checklistItems ?? []).join(" ")} ${(item.quizOptions ?? []).join(" ")} ${item.quizExplanation ?? ""} ${item.flashcardBack ?? ""} ${itemLabel(item)}`.toLocaleLowerCase("ru").includes(q);
+    });
+  }, [items, searchQuery]);
 
   const focusItem = (item: Item) => {
     finishEdit();
@@ -3959,7 +4073,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 
   const changeFontSize = (delta: number) => {
     if (!singleSelected || selectionLocked || (singleSelected.kind !== "text" && singleSelected.kind !== "sticky" && singleSelected.kind !== "formula" && singleSelected.kind !== "table" && singleSelected.kind !== "checklist" && singleSelected.kind !== "quiz" && singleSelected.kind !== "flashcard" && singleSelected.kind !== "cover")) return;
-    const fallback = singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : 20;
+    const fallback = singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20;
     const min = singleSelected.kind === "table" ? 9 : singleSelected.kind === "formula" ? 12 : 10;
     const max = singleSelected.kind === "table" || singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 32 : singleSelected.kind === "flashcard" || singleSelected.kind === "cover" ? 48 : 96;
     const nextSize = Math.max(min, Math.min(max, (singleSelected.fontSize ?? fallback) + delta));
@@ -4008,8 +4122,19 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     commit(itemsRef.current.map((item) => item.id === singleSelected.id ? { ...item, weight: nextWeight } : item));
   };
 
-  const visibleItems = items.filter((item) => !item.hidden);
-  const allBounds = boundsOf(visibleItems);
+  const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
+  const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
+  const renderedItems = useMemo(() => {
+    if (!boardViewportSize.width || !boardViewportSize.height || visibleItems.length < 120) return visibleItems;
+    const margin = 420 / Math.max(.1, view.zoom);
+    const left = -view.x / view.zoom - margin;
+    const top = -view.y / view.zoom - margin;
+    const right = (boardViewportSize.width - view.x) / view.zoom + margin;
+    const bottom = (boardViewportSize.height - view.y) / view.zoom + margin;
+    const keep = new Set(selected);
+    if (editing) keep.add(editing);
+    return visibleItems.filter((item) => keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
+  }, [visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selected, editing]);
   const minimapBounds = allBounds ?? { x: -400, y: -300, width: 800, height: 600 };
   const boardRect = board.current?.getBoundingClientRect();
   const visibleWorld = boardRect ? {
@@ -4025,10 +4150,11 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const miniBottom = Math.max(minimapBounds.y + minimapBounds.height, visibleWorld ? visibleWorld.y + visibleWorld.height : minimapBounds.y + minimapBounds.height) + miniPad;
   const miniW = Math.max(1, miniRight - miniX);
   const miniH = Math.max(1, miniBottom - miniY);
-  const layerRows = (() => {
+  const layerRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Item[] = [];
-    for (const item of [...items].reverse()) {
+    for (let indexValue = items.length - 1; indexValue >= 0; indexValue--) {
+      const item = items[indexValue];
       if (item.groupId) {
         if (seenGroups.has(item.groupId)) continue;
         seenGroups.add(item.groupId);
@@ -4036,11 +4162,23 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       rows.push(item);
     }
     return rows;
-  })();
+  }, [items]);
 
-  const comments = items.filter((item) => item.kind === "comment");
-  const openComments = comments.filter((item) => !item.resolved && !item.hidden);
-  const presentationFrames = items.filter((item) => item.kind === "frame" && !item.hidden).sort((a, b) => (a.presentationOrder ?? items.indexOf(a)) - (b.presentationOrder ?? items.indexOf(b)));
+  const { comments, openComments, linkedComments, presentationFrames } = useMemo(() => {
+    const comments: Item[] = [];
+    const frames: Array<{ item: Item; index: number }> = [];
+    items.forEach((item, indexValue) => {
+      if (item.kind === "comment") comments.push(item);
+      if (item.kind === "frame" && !item.hidden) frames.push({ item, index: indexValue });
+    });
+    frames.sort((a, b) => (a.item.presentationOrder ?? a.index) - (b.item.presentationOrder ?? b.index));
+    return {
+      comments,
+      openComments: comments.filter((item) => !item.resolved && !item.hidden),
+      linkedComments: comments.filter((item) => !item.hidden && item.commentTargetId),
+      presentationFrames: frames.map((entry) => entry.item),
+    };
+  }, [items]);
   const activePresentationFrame = presentationFrames.length
     ? presentationFrames[Math.min(presentationFrameIndex, presentationFrames.length - 1)]
     : null;
@@ -4247,12 +4385,24 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     const channel = connectBoardCursorChannel(
       boardSummary.id,
       { userId: authUser.id, name: authUser.name, role: boardSummary.role },
-      (cursor) => setRemoteCursors((current) => ({ ...current, [cursor.userId]: cursor })),
+      (cursor) => {
+        pendingRemoteCursors.current[cursor.userId] = cursor;
+        if (remoteCursorFrame.current != null) return;
+        remoteCursorFrame.current = requestAnimationFrame(() => {
+          remoteCursorFrame.current = null;
+          const pending = pendingRemoteCursors.current;
+          pendingRemoteCursors.current = {};
+          if (Object.keys(pending).length) setRemoteCursors((current) => ({ ...current, ...pending }));
+        });
+      },
     );
     cursorChannel.current = channel;
     return () => {
       cursorChannel.current = null;
       channel.close();
+      if (remoteCursorFrame.current != null) cancelAnimationFrame(remoteCursorFrame.current);
+      remoteCursorFrame.current = null;
+      pendingRemoteCursors.current = {};
       setRemoteCursors({});
     };
   }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
@@ -4345,13 +4495,23 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     return () => window.clearInterval(timer);
   }, [presenceUsers]);
 
-  const remoteEditorFor = (itemId: string) =>
-    Object.values(remoteWork).find((state) => state.editingId === itemId);
-
-  const remoteSelectorsFor = (itemId: string) =>
-    Object.values(remoteWork).filter((state) => state.selectedIds.includes(itemId));
-
-  const remoteEditingCount = Object.values(remoteWork).filter((state) => state.editingId).length;
+  const remoteWorkValues = useMemo(() => Object.values(remoteWork), [remoteWork]);
+  const remoteWorkIndex = useMemo(() => {
+    const editors = new Map<string, RemoteWorkState>();
+    const selectors = new Map<string, RemoteWorkState[]>();
+    let editingCount = 0;
+    for (const state of remoteWorkValues) {
+      if (state.editingId) { editors.set(state.editingId, state); editingCount++; }
+      for (const itemId of state.selectedIds) {
+        const list = selectors.get(itemId);
+        if (list) list.push(state); else selectors.set(itemId, [state]);
+      }
+    }
+    return { editors, selectors, editingCount };
+  }, [remoteWorkValues]);
+  const remoteEditorFor = (itemId: string) => remoteWorkIndex.editors.get(itemId);
+  const remoteSelectorsFor = (itemId: string) => remoteWorkIndex.selectors.get(itemId) ?? [];
+  const remoteEditingCount = remoteWorkIndex.editingCount;
   const lessonStudents=presenceUsers.filter((u)=>u.userId!==authUser.id);
   const lessonSeconds=liveLesson?Math.max(0,Math.floor((lessonClock-Date.parse(liveLesson.startedAt))/1000)):0;
   const lessonTime=`${String(Math.floor(lessonSeconds/3600)).padStart(2,"0")}:${String(Math.floor((lessonSeconds%3600)/60)).padStart(2,"0")}:${String(lessonSeconds%60).padStart(2,"0")}`;
@@ -4957,7 +5117,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             </div>
           </div>
         )}
-        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})} aria-label={`Цвет точки ${i+1}`}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)}/><span className="graph-preview-hint">Двойное нажатие по плоскости добавляет точку</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
+        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} aria-label="Цвет точки" onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)}/><span className="graph-preview-hint">Двойное нажатие по плоскости добавляет точку</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
         {formulaEditorId && formulaDraft && (
           <div
             className="formula-editor-backdrop"
@@ -5082,11 +5242,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         {checklistEditorId && checklistDraft && (
           <div className="checklist-editor-backdrop" onPointerDown={() => { setChecklistEditorId(null); setChecklistDraft(null); }}>
             <div className="checklist-editor-modal" role="dialog" aria-modal="true" aria-label="Редактор чек-листа" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setChecklistEditorId(null); setChecklistDraft(null); } if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveChecklistEditor(); } }}>
-              <div className="checklist-editor-header"><div><strong>Чек-лист / задание</strong><span>{checklistDraft.done.filter(Boolean).length} из {checklistDraft.items.length} выполнено</span></div><button onClick={() => { setChecklistEditorId(null); setChecklistDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
+              <div className="checklist-editor-header"><div className="checklist-editor-header-main"><strong>Чек-лист / задание</strong><span>{checklistDraft.done.filter(Boolean).length} из {checklistDraft.items.length} выполнено</span></div><button onClick={() => { setChecklistEditorId(null); setChecklistDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
               <div className="checklist-editor-settings">
                 <label className="checklist-title-input"><span>Название</span><input value={checklistDraft.title} maxLength={200} onChange={(e) => setChecklistDraft({ ...checklistDraft, title: e.target.value })}/></label>
-                <label><span>Размер</span><input type="range" min="10" max="32" value={checklistDraft.fontSize} onChange={(e) => setChecklistDraft({ ...checklistDraft, fontSize: Number(e.target.value) })}/><strong>{checklistDraft.fontSize}px</strong></label>
-                <label><span>Акцент</span><input type="color" value={checklistDraft.color} onChange={(e) => setChecklistDraft({ ...checklistDraft, color: e.target.value })}/></label>
+                <div className="checklist-editor-style-row">
+                  <label><span>Размер</span><input type="range" min="10" max="32" value={checklistDraft.fontSize} onChange={(e) => setChecklistDraft({ ...checklistDraft, fontSize: Number(e.target.value) })}/><strong>{checklistDraft.fontSize}px</strong></label>
+                  <label><span>Цвет</span><input type="color" value={checklistDraft.color} onChange={(e) => setChecklistDraft({ ...checklistDraft, color: e.target.value })}/></label>
+                </div>
               </div>
               <div className="checklist-editor-list">
                 {checklistDraft.items.map((entry, indexValue) => (
@@ -5115,7 +5277,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   <label><span>Ответ / обратная сторона</span><textarea value={flashcardDraft.back} maxLength={5000} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, back: e.target.value })} placeholder="Ответ или пояснение"/></label>
                   <div className="flashcard-editor-settings">
                     <label><span>Размер текста</span><input type="range" min="10" max="48" value={flashcardDraft.fontSize} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, fontSize: Number(e.target.value) })}/><strong>{flashcardDraft.fontSize}px</strong></label>
-                    <label><span>Акцент</span><input type="color" value={flashcardDraft.color} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, color: e.target.value })}/></label>
+                    <label><span>Цвет</span><input type="color" value={flashcardDraft.color} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, color: e.target.value })}/></label>
                   </div>
                 </section>
                 <aside className="flashcard-editor-preview">
@@ -5170,7 +5332,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   </div>
                   <div className="quiz-preview-settings">
                     <label><span>Размер</span><input type="range" min="10" max="32" value={quizDraft.fontSize} onChange={(e) => setQuizDraft({ ...quizDraft, fontSize: Number(e.target.value) })}/><strong>{quizDraft.fontSize}px</strong></label>
-                    <label><span>Акцент</span><input type="color" value={quizDraft.color} onChange={(e) => setQuizDraft({ ...quizDraft, color: e.target.value })}/></label>
+                    <label><span>Цвет</span><input type="color" value={quizDraft.color} onChange={(e) => setQuizDraft({ ...quizDraft, color: e.target.value })}/></label>
                   </div>
                 </aside>
               </div>
@@ -5220,7 +5382,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
           </div>
         )}
         {selected.length === 1 &&
-          !editing &&
+          !objectEditorOpen &&
           items.some(
             (i) =>
               i.id === selected[0] &&
@@ -5296,7 +5458,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             ] as [ShapeType,string][]).map(([id,label]) => (
               <button key={id} title={label} className={shapeType === id ? "active" : ""} onClick={() => setShapeType(id)}>
                 <span className="shape-palette-icon"><ShapeIcon type={id} /></span>
-                <span>{id === "rightTriangle" ? <>Прямоугольный<br/>треугольник</> : label}</span>
+                <span className={id === "rightTriangle" ? "shape-label-two-line" : undefined}>{id === "rightTriangle" ? <>Прямоугольный<br/>треугольник</> : label}</span>
               </button>
             ))}
           </div>
@@ -5466,15 +5628,16 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               </div>
             )}
             <svg className="comment-links-world" aria-hidden="true">
-              {items.filter((item) => item.kind === "comment" && !item.hidden && item.commentTargetId).map((comment) => {
-                const target = items.find((candidate) => candidate.id === comment.commentTargetId && !candidate.hidden);
+              {linkedComments.map((comment) => {
+                const target = comment.commentTargetId ? itemById.get(comment.commentTargetId) : undefined;
+                if (target?.hidden) return null;
                 if (!target) return null;
                 const sx = comment.x + Math.min(18, comment.width / 2), sy = comment.y + comment.height / 2;
                 const ex = target.x + target.width / 2, ey = target.y + target.height / 2;
                 return <g key={`comment-link-${comment.id}`}><line x1={sx} y1={sy} x2={ex} y2={ey} /><circle cx={ex} cy={ey} r={4} /></g>;
               })}
             </svg>
-            {items.filter((item) => !item.hidden).map((item) => (
+            {renderedItems.map((item) => (
               <div
                 data-object={item.id}
                 key={item.id}
@@ -5544,12 +5707,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
                 {item.kind === "table" && <TableView item={item} />}
                 {item.kind === "formula" && <FormulaView text={item.text} fontSize={item.fontSize ?? 28} color={item.color ?? "#20242c"} />}
-                {item.kind === "graph" && <GraphView item={item} onAddPoint={tool === "select" && !item.locked && !structurallyLockedForStudent(item) ? (x,y) => {
-                  const nextPoint={x,y,label:"",color:"#111111"};
-                  commit(itemsRef.current.map((candidate)=>candidate.id===item.id?{...candidate,graphPoints:[...(candidate.graphPoints??[]),nextPoint]}:candidate));
-                  setSelected([item.id]);
-                  setNotice(`Точка добавлена: (${x}; ${y})`);
-                } : undefined}/>}
+                {item.kind === "graph" && <GraphView item={item} onAddPoint={!item.locked && canEdit ? (x,y)=>{const next={x,y,label:"",color:"#111111"};commit(itemsRef.current.map(candidate=>candidate.id===item.id?{...candidate,graphPoints:[...(candidate.graphPoints??[]),next]}:candidate));setSelected([item.id]);} : undefined}/>}
                 {item.kind === "checklist" && <ChecklistView item={item} onToggle={!presentation && !item.locked ? (indexValue) => {
                   const entries = item.checklistItems?.length ? item.checklistItems : ["Новый пункт"];
                   const nextDone = entries.map((_, index) => index === indexValue ? !(item.checklistDone?.[index] === true) : item.checklistDone?.[index] === true);
@@ -5566,7 +5724,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                       key={item.id}
                       aria-label="Текст объекта"
                       className={item.kind === "frame" ? "text-editor frame-editor" : item.kind === "comment" ? "text-editor comment-editor" : "text-editor"}
-                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? 20, color:item.kind==="text"?(item.color??"#202124"):undefined, lineHeight:item.lineHeight??1.45, textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" }}
+                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? 20, ...(item.kind === "text" || item.kind === "sticky" ? { color:item.kind==="text"?(item.color??"#202124"):undefined, lineHeight:item.lineHeight??1.45, textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" } : {}) }}
                       value={draft}
                       placeholder="Введите текст…"
                       onChange={(e) => {
@@ -5730,7 +5888,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               <div className="locked-selection-badge"><Icon name="lock" size={13} /> Заблокировано</div>
             </div>
           )}
-          {selectionScreenBounds && selectedItems.length > 0 && !editing && !objectEditorOpen && (
+          {selectionScreenBounds && selectedItems.length > 0 && !objectEditorOpen && (
             <div
               className="selection-toolbar-screen"
               style={{
@@ -5782,7 +5940,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 </span>
               )}
               {singleSelected?.kind === "cover" && !isStudent && !selectionLocked && (
-                <span className="cover-selection-controls"><button type="button" className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title={singleSelected.coverOpen ? "Закрыть шторку" : "Открыть шторку"}><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Открыть"}</span></button></span>
+                <span className="cover-selection-controls"><button type="button" className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title="Прозрачность шторки"><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Прозрачная"}</span></button><input type="range" min="0" max="100" value={Math.round((singleSelected.coverOpen?0:(singleSelected.coverOpacity??1))*100)} onChange={e=>{const opacity=Number(e.target.value)/100;commit(itemsRef.current.map(i=>i.id===singleSelected.id?{...i,coverOpen:opacity===0,coverOpacity:opacity}:i))}} aria-label="Непрозрачность шторки"/></span>
               )}
               {singleSelected?.kind === "graph" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (<span className="graph-selection-controls"><button type="button" onClick={()=>openGraphEditor(singleSelected)} title="Параметры графика"><Icon name="graph" size={15}/><span>График</span></button></span>)}
               {singleSelected?.kind === "formula" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
@@ -5795,10 +5953,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover" || singleSelected?.kind === "connector") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="object-color-menu"><button type="button" className="object-color-trigger" onClick={()=>setColorMenuOpen(v=>!v)} title="Цвет"><span style={{background:singleSelected.color??"#5355c9"}}/>Цвет</button>{colorMenuOpen&&<span className="object-color-popover">{(singleSelected.kind==="sticky"?["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff","#ffffff"]:["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6","#0ea5e9","#64748b","#ffffff"]).map(value=><button type="button" key={value} className="object-color-square" style={{background:value}} onClick={()=>{recolorSelected(value);setColorMenuOpen(false)}} aria-label={`Цвет ${value}`}/>)}</span>}</span>
               )}
-              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
-                <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : "Размер текста"}>
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : singleSelected.kind === "cover" ? "Размер текста шторки" : "Размер текста"}>
                   <button type="button" onClick={() => changeFontSize(-2)} aria-label="Уменьшить размер">A−</button>
-                  <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : 20)}</span>
+                  <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20)}</span>
                   <button type="button" onClick={() => changeFontSize(2)} aria-label="Увеличить размер">A+</button>
                 </span>
               )}
@@ -5815,7 +5973,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   <button type="button" className={(singleSelected.textList??"none")==="bullet"?"active":""} onClick={()=>setSelectedTextStyle({textList:(singleSelected.textList??"none")==="bullet"?"none":"bullet"})} title="Маркированный список">•≡</button>
                   <button type="button" className={singleSelected.textList==="number"?"active":""} onClick={()=>setSelectedTextStyle({textList:singleSelected.textList==="number"?"none":"number"})} title="Нумерованный список">1≡</button>
                   <select className="text-line-height" value={singleSelected.lineHeight??1.45} onChange={e=>setSelectedTextStyle({lineHeight:Number(e.target.value)})} title="Межстрочный интервал"><option value={1}>1,0</option><option value={1.2}>1,2</option><option value={1.45}>1,45</option><option value={1.75}>1,75</option><option value={2}>2,0</option></select>
-
+                  
                 </span>
               )}
               {singleSelected?.kind === "connector" && !selectionLocked && (
@@ -6344,6 +6502,7 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
+        <Suspense fallback={<div className="board-server-overlay"><div className="board-server-card"><strong>Открываем раздел…</strong><span>Загружаем только нужный модуль.</span></div></div>}>
         {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="admin" && isAppAdmin
           ? <AdminScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="students" && accountRole==="teacher"
@@ -6371,6 +6530,7 @@ export default function App() {
           : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
+        </Suspense>
         {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" autoFocus value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}

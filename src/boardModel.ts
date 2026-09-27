@@ -50,7 +50,7 @@ export type Item = {
   graphA?: number; graphB?: number; graphC?: number;
   graphXMin?: number; graphXMax?: number; graphYMin?: number; graphYMax?: number;
   graphGrid?: boolean;
-  graphPoints?: { x:number; y:number; label:string; color?:string }[];
+  graphPoints?: { x:number; y:number; label:string; color?: string }[];
   graphShowLabels?: boolean;
   graphSegments?: { a:number; b:number; kind:"segment"|"line"|"ray"; label:string; measure:boolean }[];
   graphAngles?: { a:number; vertex:number; b:number; label:string }[];
@@ -135,7 +135,7 @@ export function parseDocument(raw: string): DocumentData {
       if (i.graphConnectPoints != null && typeof i.graphConnectPoints !== "boolean") throw new Error("Повреждено соединение точек");
       for (const value of [i.graphA,i.graphB,i.graphC,i.graphXMin,i.graphXMax,i.graphYMin,i.graphYMax]) if (value != null && !finite(value)) throw new Error("Повреждены параметры графика");
       if (i.graphGrid != null && typeof i.graphGrid !== "boolean") throw new Error("Повреждена сетка графика");
-      if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24 && ((p as {color?:unknown}).color == null || color((p as {color?:unknown}).color))))) throw new Error("Повреждены точки графика");
+      if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24 && ((p as {color?:string}).color == null || color((p as {color?:string}).color))))) throw new Error("Повреждены точки графика");
       if (i.graphShowLabels != null && typeof i.graphShowLabels !== "boolean") throw new Error("Повреждены подписи графика");
       if (i.graphSnap != null && typeof i.graphSnap !== "boolean") throw new Error("Повреждена привязка графика");
       if (i.graphAxisLabels != null && typeof i.graphAxisLabels !== "boolean") throw new Error("Повреждены подписи осей графика");
@@ -248,32 +248,6 @@ export function parseDocument(raw: string): DocumentData {
         ...(color(i.color) ? { color: i.color } : {}),
       } : {}),
       ...(i.kind === "formula" && finite(i.fontSize) && i.fontSize >= 12 && i.fontSize <= 96 ? { fontSize: i.fontSize } : {}),
-      ...(i.kind === "graph" ? {
-        graphType: i.graphType ?? "quadratic",
-        graphExpression: typeof i.graphExpression === "string" ? i.graphExpression.slice(0, 500) : "",
-        graphConnectPoints: i.graphConnectPoints !== false,
-        graphA: finite(i.graphA) ? i.graphA : 1,
-        graphB: finite(i.graphB) ? i.graphB : 0,
-        graphC: finite(i.graphC) ? i.graphC : 0,
-        graphXMin: finite(i.graphXMin) ? i.graphXMin : -10,
-        graphXMax: finite(i.graphXMax) ? i.graphXMax : 10,
-        graphYMin: finite(i.graphYMin) ? i.graphYMin : -10,
-        graphYMax: finite(i.graphYMax) ? i.graphYMax : 10,
-        graphGrid: i.graphGrid !== false,
-        graphPoints: Array.isArray(i.graphPoints) ? i.graphPoints.slice(0,40).map((p) => ({ x:p.x, y:p.y, label:String(p.label ?? "").slice(0,24), ...(color(p.color) ? { color:p.color } : {}) })) : [],
-        graphShowLabels: i.graphShowLabels !== false,
-        graphSnap: i.graphSnap !== false,
-        graphAxisLabels: i.graphAxisLabels !== false,
-        graphGridStep: finite(i.graphGridStep) ? i.graphGridStep : 1,
-        graphShowCurve: i.graphShowCurve !== false,
-        graphProjections: i.graphProjections === true,
-        graphSegments: Array.isArray(i.graphSegments) ? i.graphSegments.map((value) => ({ ...value })) : [],
-        graphAngles: Array.isArray(i.graphAngles) ? i.graphAngles.map((value) => ({ ...value })) : [],
-        graphCircles: Array.isArray(i.graphCircles) ? i.graphCircles.map((value) => ({ ...value })) : [],
-        graphPolygons: Array.isArray(i.graphPolygons) ? i.graphPolygons.map((value) => ({ ...value, points:[...value.points] })) : [],
-        graphMidpoints: Array.isArray(i.graphMidpoints) ? i.graphMidpoints.map((value) => ({ ...value })) : [],
-        color: color(i.color) ? i.color : "#5355c9",
-      } : {}),
       ...(i.kind === "checklist" ? {
         checklistItems: Array.isArray(i.checklistItems) ? i.checklistItems.map((value) => String(value).slice(0, 2000)) : ["Новый пункт"],
         checklistDone: Array.isArray(i.checklistDone) ? i.checklistDone.map((value) => value === true) : [false],
