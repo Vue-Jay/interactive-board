@@ -5950,19 +5950,8 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 </span>
               )}
 
-              {singleSelected?.kind === "sticky" && !selectionLocked && (
-                <span className="sticky-colors" title="Цвет стикера">
-                  {["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff"].map((value) => (
-                    <button type="button" key={value} className="sticky-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет стикера ${value}`} />
-                  ))}
-                </span>
-              )}
-              {(singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
-                <span className="object-colors" title="Цвет объекта">
-                  {["#6064d4","#2f855a","#d97706","#dc4c64","#475569","#8b5cf6"].map((value) => (
-                    <button type="button" key={value} className="object-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет объекта ${value}`} />
-                  ))}
-                </span>
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover" || singleSelected?.kind === "connector") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <span className="object-color-menu"><button type="button" className="object-color-trigger" onClick={()=>setColorMenuOpen(v=>!v)} title="Цвет"><span style={{background:singleSelected.color??"#5355c9"}}/>Цвет</button>{colorMenuOpen&&<span className="object-color-popover">{(singleSelected.kind==="sticky"?["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff","#ffffff"]:["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6","#0ea5e9","#64748b","#ffffff"]).map(value=><button type="button" key={value} className="object-color-square" style={{background:value}} onClick={()=>{recolorSelected(value);setColorMenuOpen(false)}} aria-label={`Цвет ${value}`}/>)}</span>}</span>
               )}
               {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
                 <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : singleSelected.kind === "cover" ? "Размер текста шторки" : "Размер текста"}>
@@ -6513,6 +6502,7 @@ export default function App() {
   if (!activeBoard) {
     return (
       <>
+        <Suspense fallback={<div className="board-server-overlay"><div className="board-server-card"><strong>Открываем раздел…</strong><span>Загружаем только нужный модуль.</span></div></div>}>
         {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="admin" && isAppAdmin
           ? <AdminScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="students" && accountRole==="teacher"
@@ -6540,6 +6530,7 @@ export default function App() {
           : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
+        </Suspense>
         {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" autoFocus value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
