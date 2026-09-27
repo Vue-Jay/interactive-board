@@ -213,14 +213,10 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 }
 
 function ShapeIcon({ type }: { type: ShapeType }) {
-  if (type === "ellipse") return <svg viewBox="0 0 28 22"><ellipse cx="14" cy="11" rx="10" ry="7" /></svg>;
-  if (type === "diamond") return <svg viewBox="0 0 28 22"><path d="m14 2 10 9-10 9L4 11 14 2Z" /></svg>;
-  if (type === "triangle") return <svg viewBox="0 0 28 22"><path d="m14 3 10 16H4L14 3Z" /></svg>;
-  if (type === "hexagon") return <svg viewBox="0 0 28 22"><path d="m8 3 12 0 6 8-6 8H8l-6-8 6-8Z" /></svg>;
-  if (type === "star") return <svg viewBox="0 0 28 22"><path d="m14 2 2.7 6 6.5.5-5 4.2 1.5 6.3-5.7-3.4L8.3 19l1.5-6.3-5-4.2 6.5-.5L14 2Z" /></svg>;
-  if (type === "arrow") return <svg viewBox="0 0 28 22"><path d="M3 11h18M16 5l6 6-6 6" /></svg>;
-  if (type === "rectangle") return <svg viewBox="0 0 28 22"><rect x="4" y="4" width="20" height="14" /></svg>;
-  return <svg viewBox="0 0 28 22"><rect x="4" y="4" width="20" height="14" rx="4" /></svg>;
+  const d:Partial<Record<ShapeType,string>>={triangle:"M14 2 25 20H3Z",rightTriangle:"M4 2v18h21Z",diamond:"M14 2 25 11 14 20 3 11Z",parallelogram:"M8 3h17l-5 16H3Z",trapezoid:"M8 3h12l5 16H3Z",pentagon:"M14 2 25 9l-4 11H7L3 9Z",hexagon:"M8 3h12l6 8-6 8H8l-6-8Z"};
+  if(type==="ellipse"||type==="circle")return <svg viewBox="0 0 28 22"><ellipse cx="14" cy="11" rx={type==="circle"?8:10} ry={type==="circle"?8:7}/></svg>;
+  if(type==="rectangle"||type==="square"||type==="rounded")return <svg viewBox="0 0 28 22"><rect x={type==="square"?6:4} y="4" width={type==="square"?16:20} height="14" rx={type==="rounded"?4:0}/></svg>;
+  return <svg viewBox="0 0 28 22"><path d={d[type]??"M4 4h20v14H4Z"}/></svg>;
 }
 function loadInitial(storageKey: string) {
   const empty: DocumentData = {
@@ -331,7 +327,7 @@ const mobileToolGroups: { label:string; tools:Tool[] }[] = [
   { label:"Задания", tools:["checklist","quiz","flashcard"] },
   { label:"Интерактив", tools:["table","formula","graph","cover","comment"] },
 ];
-const mobileDockTools: Tool[] = ["hand","select","lasso","pen","sticky","text","shape"];
+const mobileDockTools: Tool[] = ["hand","select","lasso","pen","eraser","sticky","text","shape"];
 
 
 const keyTools: Record<string, Tool> = {
@@ -707,14 +703,18 @@ function Media({ item, boardId }: { item: Item; boardId: string }) {
   const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
   return <object key={`${item.assetId}-${item.pdfPage ?? 1}`} className="media-pdf" data={pdfSrc} type="application/pdf"><div className="media-missing">PDF: {item.name}</div></object>;
 }
-function Shape({ type = "rounded", color = "#6064d4" }: { type?: ShapeType; color?: string }) {
-  if(type==="ellipse") return <div className="shape-fill ellipse" style={{ borderColor: color }}/>;
-  if(type==="diamond") return <div className="shape-fill diamond" style={{ borderColor: color }}/>;
-  if(type==="triangle") return <div className="shape-fill triangle" style={{ background: color }}/>;
-  if(type==="hexagon") return <div className="shape-fill hexagon" style={{ background: color }}/>;
-  if(type==="star") return <svg className="shape-vector" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 6 61 36l32 1-25 20 9 31-27-18-27 18 9-31L7 37l32-1L50 6Z" fill={color}/></svg>;
-  if(type==="arrow") return <svg className="shape-vector" viewBox="0 0 120 80" aria-hidden="true"><path d="M8 31h66V12l38 28-38 28V49H8V31Z" fill={color}/></svg>;
-  return <div className={`shape-fill ${type}`} style={{ borderColor: color }}/>;
+function Shape({ type = "rectangle", color = "#6064d4" }: { type?: ShapeType; color?: string }) {
+  const paths: Partial<Record<ShapeType,string>> = {
+    triangle:"M50 5 L96 95 L4 95 Z", rightTriangle:"M6 5 L6 95 L96 95 Z",
+    diamond:"M50 4 L96 50 L50 96 L4 50 Z", parallelogram:"M24 5 L96 5 L76 95 L4 95 Z",
+    trapezoid:"M24 5 L76 5 L96 95 L4 95 Z", pentagon:"M50 4 L96 38 L78 95 L22 95 L4 38 Z",
+    hexagon:"M25 5 L75 5 L97 50 L75 95 L25 95 L3 50 Z",
+    star:"M50 5 L61 36 L94 37 L68 57 L77 91 L50 72 L23 91 L32 57 L6 37 L39 36 Z",
+    arrow:"M5 36 L65 36 L65 16 L96 50 L65 84 L65 64 L5 64 Z"
+  };
+  if(type==="ellipse" || type==="circle") return <svg className="shape-vector school-shape" viewBox="0 0 100 100" preserveAspectRatio={type==="circle"?"xMidYMid meet":"none"}><ellipse cx="50" cy="50" rx="46" ry="46" fill="none" stroke={color} strokeWidth="3"/></svg>;
+  if(type==="rectangle" || type==="square" || type==="rounded") return <svg className="shape-vector school-shape" viewBox="0 0 100 100" preserveAspectRatio={type==="square"?"xMidYMid meet":"none"}><rect x="4" y="4" width="92" height="92" rx={type==="rounded"?8:0} fill="none" stroke={color} strokeWidth="3"/></svg>;
+  return <svg className="shape-vector school-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={paths[type] ?? paths.triangle} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round"/></svg>;
 }
 
 const FORMULA_SYMBOLS: Record<string, string> = {
@@ -870,22 +870,32 @@ function FormulaView({ text, fontSize = 28, color = "#20242c" }: { text: string;
   return <div className="formula-view" style={{ fontSize, color }}>{parseSequence()}</div>;
 }
 
+function evaluateGraphExpression(source: string, x: number): number {
+  const text=source.trim().toLowerCase().replace(/^y\s*=\s*/,"").replace(/,/g,".").replace(/π/g,"pi");
+  if(!text) return NaN;
+  const tokens=(text.match(/(?:\d+(?:\.\d+)?)|(?:[a-z]+)|[()+\-*/^]/g)??[]); let pos=0;
+  const primary=():number=>{const t=tokens[pos++];if(t===undefined)throw 0;if(t==="("){const v=expr();if(tokens[pos++]!==")")throw 0;return v}if(t==="-")return-primary();if(t==="+")return primary();if(/^\d/.test(t))return Number(t);if(t==="x")return x;if(t==="pi")return Math.PI;if(t==="e")return Math.E;if(/^[a-z]+$/.test(t)){if(tokens[pos++]!=="(")throw 0;const v=expr();if(tokens[pos++]!==")")throw 0;const f:{[k:string]:(n:number)=>number}={sin:Math.sin,cos:Math.cos,tan:Math.tan,sqrt:Math.sqrt,abs:Math.abs,exp:Math.exp,ln:Math.log,log:Math.log10};if(!f[t])throw 0;return f[t](v)}throw 0};
+  const power=():number=>{let v=primary();while(tokens[pos]==="^"){pos++;v=Math.pow(v,power())}return v};
+  const term=():number=>{let v=power();while(tokens[pos]==="*"||tokens[pos]==="/"){const op=tokens[pos++];const q=power();v=op==="*"?v*q:v/q}return v};
+  const expr=():number=>{let v=term();while(tokens[pos]==="+"||tokens[pos]==="-"){const op=tokens[pos++];const q=term();v=op==="+"?v+q:v-q}return v};
+  try{const value=expr();return pos===tokens.length&&Number.isFinite(value)?value:NaN}catch{return NaN}
+}
 function GraphView({ item, onPointMove, onAddPoint }: { item: Item; onPointMove?: (index:number,x:number,y:number)=>void; onAddPoint?: (x:number,y:number)=>void }) {
-  const type=item.graphType ?? "quadratic", A=item.graphA ?? 1, B=item.graphB ?? 0, C=item.graphC ?? 0;
-  const xMin=item.graphXMin ?? -10, xMax=item.graphXMax ?? 10, yMin=item.graphYMin ?? -10, yMax=item.graphYMax ?? 10;
-  const W=600,H=360, sx=(x:number)=>(x-xMin)/(xMax-xMin)*W, sy=(y:number)=>H-(y-yMin)/(yMax-yMin)*H, ux=(px:number)=>xMin+px/W*(xMax-xMin), uy=(py:number)=>yMax-py/H*(yMax-yMin);
-  const f=(x:number)=>type==="linear"?A*x+B:type==="quadratic"?A*x*x+B*x+C:type==="sin"?A*Math.sin(B*x+C):A*Math.cos(B*x+C);
-  const pts=Array.from({length:241},(_,i)=>{const x=xMin+(xMax-xMin)*i/240;return [sx(x),sy(f(x))] as const}).filter(p=>Number.isFinite(p[1])&&p[1]>-H*3&&p[1]<H*4);
-  const path=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
-  const gp=item.graphPoints??[];
-  const extend=(pa:{x:number;y:number},pb:{x:number;y:number},kind:"segment"|"line"|"ray")=>{let ax=sx(pa.x),ay=sy(pa.y),bx=sx(pb.x),by=sy(pb.y);if(kind==="segment")return {ax,ay,bx,by};const dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,L=1400;if(kind==="ray")return {ax,ay,bx:bx+ux*L,by:by+uy*L};return {ax:ax-ux*L,ay:ay-uy*L,bx:bx+ux*L,by:by+uy*L}};
-  const angleDeg=(p1:{x:number;y:number},v:{x:number;y:number},p2:{x:number;y:number})=>{const a1=Math.atan2(p1.y-v.y,p1.x-v.x),a2=Math.atan2(p2.y-v.y,p2.x-v.x);let d=Math.abs((a2-a1)*180/Math.PI)%360;return d>180?360-d:d};
-  const step=Math.max(.1,item.graphGridStep??1);
-  const gridValues=(min:number,max:number)=>{const first=Math.ceil(min/step)*step,count=Math.min(101,Math.max(0,Math.floor((max-first)/step)+1));return Array.from({length:count},(_,i)=>Number((first+i*step).toFixed(6)))};
-  const gridX=gridValues(xMin,xMax),gridY=gridValues(yMin,yMax);
-  const label=type==="linear"?`y = ${A}x ${B>=0?"+ ":"- "}${Math.abs(B)}`:type==="quadratic"?`y = ${A}x² ${B>=0?"+ ":"- "}${Math.abs(B)}x ${C>=0?"+ ":"- "}${Math.abs(C)}`:type==="sin"?`y = ${A}·sin(${B}x ${C>=0?"+ ":"- "}${Math.abs(C)})`:`y = ${A}·cos(${B}x ${C>=0?"+ ":"- "}${Math.abs(C)})`;
-  const pointerCoord=(e: React.MouseEvent<SVGSVGElement>)=>{const r=e.currentTarget.getBoundingClientRect();let x=ux((e.clientX-r.left)/r.width*W),y=uy((e.clientY-r.top)/r.height*H);if(item.graphSnap!==false){const st=Math.max(.1,item.graphGridStep??1);x=Math.round(x/st)*st;y=Math.round(y/st)*st}return {x:Number(x.toFixed(6)),y:Number(y.toFixed(6))}};
-  return <div className={`graph-view ${onPointMove?"graph-interactive":""}`}><div className="graph-label">{label}</div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onDoubleClick={(e)=>{if(onAddPoint){e.stopPropagation();const p=pointerCoord(e);onAddPoint(p.x,p.y)}}}>{item.graphGrid!==false&&<g className="graph-grid">{gridX.map(x=><line key={"x"+x} x1={sx(x)} x2={sx(x)} y1="0" y2={H}/>)}{gridY.map(y=><line key={"y"+y} x1="0" x2={W} y1={sy(y)} y2={sy(y)}/>)}</g>}<g className="graph-axes">{xMin<=0&&xMax>=0&&<line x1={sx(0)} x2={sx(0)} y1="0" y2={H}/>} {yMin<=0&&yMax>=0&&<line x1="0" x2={W} y1={sy(0)} y2={sy(0)}/>}</g>{item.graphAxisLabels!==false&&<g className="graph-axis-labels">{gridX.filter(x=>x!==0).map(x=><text key={"xl"+x} x={sx(x)+2} y={Math.min(H-4,Math.max(12,sy(0)+14))}>{x}</text>)}{gridY.filter(y=>y!==0).map(y=><text key={"yl"+y} x={Math.min(W-22,Math.max(3,sx(0)+5))} y={sy(y)-3}>{y}</text>)}</g>}{item.graphShowCurve!==false&&<path className="graph-curve" d={path}/>}{item.graphProjections===true&&<g className="graph-projections">{gp.map((p,i)=><g key={"proj"+i}>{xMin<=0&&xMax>=0&&<line x1={sx(p.x)} x2={sx(0)} y1={sy(p.y)} y2={sy(p.y)}/>} {yMin<=0&&yMax>=0&&<line x1={sx(p.x)} x2={sx(p.x)} y1={sy(p.y)} y2={sy(0)}/>}</g>)}</g>}<g className="graph-geometry">{(item.graphSegments??[]).map((s,i)=>{const pa=gp[s.a],pb=gp[s.b];if(!pa||!pb||s.a===s.b)return null;const e=extend(pa,pb,s.kind),mx=(sx(pa.x)+sx(pb.x))/2,my=(sy(pa.y)+sy(pb.y))/2,dist=Math.hypot(pb.x-pa.x,pb.y-pa.y);return <g key={"seg"+i}><line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by}/>{(s.label||s.measure)&&<text x={mx+7} y={my-7}>{s.label}{s.label&&s.measure?" · ":""}{s.measure?dist.toFixed(2):""}</text>}</g>})}{(item.graphAngles??[]).map((g,i)=>{const p1=gp[g.a],v=gp[g.vertex],p2=gp[g.b];if(!p1||!v||!p2)return null;const deg=angleDeg(p1,v,p2);return <text className="graph-angle-label" key={"ang"+i} x={sx(v.x)+12} y={sy(v.y)+20}>{g.label?g.label+" · ":""}{deg.toFixed(1)}°</text>})}{(item.graphCircles??[]).map((g,i)=>{const c=gp[g.center],e=gp[g.edge];if(!c||!e||g.center===g.edge)return null;const r=Math.hypot(e.x-c.x,e.y-c.y),rx=Math.abs(sx(c.x+r)-sx(c.x)),ry=Math.abs(sy(c.y+r)-sy(c.y));return <g className="graph-circle" key={"cir"+i}><ellipse cx={sx(c.x)} cy={sy(c.y)} rx={rx} ry={ry}/>{(g.label||g.measure)&&<text x={sx(c.x)+rx+6} y={sy(c.y)}>{g.label}{g.label&&g.measure?" · ":""}{g.measure?`r=${r.toFixed(2)}`:""}</text>}</g>})}{(item.graphPolygons??[]).map((g,i)=>{const pp=g.points.map(n=>gp[n]).filter(Boolean);if(pp.length<3)return null;const xy=pp.map(p=>`${sx(p.x)},${sy(p.y)}`).join(" ");const per=pp.reduce((sum,p,j)=>{const q=pp[(j+1)%pp.length];return sum+Math.hypot(q.x-p.x,q.y-p.y)},0);const area=Math.abs(pp.reduce((sum,p,j)=>{const q=pp[(j+1)%pp.length];return sum+p.x*q.y-q.x*p.y},0))/2;const cxp=pp.reduce((s,p)=>s+sx(p.x),0)/pp.length,cyp=pp.reduce((s,p)=>s+sy(p.y),0)/pp.length;return <g className="graph-polygon" key={"poly"+i}><polygon points={xy}/>{(g.label||g.measure)&&<text x={cxp+7} y={cyp-7}>{g.label}{g.label&&g.measure?" · ":""}{g.measure?`P=${per.toFixed(2)} · S=${area.toFixed(2)}`:""}</text>}</g>})}{(item.graphMidpoints??[]).map((g,i)=>{const p=gp[g.a],q=gp[g.b];if(!p||!q)return null;const x=(p.x+q.x)/2,y=(p.y+q.y)/2;return <g className="graph-midpoint" key={"mid"+i}><circle cx={sx(x)} cy={sy(y)} r="4"/><text x={sx(x)+7} y={sy(y)-7}>{g.label||"M"} ({x.toFixed(1)}; {y.toFixed(1)})</text></g>})}</g>{(item.graphPoints??[]).map((p,i)=>{const px=sx(p.x),py=sy(p.y);if(px<0||px>W||py<0||py>H)return null;return <g className={`graph-point ${onPointMove?"draggable":""}`} key={i} onPointerDown={onPointMove?(e)=>{e.stopPropagation();const svg=e.currentTarget.ownerSVGElement;if(!svg)return;const move=(ev:PointerEvent)=>{const r=svg.getBoundingClientRect();let x=ux((ev.clientX-r.left)/r.width*W),y=uy((ev.clientY-r.top)/r.height*H);if(item.graphSnap!==false){const st=Math.max(.1,item.graphGridStep??1);x=Math.round(x/st)*st;y=Math.round(y/st)*st}onPointMove(i,Number(x.toFixed(6)),Number(y.toFixed(6)))};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up)}:undefined}><circle cx={px} cy={py} r={onPointMove?"7":"5"}/>{item.graphShowLabels!==false&&<text x={px+8} y={py-8}>{p.label||`(${p.x}; ${p.y})`}</text>}</g>})}</svg></div>;
+  const expression=item.graphExpression?.trim()??"";
+  const xMin=item.graphXMin??-10,xMax=item.graphXMax??10,yMin=item.graphYMin??-10,yMax=item.graphYMax??10,W=600,H=360;
+  const sx=(x:number)=>(x-xMin)/(xMax-xMin)*W,sy=(y:number)=>H-(y-yMin)/(yMax-yMin)*H,ux=(p:number)=>xMin+p/W*(xMax-xMin),uy=(p:number)=>yMax-p/H*(yMax-yMin);
+  const step=Math.max(.1,item.graphGridStep??1), values=(a:number,b:number)=>{const first=Math.ceil(a/step)*step,count=Math.min(101,Math.max(0,Math.floor((b-first)/step)+1));return Array.from({length:count},(_,i)=>Number((first+i*step).toFixed(6)))};
+  const gridX=values(xMin,xMax),gridY=values(yMin,yMax),gp=item.graphPoints??[];
+  const curve=expression?Array.from({length:401},(_,i)=>{const x=xMin+(xMax-xMin)*i/400,y=evaluateGraphExpression(expression,x);return {x:sx(x),y:sy(y),ok:Number.isFinite(y)&&y>=yMin-(yMax-yMin)*2&&y<=yMax+(yMax-yMin)*2}}):[];
+  let path="",pen=false;for(const p of curve){if(!p.ok){pen=false;continue}path+=`${pen?"L":"M"}${p.x.toFixed(1)} ${p.y.toFixed(1)} `;pen=true}
+  const coord=(clientX:number,clientY:number,svg:SVGSVGElement)=>{const r=svg.getBoundingClientRect();let x=ux((clientX-r.left)/r.width*W),y=uy((clientY-r.top)/r.height*H);if(item.graphSnap!==false){x=Math.round(x/step)*step;y=Math.round(y/step)*step}return{x:Number(x.toFixed(4)),y:Number(y.toFixed(4))}};
+  return <div className={`graph-view ${onPointMove?"graph-interactive":""}`}><div className="graph-label">{expression?`y = ${expression.replace(/^y\s*=\s*/i,"")}`:"Координатная плоскость"}</div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onDoubleClick={e=>{if(onAddPoint){e.stopPropagation();const p=coord(e.clientX,e.clientY,e.currentTarget);onAddPoint(p.x,p.y)}}}>
+    {item.graphGrid!==false&&<g className="graph-grid">{gridX.map(x=><line key={`x${x}`} x1={sx(x)} x2={sx(x)} y1="0" y2={H}/>)}{gridY.map(y=><line key={`y${y}`} x1="0" x2={W} y1={sy(y)} y2={sy(y)}/>)}</g>}
+    <g className="graph-axes">{xMin<=0&&xMax>=0&&<line x1={sx(0)} x2={sx(0)} y1="0" y2={H}/>} {yMin<=0&&yMax>=0&&<line x1="0" x2={W} y1={sy(0)} y2={sy(0)}/>}</g>
+    {item.graphAxisLabels!==false&&<g className="graph-axis-labels">{gridX.filter(x=>x!==0).map(x=><text key={`xl${x}`} x={sx(x)+2} y={Math.min(H-4,Math.max(12,sy(0)+14))}>{x}</text>)}{gridY.filter(y=>y!==0).map(y=><text key={`yl${y}`} x={Math.min(W-22,Math.max(3,sx(0)+5))} y={sy(y)-3}>{y}</text>)}</g>}
+    {expression&&path&&<path className="graph-curve" d={path}/>} {item.graphConnectPoints!==false&&gp.length>1&&<polyline className="graph-point-line" points={gp.map(p=>`${sx(p.x)},${sy(p.y)}`).join(" ")}/>}
+    {gp.map((p,i)=><g className={`graph-point ${onPointMove?"draggable":""}`} key={i} onPointerDown={onPointMove?(e)=>{e.stopPropagation();const svg=e.currentTarget.ownerSVGElement;if(!svg)return;e.currentTarget.setPointerCapture?.(e.pointerId);const move=(ev:PointerEvent)=>{const q=coord(ev.clientX,ev.clientY,svg);onPointMove(i,q.x,q.y)};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up)}:undefined}><circle cx={sx(p.x)} cy={sy(p.y)} r={onPointMove?"4.5":"3.5"} fill={p.color??"#111111"}/>{item.graphShowLabels!==false&&p.label&&<text x={sx(p.x)+7} y={sy(p.y)-7}>{p.label}</text>}</g>)}
+  </svg></div>;
 }
 
 function TableView({ item }: { item: Item }) {
@@ -990,20 +1000,11 @@ function FlashcardView({ item, onFlip }: { item: Item; onFlip?: () => void }) {
 }
 
 function CoverView({ item, onToggle }: { item: Item; onToggle?: () => void }) {
-  const open = item.coverOpen === true;
-  const accent = item.color ?? "#5355c9";
-  return (
-    <div className={`cover-view ${open ? "open" : "closed"}`} style={{ borderColor: accent, background: open ? `${accent}10` : accent, fontSize: item.fontSize ?? 17 }}>
-      <div className="cover-view-inner">
-        <Icon name={open ? "eye-off" : "eye"} size={18} />
-        <strong>{open ? "Ответ открыт" : (item.text.trim() || "Открыть ответ")}</strong>
-        {open && <span>{item.text.trim() || "Нажмите, чтобы снова закрыть"}</span>}
-      </div>
-      <button type="button" className="cover-toggle" disabled={!onToggle || item.locked} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onToggle?.(); }} title={open ? "Закрыть шторку" : "Открыть шторку"}>
-        <Icon name={open ? "eye-off" : "eye"} size={14}/><span>{open ? "Закрыть" : "Открыть"}</span>
-      </button>
-    </div>
-  );
+  const accent=item.color??"#5355c9";
+  const open=item.coverOpen===true;
+  return <div className={`cover-view ${open?"open":"closed"}`} style={{background:open?"transparent":accent}}>
+    {onToggle&&<button type="button" className="cover-toggle" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onToggle()}} title={open?"Закрыть шторку":"Открыть шторку"}><Icon name={open?"eye-off":"eye"} size={15}/></button>}
+  </div>;
 }
 
 function CommentCard({ item }: { item: Item }) {
@@ -1204,7 +1205,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [studyTab, setStudyTab] = useState<"quiz"|"flashcards">("quiz");
   const [studyCardIndex, setStudyCardIndex] = useState(0);
   const [graphEditorId, setGraphEditorId] = useState<string | null>(null);
-  const [graphDraft, setGraphDraft] = useState<{type:"linear"|"quadratic"|"sin"|"cos";a:number;b:number;c:number;xMin:number;xMax:number;yMin:number;yMax:number;grid:boolean;points:{x:number;y:number;label:string}[];showLabels:boolean;snap:boolean;axisLabels:boolean;gridStep:number;showCurve:boolean;projections:boolean;segments:{a:number;b:number;kind:"segment"|"line"|"ray";label:string;measure:boolean}[];angles:{a:number;vertex:number;b:number;label:string}[];circles:{center:number;edge:number;label:string;measure:boolean}[];polygons:{points:number[];label:string;measure:boolean}[];midpoints:{a:number;b:number;label:string}[]}|null>(null);
+  const [graphDraft, setGraphDraft] = useState<{type:"linear"|"quadratic"|"sin"|"cos";expression:string;connectPoints:boolean;a:number;b:number;c:number;xMin:number;xMax:number;yMin:number;yMax:number;grid:boolean;points:{x:number;y:number;label:string;color?:string}[];showLabels:boolean;snap:boolean;axisLabels:boolean;gridStep:number;showCurve:boolean;projections:boolean;segments:{a:number;b:number;kind:"segment"|"line"|"ray";label:string;measure:boolean}[];angles:{a:number;vertex:number;b:number;label:string}[];circles:{center:number;edge:number;label:string;measure:boolean}[];polygons:{points:number[];label:string;measure:boolean}[];midpoints:{a:number;b:number;label:string}[]}|null>(null);
   const [formulaEditorId, setFormulaEditorId] = useState<string | null>(null);
   const [formulaDraft, setFormulaDraft] = useState<{ text: string; fontSize: number; color: string } | null>(null);
   const [formulaPaletteTab, setFormulaPaletteTab] = useState<FormulaPaletteTab>("basic");
@@ -1287,6 +1288,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const touchPoints = useRef(new Map<number, Point>());
   const pinchState = useRef<{ distance:number; center:Point; view:View } | null>(null);
   const [mobileToolsOpen,setMobileToolsOpen]=useState(false);
+  const [colorMenuOpen,setColorMenuOpen]=useState(false);
   const [desktopToolsExpanded,setDesktopToolsExpanded]=useState(()=>{
     try { return localStorage.getItem("onlinerepetitor.desktopToolsExpanded") === "1"; }
     catch { return false; }
@@ -2265,18 +2267,17 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     if (tool === "hand" && !space && e.button === 0) {
       const family = hit ? familyIdsFor(hit) : [];
       const hitIsSelected = !!hit && family.every((member) => selected.includes(member));
-      const movableIds = hitIsSelected
-        ? selected.filter((member) => {
-            const candidate=itemsRef.current.find((item) => item.id === member);
-            return !!candidate && !candidate.locked && !structurallyLockedForStudent(candidate);
-          })
-        : [];
+      const movableIds = (hitIsSelected ? selected : family).filter((member) => {
+        const candidate=itemsRef.current.find((item) => item.id === member);
+        return !!candidate && !candidate.locked && !structurallyLockedForStudent(candidate);
+      });
+      if (e.pointerType === "touch" && hit && !hitIsSelected) setSelected(family);
 
       /* Touch needs capture immediately. Waiting for the movement threshold on
          Android can produce pointercancel/retargeting, which made selected
          attachments jump a few pixels and then snap back. For an already
          selected object use the proven normal drag path from pointerdown. */
-      if (e.pointerType === "touch" && hitIsSelected && movableIds.length) {
+      if (e.pointerType === "touch" && hit && movableIds.length) {
         e.preventDefault();
         e.stopPropagation();
         gesture.current = {
@@ -2369,7 +2370,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       setTableDraft({ rows, cols, cells: [...cells], header: true, fontSize: 13, align: "left", stripe: false, compact: false });
       return;
     } else if (tool === "graph") {
-      e.preventDefault(); const item: Item={id:createId(),kind:"graph",x:p.x-260,y:p.y-170,width:520,height:340,text:"",graphType:"quadratic",graphA:1,graphB:0,graphC:0,graphXMin:-10,graphXMax:10,graphYMin:-10,graphYMax:10,graphGrid:true,graphPoints:[],graphShowLabels:true,graphSnap:true,graphAxisLabels:true,graphGridStep:1,graphShowCurve:true,graphProjections:false,graphSegments:[],graphAngles:[],graphCircles:[],graphPolygons:[],graphMidpoints:[],color:"#5355c9"}; commit([...itemsRef.current,item]);setSelected([item.id]);setTool("select");window.setTimeout(()=>openGraphEditor(item),0);return;
+      e.preventDefault(); const item: Item={id:createId(),kind:"graph",x:p.x-260,y:p.y-170,width:520,height:340,text:"",graphType:"quadratic",graphExpression:"",graphConnectPoints:true,graphA:1,graphB:0,graphC:0,graphXMin:-10,graphXMax:10,graphYMin:-10,graphYMax:10,graphGrid:true,graphPoints:[],graphShowLabels:true,graphSnap:true,graphAxisLabels:true,graphGridStep:1,graphShowCurve:true,graphProjections:false,graphSegments:[],graphAngles:[],graphCircles:[],graphPolygons:[],graphMidpoints:[],color:"#5355c9"}; commit([...itemsRef.current,item]);setSelected([item.id]);setTool("select");window.setTimeout(()=>openGraphEditor(item),0);return;
     } else if (tool === "formula") {
       e.preventDefault();
       const item: Item = { id: createId(), kind: "formula", x: p.x - 190, y: p.y - 70, width: 380, height: 140, text: "x^2 + y^2 = r^2", fontSize: 28, color: "#20242c" };
@@ -2414,11 +2415,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       return;
     } else if (tool === "cover") {
       e.preventDefault();
-      const item: Item = { id: createId(), kind: "cover", x: p.x - 170, y: p.y - 90, width: 340, height: 180, text: "Открыть ответ", coverOpen: false, fontSize: 17, color: "#5355c9" };
+      const item: Item = { id: createId(), kind: "cover", x: p.x - 170, y: p.y - 90, width: 340, height: 180, text: "Шторка", coverOpen: false, coverOpacity: 1, fontSize: 17, color: "#5355c9" };
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
-      window.setTimeout(() => startEdit(item), 0);
       return;
     } else if (tool === "sticky" || tool === "text" || tool === "shape") {
       e.preventDefault();
@@ -2480,7 +2480,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         setNotice("Создана копия · продолжайте перетаскивать");
       }
     }
-    if (mode !== "drag") e.preventDefault();
+    e.preventDefault();
     const connectorStartHit = mode === "connector"
       ? connectorAnchor(p, itemsRef.current, 18 / view.zoom)
       : null;
@@ -2733,7 +2733,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       if (gesture.current) return;
       if ((e.code === "Enter" || e.code === "F2") && selected.length === 1) {
         const item = itemsRef.current.find((i) => i.id === selected[0]);
-        if (item && !item.locked && (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "formula" || item.kind === "table" || item.kind === "checklist" || item.kind === "quiz" || item.kind === "flashcard" || item.kind === "cover" || item.kind === "linkmedia")) {
+        if (item && !item.locked && (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "formula" || item.kind === "table" || item.kind === "checklist" || item.kind === "quiz" || item.kind === "flashcard" || item.kind === "linkmedia")) {
           e.preventDefault();
           if (item.kind === "table") openTableEditor(item); else if (item.kind === "formula") openFormulaEditor(item); else if (item.kind === "checklist") openChecklistEditor(item); else if (item.kind === "quiz") openQuizEditor(item); else if (item.kind === "flashcard") openFlashcardEditor(item); else if (item.kind === "linkmedia") openLinkMediaEditor(item); else startEdit(item);
           return;
@@ -2927,6 +2927,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const selectionToolbarLeft = selectionScreenBounds
     ? Math.max(54,Math.min((board.current?.clientWidth??window.innerWidth)-54,selectionScreenBounds.left+selectionScreenBounds.width/2))
     : 0;
+  const objectEditorOpen = !!(tableEditorId || checklistEditorId || quizEditorId || flashcardEditorId || graphEditorId || formulaEditorId || frameNotesEditorId || linkMediaOpen);
 
   const selectionToolbarPointerDown=(event:React.PointerEvent<HTMLDivElement>)=>{
     event.stopPropagation();
@@ -3160,7 +3161,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
           const c = item.color ?? "#6064d4"; ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 3;
           if (item.shapeType === "ellipse") { ctx.beginPath(); ctx.ellipse(cx, cy, item.width / 2 - 3, item.height / 2 - 3, 0, 0, Math.PI * 2); ctx.stroke(); }
           else if (item.shapeType === "diamond") { ctx.beginPath(); ctx.moveTo(cx, item.y + 3); ctx.lineTo(item.x + item.width - 3, cy); ctx.lineTo(cx, item.y + item.height - 3); ctx.lineTo(item.x + 3, cy); ctx.closePath(); ctx.stroke(); }
-          else if (item.shapeType === "triangle") { ctx.beginPath(); ctx.moveTo(cx, item.y + 3); ctx.lineTo(item.x + item.width - 4, item.y + item.height - 4); ctx.lineTo(item.x + 4, item.y + item.height - 4); ctx.closePath(); ctx.fill(); }
+          else if (item.shapeType === "circle") { const r=Math.min(item.width,item.height)/2-3;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke(); }
+          else if (item.shapeType === "square") { const side=Math.min(item.width,item.height)-6;ctx.strokeRect(cx-side/2,cy-side/2,side,side); }
+          else if (item.shapeType === "triangle") { ctx.beginPath(); ctx.moveTo(cx, item.y + 3); ctx.lineTo(item.x + item.width - 4, item.y + item.height - 4); ctx.lineTo(item.x + 4, item.y + item.height - 4); ctx.closePath(); ctx.stroke(); }
+          else if (item.shapeType === "rightTriangle") { ctx.beginPath();ctx.moveTo(item.x+4,item.y+4);ctx.lineTo(item.x+4,item.y+item.height-4);ctx.lineTo(item.x+item.width-4,item.y+item.height-4);ctx.closePath();ctx.stroke(); }
+          else if (item.shapeType === "parallelogram") { ctx.beginPath();ctx.moveTo(item.x+item.width*.22,item.y+3);ctx.lineTo(item.x+item.width-3,item.y+3);ctx.lineTo(item.x+item.width*.78,item.y+item.height-3);ctx.lineTo(item.x+3,item.y+item.height-3);ctx.closePath();ctx.stroke(); }
+          else if (item.shapeType === "trapezoid") { ctx.beginPath();ctx.moveTo(item.x+item.width*.22,item.y+3);ctx.lineTo(item.x+item.width*.78,item.y+3);ctx.lineTo(item.x+item.width-3,item.y+item.height-3);ctx.lineTo(item.x+3,item.y+item.height-3);ctx.closePath();ctx.stroke(); }
+          else if (item.shapeType === "pentagon") { ctx.beginPath();ctx.moveTo(cx,item.y+3);ctx.lineTo(item.x+item.width-3,item.y+item.height*.38);ctx.lineTo(item.x+item.width*.78,item.y+item.height-3);ctx.lineTo(item.x+item.width*.22,item.y+item.height-3);ctx.lineTo(item.x+3,item.y+item.height*.38);ctx.closePath();ctx.stroke(); }
           else if (item.shapeType === "arrow") { ctx.beginPath(); ctx.moveTo(item.x + 4, cy - item.height * .12); ctx.lineTo(item.x + item.width * .62, cy - item.height * .12); ctx.lineTo(item.x + item.width * .62, item.y + item.height * .2); ctx.lineTo(item.x + item.width - 4, cy); ctx.lineTo(item.x + item.width * .62, item.y + item.height * .8); ctx.lineTo(item.x + item.width * .62, cy + item.height * .12); ctx.lineTo(item.x + 4, cy + item.height * .12); ctx.closePath(); ctx.fill(); }
           else if (item.shapeType === "hexagon") { ctx.beginPath(); ctx.moveTo(item.x + item.width * .25, item.y + 3); ctx.lineTo(item.x + item.width * .75, item.y + 3); ctx.lineTo(item.x + item.width - 3, cy); ctx.lineTo(item.x + item.width * .75, item.y + item.height - 3); ctx.lineTo(item.x + item.width * .25, item.y + item.height - 3); ctx.lineTo(item.x + 3, cy); ctx.closePath(); ctx.fill(); }
           else if (item.shapeType === "star") { ctx.beginPath(); for (let n = 0; n < 10; n++) { const a = -Math.PI / 2 + n * Math.PI / 5; const r = n % 2 === 0 ? Math.min(item.width, item.height) * .46 : Math.min(item.width, item.height) * .2; const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r; n ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.fill(); }
@@ -3467,12 +3474,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 
   const openGraphEditor = (item: Item) => {
     if(item.kind!=="graph"||item.locked)return; setSelected([item.id]); setGraphEditorId(item.id);
-    setGraphDraft({type:item.graphType??"quadratic",a:item.graphA??1,b:item.graphB??0,c:item.graphC??0,xMin:item.graphXMin??-10,xMax:item.graphXMax??10,yMin:item.graphYMin??-10,yMax:item.graphYMax??10,grid:item.graphGrid!==false,points:(item.graphPoints??[]).map(p=>({...p})),showLabels:item.graphShowLabels!==false,snap:item.graphSnap!==false,axisLabels:item.graphAxisLabels!==false,gridStep:item.graphGridStep??1,showCurve:item.graphShowCurve!==false,projections:item.graphProjections===true,segments:(item.graphSegments??[]).map(s=>({...s})),angles:(item.graphAngles??[]).map(g=>({...g})),circles:(item.graphCircles??[]).map(g=>({...g})),polygons:(item.graphPolygons??[]).map(g=>({...g,points:[...g.points]})),midpoints:(item.graphMidpoints??[]).map(g=>({...g}))});
+    setGraphDraft({type:item.graphType??"quadratic",expression:item.graphExpression??"",connectPoints:item.graphConnectPoints!==false,a:item.graphA??1,b:item.graphB??0,c:item.graphC??0,xMin:item.graphXMin??-10,xMax:item.graphXMax??10,yMin:item.graphYMin??-10,yMax:item.graphYMax??10,grid:item.graphGrid!==false,points:(item.graphPoints??[]).map(p=>({...p})),showLabels:item.graphShowLabels!==false,snap:item.graphSnap!==false,axisLabels:item.graphAxisLabels!==false,gridStep:item.graphGridStep??1,showCurve:item.graphShowCurve!==false,projections:item.graphProjections===true,segments:(item.graphSegments??[]).map(s=>({...s})),angles:(item.graphAngles??[]).map(g=>({...g})),circles:(item.graphCircles??[]).map(g=>({...g})),polygons:(item.graphPolygons??[]).map(g=>({...g,points:[...g.points]})),midpoints:(item.graphMidpoints??[]).map(g=>({...g}))});
   };
   const closeGraphEditor=()=>{setGraphEditorId(null);setGraphDraft(null)};
-  const copyGraphPoints = async () => { if(!graphDraft?.points.length){setNotice("На плоскости пока нет точек");return} const value=graphDraft.points.map((p,i)=>`${p.label||String.fromCharCode(65+i)}\t${p.x}\t${p.y}`).join("\n"); try{await navigator.clipboard.writeText(value);setNotice("Координаты точек скопированы")}catch{setNotice("Не удалось скопировать координаты")} };
-  const autoFitGraph = () => { if(!graphDraft)return; if(!graphDraft.points.length){setGraphDraft({...graphDraft,xMin:-10,xMax:10,yMin:-10,yMax:10});return} const xs=graphDraft.points.map(p=>p.x),ys=graphDraft.points.map(p=>p.y),dx=Math.max(2,(Math.max(...xs)-Math.min(...xs))*.15),dy=Math.max(2,(Math.max(...ys)-Math.min(...ys))*.15); setGraphDraft({...graphDraft,xMin:Math.floor(Math.min(...xs)-dx),xMax:Math.ceil(Math.max(...xs)+dx),yMin:Math.floor(Math.min(...ys)-dy),yMax:Math.ceil(Math.max(...ys)+dy)}); };
-  const saveGraphEditor=()=>{if(!graphEditorId||!graphDraft){closeGraphEditor();return} const d={...graphDraft,xMin:Math.min(graphDraft.xMin,graphDraft.xMax-1),xMax:Math.max(graphDraft.xMax,graphDraft.xMin+1),yMin:Math.min(graphDraft.yMin,graphDraft.yMax-1),yMax:Math.max(graphDraft.yMax,graphDraft.yMin+1)}; commit(itemsRef.current.map(item=>item.id===graphEditorId?{...item,graphType:d.type,graphA:d.a,graphB:d.b,graphC:d.c,graphXMin:d.xMin,graphXMax:d.xMax,graphYMin:d.yMin,graphYMax:d.yMax,graphGrid:d.grid,graphPoints:d.points,graphShowLabels:d.showLabels,graphSnap:d.snap,graphAxisLabels:d.axisLabels,graphGridStep:d.gridStep,graphShowCurve:d.showCurve,graphProjections:d.projections,graphSegments:d.segments,graphAngles:d.angles,graphCircles:d.circles,graphPolygons:d.polygons,graphMidpoints:d.midpoints}:item)); closeGraphEditor(); setNotice("График сохранён")};
+  const saveGraphEditor=()=>{if(!graphEditorId||!graphDraft){closeGraphEditor();return} const d={...graphDraft,xMin:Math.min(graphDraft.xMin,graphDraft.xMax-1),xMax:Math.max(graphDraft.xMax,graphDraft.xMin+1),yMin:Math.min(graphDraft.yMin,graphDraft.yMax-1),yMax:Math.max(graphDraft.yMax,graphDraft.yMin+1)}; commit(itemsRef.current.map(item=>item.id===graphEditorId?{...item,graphType:d.type,graphExpression:d.expression,graphConnectPoints:d.connectPoints,graphA:d.a,graphB:d.b,graphC:d.c,graphXMin:d.xMin,graphXMax:d.xMax,graphYMin:d.yMin,graphYMax:d.yMax,graphGrid:d.grid,graphPoints:d.points,graphShowLabels:d.showLabels,graphSnap:d.snap,graphAxisLabels:d.axisLabels,graphGridStep:d.gridStep,graphShowCurve:d.showCurve,graphProjections:d.projections,graphSegments:d.segments,graphAngles:d.angles,graphCircles:d.circles,graphPolygons:d.polygons,graphMidpoints:d.midpoints}:item)); closeGraphEditor(); setNotice("График сохранён")};
 
   const openFormulaEditor = (item: Item) => {
     if (item.kind !== "formula" || item.locked) return;
@@ -3954,7 +3959,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 
   const changeFontSize = (delta: number) => {
     if (!singleSelected || selectionLocked || (singleSelected.kind !== "text" && singleSelected.kind !== "sticky" && singleSelected.kind !== "formula" && singleSelected.kind !== "table" && singleSelected.kind !== "checklist" && singleSelected.kind !== "quiz" && singleSelected.kind !== "flashcard" && singleSelected.kind !== "cover")) return;
-    const fallback = singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20;
+    const fallback = singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : 20;
     const min = singleSelected.kind === "table" ? 9 : singleSelected.kind === "formula" ? 12 : 10;
     const max = singleSelected.kind === "table" || singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 32 : singleSelected.kind === "flashcard" || singleSelected.kind === "cover" ? 48 : 96;
     const nextSize = Math.max(min, Math.min(max, (singleSelected.fontSize ?? fallback) + delta));
@@ -4952,7 +4957,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             </div>
           </div>
         )}
-        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal" role="dialog" aria-modal="true" onPointerDown={(e)=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График функции</strong><span>Координатная плоскость и параметры функции</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><div className="graph-presets"><button type="button" onClick={()=>setGraphDraft({...graphDraft,type:"linear",a:1,b:0,c:0})}>y=x</button><button type="button" onClick={()=>setGraphDraft({...graphDraft,type:"quadratic",a:1,b:0,c:0})}>y=x²</button><button type="button" onClick={()=>setGraphDraft({...graphDraft,type:"sin",a:1,b:1,c:0})}>sin x</button><button type="button" onClick={()=>setGraphDraft({...graphDraft,type:"cos",a:1,b:1,c:0})}>cos x</button></div><label><span>Тип функции</span><select value={graphDraft.type} onChange={e=>setGraphDraft({...graphDraft,type:e.target.value as "linear"|"quadratic"|"sin"|"cos"})}><option value="linear">Линейная y = ax + b</option><option value="quadratic">Парабола y = ax² + bx + c</option><option value="sin">Синус y = a·sin(bx+c)</option><option value="cos">Косинус y = a·cos(bx+c)</option></select></label><div className="graph-coefficients">{(["a","b","c"] as const).map(k=><label key={k}><span>{k}</span><input type="number" step="0.1" value={graphDraft[k]} onChange={e=>setGraphDraft({...graphDraft,[k]:Number(e.target.value)})}/></label>)}</div><strong>Диапазон осей</strong><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Показывать сетку</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.showLabels} onChange={e=>setGraphDraft({...graphDraft,showLabels:e.target.checked})}/> Подписи точек</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option><option value={10}>10</option></select></label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.showCurve} onChange={e=>setGraphDraft({...graphDraft,showCurve:e.target.checked})}/> Показывать график функции</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.projections} onChange={e=>setGraphDraft({...graphDraft,projections:e.target.checked})}/> Проекции точек на оси</label><div className="graph-quick-actions"><button type="button" onClick={()=>setGraphDraft({...graphDraft,xMin:-10,xMax:10,yMin:-10,yMax:10})}>Центр -10...10</button><button type="button" onClick={autoFitGraph}>Автодиапазон</button><button type="button" disabled={!graphDraft.points.length} onClick={()=>void copyGraphPoints()}>Копировать точки</button></div><div className="graph-points-editor"><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:String.fromCharCode(65+Math.min(25,graphDraft.points.length))}]})}>+ Точка</button></div>{graphDraft.points.length>=2&&<><div className="graph-geometry-section"><div className="graph-points-head"><strong>Линии и отрезки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,segments:[...graphDraft.segments,{a:0,b:1,kind:"segment",label:"",measure:true}]})}>+ Связь</button></div>{graphDraft.segments.map((s,i)=><div className="graph-geometry-row" key={i}><select value={s.a} onChange={e=>setGraphDraft({...graphDraft,segments:graphDraft.segments.map((q,j)=>j===i?{...q,a:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>{p.label||j+1}</option>)}</select><select value={s.kind} onChange={e=>setGraphDraft({...graphDraft,segments:graphDraft.segments.map((q,j)=>j===i?{...q,kind:e.target.value as "segment"|"line"|"ray"}:q)})}><option value="segment">Отрезок</option><option value="line">Прямая</option><option value="ray">Луч</option></select><select value={s.b} onChange={e=>setGraphDraft({...graphDraft,segments:graphDraft.segments.map((q,j)=>j===i?{...q,b:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>{p.label||j+1}</option>)}</select><label className="graph-measure"><input type="checkbox" checked={s.measure} onChange={e=>setGraphDraft({...graphDraft,segments:graphDraft.segments.map((q,j)=>j===i?{...q,measure:e.target.checked}:q)})}/>↔</label><button type="button" onClick={()=>setGraphDraft({...graphDraft,segments:graphDraft.segments.filter((_,j)=>j!==i)})}>×</button></div>)}</div>{graphDraft.points.length>=3&&<div className="graph-geometry-section"><div className="graph-points-head"><strong>Углы</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,angles:[...graphDraft.angles,{a:0,vertex:1,b:2,label:""}]})}>+ Угол</button></div>{graphDraft.angles.map((g,i)=><div className="graph-angle-row" key={i}>{(["a","vertex","b"] as const).map(k=><select key={k} value={g[k]} onChange={e=>setGraphDraft({...graphDraft,angles:graphDraft.angles.map((q,j)=>j===i?{...q,[k]:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>{p.label||j+1}</option>)}</select>)}<button type="button" onClick={()=>setGraphDraft({...graphDraft,angles:graphDraft.angles.filter((_,j)=>j!==i)})}>×</button></div>)}</div>}</>}{graphDraft.points.length>=2&&<div className="graph-geometry-section"><div className="graph-points-head"><strong>Окружности и середины</strong><span><button type="button" onClick={()=>setGraphDraft({...graphDraft,circles:[...graphDraft.circles,{center:0,edge:1,label:"",measure:true}]})}>+ Окружность</button><button type="button" onClick={()=>setGraphDraft({...graphDraft,midpoints:[...graphDraft.midpoints,{a:0,b:1,label:"M"}]})}>+ Середина</button></span></div>{graphDraft.circles.map((g,i)=><div className="graph-simple-row" key={"c"+i}><span>○</span><select value={g.center} onChange={e=>setGraphDraft({...graphDraft,circles:graphDraft.circles.map((q,j)=>j===i?{...q,center:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>центр {p.label||j+1}</option>)}</select><select value={g.edge} onChange={e=>setGraphDraft({...graphDraft,circles:graphDraft.circles.map((q,j)=>j===i?{...q,edge:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>через {p.label||j+1}</option>)}</select><button onClick={()=>setGraphDraft({...graphDraft,circles:graphDraft.circles.filter((_,j)=>j!==i)})}>×</button></div>)}{graphDraft.midpoints.map((g,i)=><div className="graph-simple-row" key={"m"+i}><input value={g.label} maxLength={8} onChange={e=>setGraphDraft({...graphDraft,midpoints:graphDraft.midpoints.map((q,j)=>j===i?{...q,label:e.target.value}:q)})}/><select value={g.a} onChange={e=>setGraphDraft({...graphDraft,midpoints:graphDraft.midpoints.map((q,j)=>j===i?{...q,a:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>{p.label||j+1}</option>)}</select><select value={g.b} onChange={e=>setGraphDraft({...graphDraft,midpoints:graphDraft.midpoints.map((q,j)=>j===i?{...q,b:Number(e.target.value)}:q)})}>{graphDraft.points.map((p,j)=><option key={j} value={j}>{p.label||j+1}</option>)}</select><button onClick={()=>setGraphDraft({...graphDraft,midpoints:graphDraft.midpoints.filter((_,j)=>j!==i)})}>×</button></div>)}</div>}{graphDraft.points.length>=3&&<div className="graph-geometry-section"><div className="graph-points-head"><strong>Многоугольники</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,polygons:[...graphDraft.polygons,{points:[0,1,2],label:"",measure:true}]})}>+ Многоугольник</button></div>{graphDraft.polygons.map((g,i)=><div className="graph-polygon-row" key={i}><input value={g.label} placeholder="Название" onChange={e=>setGraphDraft({...graphDraft,polygons:graphDraft.polygons.map((q,j)=>j===i?{...q,label:e.target.value}:q)})}/><input value={g.points.map(n=>graphDraft.points[n]?.label||n+1).join(", ")} title="Индексы/точки многоугольника" readOnly/><button title="Добавить следующую точку" onClick={()=>{const next=(g.points[g.points.length-1]+1)%graphDraft.points.length;setGraphDraft({...graphDraft,polygons:graphDraft.polygons.map((q,j)=>j===i?{...q,points:[...q.points,next]}:q)})}}>+</button><button onClick={()=>setGraphDraft({...graphDraft,polygons:graphDraft.polygons.filter((_,j)=>j!==i)})}>×</button></div>)}</div>}{graphDraft.points.length===0?<span className="graph-points-empty">Добавьте точки A, B, C...</span>:graphDraft.points.map((p,i)=><div className="graph-point-row" key={i}><input aria-label="Название точки" value={p.label} maxLength={24} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,label:e.target.value}:q)})}/><input aria-label="X точки" type="number" step="0.1" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input aria-label="Y точки" type="number" step="0.1" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><button type="button" title="Удалить точку" onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div></div><div className="graph-editor-preview"><div className="graph-preview-hint">Перетащите точку · двойной щелчок добавляет новую</div><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:520,height:340,text:"",graphType:graphDraft.type,graphA:graphDraft.a,graphB:graphDraft.b,graphC:graphDraft.c,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep,graphShowCurve:graphDraft.showCurve,graphProjections:graphDraft.projections,graphSegments:graphDraft.segments,graphAngles:graphDraft.angles,graphCircles:graphDraft.circles,graphPolygons:graphDraft.polygons,graphMidpoints:graphDraft.midpoints}} onPointMove={(index,x,y)=>setGraphDraft({...graphDraft,points:graphDraft.points.map((p,i)=>i===index?{...p,x,y}:p)})} onAddPoint={(x,y)=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x,y,label:String.fromCharCode(65+Math.min(25,graphDraft.points.length))}]})}/></div></div><div className="graph-editor-footer"><span>Ctrl+Enter — сохранить</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}><Icon name="check" size={15}/> Сохранить</button></div></div></div></div>)}
+        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})} aria-label={`Цвет точки ${i+1}`}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)}/><span className="graph-preview-hint">Двойное нажатие по плоскости добавляет точку</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
         {formulaEditorId && formulaDraft && (
           <div
             className="formula-editor-backdrop"
@@ -5285,12 +5290,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         {tool === "shape" && (
           <div className="shape-palette">
             {([
-              ["rectangle","Прямоугольник"], ["rounded","Скруглённый"], ["ellipse","Эллипс"], ["diamond","Ромб"],
-              ["triangle","Треугольник"], ["hexagon","Шестиугольник"], ["star","Звезда"], ["arrow","Стрелка"],
+              ["rectangle","Прямоугольник"], ["square","Квадрат"], ["circle","Круг"], ["ellipse","Овал"],
+              ["triangle","Треугольник"], ["rightTriangle","Прямоугольный треугольник"], ["diamond","Ромб"], ["parallelogram","Параллелограмм"],
+              ["trapezoid","Трапеция"], ["pentagon","Пятиугольник"], ["hexagon","Шестиугольник"],
             ] as [ShapeType,string][]).map(([id,label]) => (
               <button key={id} title={label} className={shapeType === id ? "active" : ""} onClick={() => setShapeType(id)}>
                 <span className="shape-palette-icon"><ShapeIcon type={id} /></span>
-                <span>{label}</span>
+                <span>{id === "rightTriangle" ? <>Прямоугольный<br/>треугольник</> : label}</span>
               </button>
             ))}
           </div>
@@ -5304,11 +5310,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
-          {!isStudent&&<button type="button" className="mobile-ai-tool" aria-label="AI-помощник" title="AI-помощник" onClick={()=>{finishEdit();setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}}><Icon name="robot" size={20}/></button>}
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
         </nav>
         {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
-          <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions"><button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
+          <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions">{!isStudent&&<button type="button" onClick={()=>{setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}} aria-label="AI-помощник" title="AI-помощник"><Icon name="robot" size={18}/></button>}<button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
             {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
           </div>
@@ -5499,7 +5504,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                     tool === "select" &&
                     !space &&
                     !item.locked &&
-                    (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "cover")
+                    (item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment")
                   ) {
                     startEdit(item);
                   } else if (tool === "select" && !space && !item.locked && item.kind === "formula") {
@@ -5539,7 +5544,12 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
                 {item.kind === "table" && <TableView item={item} />}
                 {item.kind === "formula" && <FormulaView text={item.text} fontSize={item.fontSize ?? 28} color={item.color ?? "#20242c"} />}
-                {item.kind === "graph" && <GraphView item={item}/>}
+                {item.kind === "graph" && <GraphView item={item} onAddPoint={tool === "select" && !item.locked && !structurallyLockedForStudent(item) ? (x,y) => {
+                  const nextPoint={x,y,label:"",color:"#111111"};
+                  commit(itemsRef.current.map((candidate)=>candidate.id===item.id?{...candidate,graphPoints:[...(candidate.graphPoints??[]),nextPoint]}:candidate));
+                  setSelected([item.id]);
+                  setNotice(`Точка добавлена: (${x}; ${y})`);
+                } : undefined}/>}
                 {item.kind === "checklist" && <ChecklistView item={item} onToggle={!presentation && !item.locked ? (indexValue) => {
                   const entries = item.checklistItems?.length ? item.checklistItems : ["Новый пункт"];
                   const nextDone = entries.map((_, index) => index === indexValue ? !(item.checklistDone?.[index] === true) : item.checklistDone?.[index] === true);
@@ -5547,16 +5557,16 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 } : undefined} />}
                 {item.kind === "quiz" && <QuizView item={item} onSelect={!item.locked ? (indexValue) => selectQuizAnswer(item, indexValue) : undefined} />}
                 {item.kind === "flashcard" && <FlashcardView item={item} onFlip={!item.locked ? () => flipFlashcard(item) : undefined} />}
-                {item.kind === "cover" && editing !== item.id && <CoverView item={item} onToggle={!item.locked ? () => toggleCover(item) : undefined} />}
+                {item.kind === "cover" && editing !== item.id && <CoverView item={item} onToggle={!isStudent && !item.locked ? () => toggleCover(item) : undefined} />}
                 {item.locked && <div className="object-lock-badge" aria-label="Объект заблокирован"><Icon name="lock" size={13} /></div>}
-                {(item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment" || item.kind === "cover") &&
+                {(item.kind === "text" || item.kind === "sticky" || item.kind === "frame" || item.kind === "comment") &&
                   (editing === item.id ? (
                     <textarea
                       ref={editor}
                       key={item.id}
                       aria-label="Текст объекта"
-                      className={item.kind === "frame" ? "text-editor frame-editor" : item.kind === "comment" ? "text-editor comment-editor" : item.kind === "cover" ? "text-editor cover-editor" : "text-editor"}
-                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? (item.kind === "cover" ? 17 : 20), ...(item.kind === "text" || item.kind === "sticky" ? { color:item.kind==="text"?(item.color??"#202124"):undefined, lineHeight:item.lineHeight??1.45, textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" } : {}) }}
+                      className={item.kind === "frame" ? "text-editor frame-editor" : item.kind === "comment" ? "text-editor comment-editor" : "text-editor"}
+                      style={item.kind === "frame" || item.kind === "comment" ? undefined : { fontSize: item.fontSize ?? 20, color:item.kind==="text"?(item.color??"#202124"):undefined, lineHeight:item.lineHeight??1.45, textAlign: item.textAlign ?? "left", fontWeight: item.fontWeight ?? "normal", fontStyle: item.fontStyle ?? "normal", textDecoration: item.textDecoration ?? "none" }}
                       value={draft}
                       placeholder="Введите текст…"
                       onChange={(e) => {
@@ -5720,7 +5730,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               <div className="locked-selection-badge"><Icon name="lock" size={13} /> Заблокировано</div>
             </div>
           )}
-          {selectionScreenBounds && selectedItems.length > 0 && !editing && (
+          {selectionScreenBounds && selectedItems.length > 0 && !editing && !objectEditorOpen && (
             <div
               className="selection-toolbar-screen"
               style={{
@@ -5771,11 +5781,8 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   <button type="button" className={singleSelected.flashcardFlipped ? "active" : ""} onClick={() => flipFlashcard(singleSelected)} title="Перевернуть карточку"><Icon name="flip" size={15}/><span>{singleSelected.flashcardFlipped ? "Вопрос" : "Ответ"}</span></button>
                 </span>
               )}
-              {singleSelected?.kind === "cover" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
-                <span className="cover-selection-controls">
-                  <button type="button" onClick={() => startEdit(singleSelected)} title="Изменить подпись шторки"><Icon name="rename" size={15}/><span>Подпись</span></button>
-                  <button type="button" className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title={singleSelected.coverOpen ? "Закрыть шторку" : "Открыть шторку"}><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Открыть"}</span></button>
-                </span>
+              {singleSelected?.kind === "cover" && !isStudent && !selectionLocked && (
+                <span className="cover-selection-controls"><button type="button" className={singleSelected.coverOpen ? "active" : ""} onClick={() => toggleCover(singleSelected)} title={singleSelected.coverOpen ? "Закрыть шторку" : "Открыть шторку"}><Icon name={singleSelected.coverOpen ? "eye-off" : "eye"} size={15}/><span>{singleSelected.coverOpen ? "Закрыть" : "Открыть"}</span></button></span>
               )}
               {singleSelected?.kind === "graph" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (<span className="graph-selection-controls"><button type="button" onClick={()=>openGraphEditor(singleSelected)} title="Параметры графика"><Icon name="graph" size={15}/><span>График</span></button></span>)}
               {singleSelected?.kind === "formula" && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
@@ -5785,24 +5792,13 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 </span>
               )}
 
-              {singleSelected?.kind === "sticky" && !selectionLocked && (
-                <span className="sticky-colors" title="Цвет стикера">
-                  {["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff"].map((value) => (
-                    <button type="button" key={value} className="sticky-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет стикера ${value}`} />
-                  ))}
-                </span>
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover" || singleSelected?.kind === "connector") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <span className="object-color-menu"><button type="button" className="object-color-trigger" onClick={()=>setColorMenuOpen(v=>!v)} title="Цвет"><span style={{background:singleSelected.color??"#5355c9"}}/>Цвет</button>{colorMenuOpen&&<span className="object-color-popover">{(singleSelected.kind==="sticky"?["#fff3a6","#ffd9de","#dff5c8","#dcecff","#eadcff","#ffffff"]:["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6","#0ea5e9","#64748b","#ffffff"]).map(value=><button type="button" key={value} className="object-color-square" style={{background:value}} onClick={()=>{recolorSelected(value);setColorMenuOpen(false)}} aria-label={`Цвет ${value}`}/>)}</span>}</span>
               )}
-              {(singleSelected?.kind === "shape" || singleSelected?.kind === "frame" || singleSelected?.kind === "formula" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
-                <span className="object-colors" title="Цвет объекта">
-                  {["#6064d4","#2f855a","#d97706","#dc4c64","#475569","#8b5cf6"].map((value) => (
-                    <button type="button" key={value} className="object-color-button" style={{ background: value }} onClick={() => recolorSelected(value)} aria-label={`Цвет объекта ${value}`} />
-                  ))}
-                </span>
-              )}
-              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard" || singleSelected?.kind === "cover") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
-                <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : singleSelected.kind === "cover" ? "Размер текста шторки" : "Размер текста"}>
+              {(singleSelected?.kind === "text" || singleSelected?.kind === "sticky" || singleSelected?.kind === "formula" || singleSelected?.kind === "table" || singleSelected?.kind === "checklist" || singleSelected?.kind === "quiz" || singleSelected?.kind === "flashcard") && !selectionLocked && !structurallyLockedForStudent(singleSelected) && (
+                <span className="font-size-controls" title={singleSelected.kind === "formula" ? "Размер формулы" : singleSelected.kind === "table" ? "Размер текста таблицы" : singleSelected.kind === "checklist" ? "Размер текста чек-листа" : singleSelected.kind === "quiz" ? "Размер текста вопроса" : singleSelected.kind === "flashcard" ? "Размер текста карточки" : "Размер текста"}>
                   <button type="button" onClick={() => changeFontSize(-2)} aria-label="Уменьшить размер">A−</button>
-                  <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : singleSelected.kind === "cover" ? 17 : 20)}</span>
+                  <span>{singleSelected.fontSize ?? (singleSelected.kind === "formula" ? 28 : singleSelected.kind === "table" ? 13 : singleSelected.kind === "checklist" || singleSelected.kind === "quiz" ? 15 : singleSelected.kind === "flashcard" ? 18 : 20)}</span>
                   <button type="button" onClick={() => changeFontSize(2)} aria-label="Увеличить размер">A+</button>
                 </span>
               )}
@@ -5819,7 +5815,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   <button type="button" className={(singleSelected.textList??"none")==="bullet"?"active":""} onClick={()=>setSelectedTextStyle({textList:(singleSelected.textList??"none")==="bullet"?"none":"bullet"})} title="Маркированный список">•≡</button>
                   <button type="button" className={singleSelected.textList==="number"?"active":""} onClick={()=>setSelectedTextStyle({textList:singleSelected.textList==="number"?"none":"number"})} title="Нумерованный список">1≡</button>
                   <select className="text-line-height" value={singleSelected.lineHeight??1.45} onChange={e=>setSelectedTextStyle({lineHeight:Number(e.target.value)})} title="Межстрочный интервал"><option value={1}>1,0</option><option value={1.2}>1,2</option><option value={1.45}>1,45</option><option value={1.75}>1,75</option><option value={2}>2,0</option></select>
-                  {singleSelected.kind==="text"&&<span className="text-color-palette">{["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6"].map(value=><button type="button" key={value} className="text-color-button" style={{background:value}} onClick={()=>recolorSelected(value)} aria-label={`Цвет текста ${value}`}/>)}</span>}
+
                 </span>
               )}
               {singleSelected?.kind === "connector" && !selectionLocked && (

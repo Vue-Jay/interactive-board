@@ -38,8 +38,20 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-const APP_BUILD_VERSION = "176";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v176";
+
+// The board owns zoom. Prevent browser/page zoom from moving the surrounding UI.
+const preventPageZoom = (event: WheelEvent) => {
+  if (event.ctrlKey || event.metaKey) event.preventDefault();
+};
+const preventZoomShortcut = (event: KeyboardEvent) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (["+", "=", "-", "0"].includes(event.key)) event.preventDefault();
+};
+window.addEventListener("wheel", preventPageZoom, { passive: false, capture: true });
+window.addEventListener("keydown", preventZoomShortcut, { capture: true });
+
+const APP_BUILD_VERSION = "225";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.update-reload.v225";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;

@@ -1,6 +1,6 @@
 export type Point = { x: number; y: number };
 export type View = Point & { zoom: number };
-export type ShapeType = "rectangle" | "rounded" | "ellipse" | "diamond" | "triangle" | "hexagon" | "star" | "arrow";
+export type ShapeType = "rectangle" | "square" | "rounded" | "ellipse" | "circle" | "diamond" | "triangle" | "rightTriangle" | "parallelogram" | "trapezoid" | "pentagon" | "hexagon" | "star" | "arrow";
 export type ConnectorStyle = "line" | "arrow" | "double";
 export type ConnectorRouting = "straight" | "elbow";
 export type ConnectorBinding = { itemId: string; nx: number; ny: number };
@@ -45,10 +45,12 @@ export type Item = {
   tableStripe?: boolean;
   tableCompact?: boolean;
   graphType?: "linear" | "quadratic" | "sin" | "cos";
+  graphExpression?: string;
+  graphConnectPoints?: boolean;
   graphA?: number; graphB?: number; graphC?: number;
   graphXMin?: number; graphXMax?: number; graphYMin?: number; graphYMax?: number;
   graphGrid?: boolean;
-  graphPoints?: { x:number; y:number; label:string }[];
+  graphPoints?: { x:number; y:number; label:string; color?:string }[];
   graphShowLabels?: boolean;
   graphSegments?: { a:number; b:number; kind:"segment"|"line"|"ray"; label:string; measure:boolean }[];
   graphAngles?: { a:number; vertex:number; b:number; label:string }[];
@@ -75,6 +77,7 @@ export type Item = {
   flashcardFlipped?: boolean;
   flashcardMastery?: "again" | "known";
   coverOpen?: boolean;
+  coverOpacity?: number;
   mediaUrl?: string;
   mediaTitle?: string;
 };
@@ -83,7 +86,7 @@ export const STORAGE_KEY = "lesson-board.document.v1";
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e9;
 const point = (v: unknown): boolean => !!v && typeof v === "object" && finite((v as Point).x) && finite((v as Point).y);
 const color = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
-const shapes: ShapeType[] = ["rectangle","rounded","ellipse","diamond","triangle","hexagon","star","arrow"];
+const shapes: ShapeType[] = ["rectangle","square","rounded","ellipse","circle","diamond","triangle","rightTriangle","parallelogram","trapezoid","pentagon","hexagon","star","arrow"];
 const connectorStyles: ConnectorStyle[] = ["line","arrow","double"];
 const connectorRoutings: ConnectorRouting[] = ["straight","elbow"];
 const binding = (v: unknown): v is ConnectorBinding => !!v && typeof v === "object" && typeof (v as ConnectorBinding).itemId === "string" && finite((v as ConnectorBinding).nx) && finite((v as ConnectorBinding).ny) && (v as ConnectorBinding).nx >= 0 && (v as ConnectorBinding).nx <= 1 && (v as ConnectorBinding).ny >= 0 && (v as ConnectorBinding).ny <= 1;
@@ -128,9 +131,11 @@ export function parseDocument(raw: string): DocumentData {
     }
     if (i.kind === "graph") {
       if (i.graphType != null && !["linear","quadratic","sin","cos"].includes(i.graphType)) throw new Error("Повреждён тип графика");
+      if (i.graphExpression != null && (typeof i.graphExpression !== "string" || i.graphExpression.length > 500)) throw new Error("Повреждена функция графика");
+      if (i.graphConnectPoints != null && typeof i.graphConnectPoints !== "boolean") throw new Error("Повреждено соединение точек");
       for (const value of [i.graphA,i.graphB,i.graphC,i.graphXMin,i.graphXMax,i.graphYMin,i.graphYMax]) if (value != null && !finite(value)) throw new Error("Повреждены параметры графика");
       if (i.graphGrid != null && typeof i.graphGrid !== "boolean") throw new Error("Повреждена сетка графика");
-      if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24))) throw new Error("Повреждены точки графика");
+      if (i.graphPoints != null && (!Array.isArray(i.graphPoints) || i.graphPoints.length > 40 || !i.graphPoints.every((p: unknown) => !!p && typeof p === "object" && finite((p as {x:number}).x) && finite((p as {y:number}).y) && typeof (p as {label:string}).label === "string" && (p as {label:string}).label.length <= 24 && ((p as {color?:unknown}).color == null || color((p as {color?:unknown}).color))))) throw new Error("Повреждены точки графика");
       if (i.graphShowLabels != null && typeof i.graphShowLabels !== "boolean") throw new Error("Повреждены подписи графика");
       if (i.graphSnap != null && typeof i.graphSnap !== "boolean") throw new Error("Повреждена привязка графика");
       if (i.graphAxisLabels != null && typeof i.graphAxisLabels !== "boolean") throw new Error("Повреждены подписи осей графика");
@@ -193,6 +198,7 @@ export function parseDocument(raw: string): DocumentData {
     if (i.kind === "cover") {
       if (i.text.length > 5000) throw new Error("Подпись шторки слишком длинная");
       if (i.coverOpen != null && typeof i.coverOpen !== "boolean") throw new Error("Повреждено состояние шторки");
+      if (i.coverOpacity != null && (!finite(i.coverOpacity) || i.coverOpacity < 0 || i.coverOpacity > 1)) throw new Error("Повреждена прозрачность шторки");
       if (i.fontSize != null && (!finite(i.fontSize) || i.fontSize < 10 || i.fontSize > 48)) throw new Error("Повреждён размер текста шторки");
       if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет шторки");
     }
@@ -242,6 +248,32 @@ export function parseDocument(raw: string): DocumentData {
         ...(color(i.color) ? { color: i.color } : {}),
       } : {}),
       ...(i.kind === "formula" && finite(i.fontSize) && i.fontSize >= 12 && i.fontSize <= 96 ? { fontSize: i.fontSize } : {}),
+      ...(i.kind === "graph" ? {
+        graphType: i.graphType ?? "quadratic",
+        graphExpression: typeof i.graphExpression === "string" ? i.graphExpression.slice(0, 500) : "",
+        graphConnectPoints: i.graphConnectPoints !== false,
+        graphA: finite(i.graphA) ? i.graphA : 1,
+        graphB: finite(i.graphB) ? i.graphB : 0,
+        graphC: finite(i.graphC) ? i.graphC : 0,
+        graphXMin: finite(i.graphXMin) ? i.graphXMin : -10,
+        graphXMax: finite(i.graphXMax) ? i.graphXMax : 10,
+        graphYMin: finite(i.graphYMin) ? i.graphYMin : -10,
+        graphYMax: finite(i.graphYMax) ? i.graphYMax : 10,
+        graphGrid: i.graphGrid !== false,
+        graphPoints: Array.isArray(i.graphPoints) ? i.graphPoints.slice(0,40).map((p) => ({ x:p.x, y:p.y, label:String(p.label ?? "").slice(0,24), ...(color(p.color) ? { color:p.color } : {}) })) : [],
+        graphShowLabels: i.graphShowLabels !== false,
+        graphSnap: i.graphSnap !== false,
+        graphAxisLabels: i.graphAxisLabels !== false,
+        graphGridStep: finite(i.graphGridStep) ? i.graphGridStep : 1,
+        graphShowCurve: i.graphShowCurve !== false,
+        graphProjections: i.graphProjections === true,
+        graphSegments: Array.isArray(i.graphSegments) ? i.graphSegments.map((value) => ({ ...value })) : [],
+        graphAngles: Array.isArray(i.graphAngles) ? i.graphAngles.map((value) => ({ ...value })) : [],
+        graphCircles: Array.isArray(i.graphCircles) ? i.graphCircles.map((value) => ({ ...value })) : [],
+        graphPolygons: Array.isArray(i.graphPolygons) ? i.graphPolygons.map((value) => ({ ...value, points:[...value.points] })) : [],
+        graphMidpoints: Array.isArray(i.graphMidpoints) ? i.graphMidpoints.map((value) => ({ ...value })) : [],
+        color: color(i.color) ? i.color : "#5355c9",
+      } : {}),
       ...(i.kind === "checklist" ? {
         checklistItems: Array.isArray(i.checklistItems) ? i.checklistItems.map((value) => String(value).slice(0, 2000)) : ["Новый пункт"],
         checklistDone: Array.isArray(i.checklistDone) ? i.checklistDone.map((value) => value === true) : [false],
@@ -267,6 +299,7 @@ export function parseDocument(raw: string): DocumentData {
       ...(i.kind === "linkmedia" ? { mediaUrl: i.mediaUrl, ...(typeof i.mediaTitle === "string" ? { mediaTitle: i.mediaTitle.slice(0,500) } : {}) } : {}),
       ...(i.kind === "cover" ? {
         coverOpen: i.coverOpen === true,
+        coverOpacity: finite(i.coverOpacity) ? Math.max(0, Math.min(1, i.coverOpacity)) : 1,
         ...(finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 48 ? { fontSize: i.fontSize } : {}),
         color: color(i.color) ? i.color : "#5355c9",
       } : {}),
