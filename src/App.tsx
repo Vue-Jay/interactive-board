@@ -23,7 +23,6 @@ const BillingScreen = lazy(() => import("./BillingScreen"));
 const AiStudioScreen = lazy(() => import("./AiStudioScreen"));
 const AdminScreen = lazy(() => import("./AdminScreen"));
 const TemplatesScreen = lazy(() => import("./TemplatesScreen"));
-const TestingGuideScreen = lazy(() => import("./TestingGuideScreen"));
 import { clearNotificationCache } from "./notificationsStore";
 import { clearAiBoardTransfer, peekAiBoardTransfer } from "./aiLocalStore";
 import { generateMathAi, type MathAiLevel, type MathAiMode } from "./aiMathGenerator";
@@ -5973,7 +5972,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   <button type="button" className={(singleSelected.textList??"none")==="bullet"?"active":""} onClick={()=>setSelectedTextStyle({textList:(singleSelected.textList??"none")==="bullet"?"none":"bullet"})} title="Маркированный список">•≡</button>
                   <button type="button" className={singleSelected.textList==="number"?"active":""} onClick={()=>setSelectedTextStyle({textList:singleSelected.textList==="number"?"none":"number"})} title="Нумерованный список">1≡</button>
                   <select className="text-line-height" value={singleSelected.lineHeight??1.45} onChange={e=>setSelectedTextStyle({lineHeight:Number(e.target.value)})} title="Межстрочный интервал"><option value={1}>1,0</option><option value={1.2}>1,2</option><option value={1.45}>1,45</option><option value={1.75}>1,75</option><option value={2}>2,0</option></select>
-                  {singleSelected.kind==="text"&&<span className="text-color-palette">{["#202124","#5355c9","#2f855a","#d97706","#dc4c64","#8b5cf6"].map(value=><button type="button" key={value} className="text-color-button" style={{background:value}} onClick={()=>recolorSelected(value)} aria-label={`Цвет текста ${value}`}/>)}</span>}
+                  
                 </span>
               )}
               {singleSelected?.kind === "connector" && !selectionLocked && (
@@ -6525,8 +6524,6 @@ export default function App() {
           ? <BillingScreen onBack={()=>{window.history.pushState({}, "", "/?section=settings");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="ai"
           ? <AiStudioScreen onBack={()=>{window.history.pushState({}, "", "/?section=settings");window.dispatchEvent(new PopStateEvent("popstate"))}} onTariffs={()=>{window.history.pushState({}, "", "/?section=billing");window.dispatchEvent(new PopStateEvent("popstate"))}} />
-          : section==="guide"
-          ? <TestingGuideScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="templates" && accountRole==="teacher"
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
