@@ -50,7 +50,7 @@ export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
      throw error;
    }
  }
- claimLocal(user);const ms=members();const out:BoardSummary[]=[];for(const b of boards()){if(b.ownerId===user.id)out.push({...b,role:"owner"});else{const m=ms.find(x=>x.boardId===b.id&&m.userId===user.id);if(m)out.push({...b,role:m.role})}}return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+ claimLocal(user);const ms=members();const out:BoardSummary[]=[];for(const b of boards()){if(b.ownerId===user.id)out.push({...b,role:"owner"});else{const member:BoardMember|undefined=ms.find(x=>x.boardId===b.id&&x.userId===user.id);if(member)out.push({...b,role:member.role})}}return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
 };
 
 export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoards(user);if(list.length)return list;return [await createBoard(user,"Моя доска",true)]};
