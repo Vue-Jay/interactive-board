@@ -79,6 +79,7 @@ export function subscribeBoardPresence(
   boardId: string,
   me: { userId: string; name: string; role: BoardRole },
   onPresence: (users: BoardPresenceUser[]) => void,
+  trackSelf = true,
 ): () => void {
   if (!isRemoteBackendEnabled()) {
     onPresence([]);
@@ -240,16 +241,18 @@ export function subscribeBoardPresence(
           if (message.event === "phx_reply" && message.ref === joinRef && message.payload?.status === "ok") {
             clearTimeout(deadline);
             attempt = 0;
-            send("presence", {
-              type: "presence",
-              event: "track",
-              payload: {
-                userId: me.userId,
-                name: me.name,
-                role: me.role,
-                onlineAt: new Date().toISOString(),
-              },
-            });
+            if (trackSelf) {
+              send("presence", {
+                type: "presence",
+                event: "track",
+                payload: {
+                  userId: me.userId,
+                  name: me.name,
+                  role: me.role,
+                  onlineAt: new Date().toISOString(),
+                },
+              });
+            }
             return;
           }
 

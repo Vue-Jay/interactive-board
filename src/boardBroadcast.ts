@@ -22,6 +22,7 @@ export function connectBoardCursorChannel(
   boardId: string,
   me: { userId: string; name: string; role: BoardRole },
   onCursor: (cursor: RemoteCursor) => void,
+  publishSelf = true,
 ): BoardCursorChannel {
   if (!isRemoteBackendEnabled()) {
     return { sendCursor: () => {}, close: () => {} };
@@ -69,7 +70,7 @@ export function connectBoardCursorChannel(
   };
 
   const broadcastCursor = (point: { x: number; y: number }) => {
-    if (!ready) return false;
+    if (!publishSelf || !ready) return false;
 
     const sent = rawSend("broadcast", {
       type: "broadcast",
@@ -318,7 +319,7 @@ export function connectBoardCursorChannel(
   };
 
   const sendCursor = (x: number, y: number) => {
-    if (stopped || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (stopped || !publishSelf || !Number.isFinite(x) || !Number.isFinite(y)) return;
 
     latest = { x, y };
 

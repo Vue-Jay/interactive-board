@@ -6,6 +6,7 @@ export type BoardSummary={id:string;title:string;ownerId:string;role:BoardRole;c
 export type BoardMember={boardId:string;userId:string;role:Exclude<BoardRole,"owner">;addedAt:string};
 export type BoardInvitation={id:string;boardId:string;email:string;role:Exclude<BoardRole,"owner">;createdAt:string};
 export type BoardAccessMember=BoardMember&{user:AuthUser|null};
+export type AdminBoardSummary=BoardSummary&{ownerName:string;ownerEmail:string;memberCount:number};
 
 const BOARDS_KEY="lesson-board.boards.v1",MEMBERS_KEY="lesson-board.board-members.v1",INVITES_KEY="lesson-board.board-invites.v1";
 const read=<T,>(k:string):T[]=>{try{const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v:[]}catch{return []}};
@@ -26,12 +27,27 @@ export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
      remoteRequest<any[]>(`/rest/v1/board_members?select=board_id,role&user_id=eq.${encodeURIComponent(user.id)}`),
    ]);
    const roleMap=new Map(ms.map(m=>[m.board_id,m.role as BoardRole]));
-   return bs.map(row=>rowToBoard(row,row.owner_id===user.id?"owner":roleMap.get(row.id)||"viewer"));
+   // Admin RLS may allow reading every board. “My boards” must still contain
+   // only boards the current user actually owns or participates in.
+   return bs
+     .filter(row=>row.owner_id===user.id || roleMap.has(row.id))
+     .map(row=>rowToBoard(row,row.owner_id===user.id?"owner":roleMap.get(row.id)!));
  }
  claimLocal(user);const ms=members();const out:BoardSummary[]=[];for(const b of boards()){if(b.ownerId===user.id)out.push({...b,role:"owner"});else{const m=ms.find(x=>x.boardId===b.id&&x.userId===user.id);if(m)out.push({...b,role:m.role})}}return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
 };
 
 export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoards(user);if(list.length)return list;return [await createBoard(user,"Моя доска",true)]};
+export const listAdminBoards=async():Promise<AdminBoardSummary[]>=>{
+ if(isRemoteBackendEnabled()){
+   const rows=await remoteRequest<any[]>("/rest/v1/rpc/admin_list_boards",{method:"POST",body:"{}"});
+   return (rows||[]).map((row:any)=>({
+     ...rowToBoard({id:row.id,title:row.title,owner_id:row.owner_id,created_at:row.created_at,updated_at:row.updated_at,deleted_at:row.deleted_at},"viewer"),
+     ownerName:String(row.owner_name||"Пользователь"),ownerEmail:String(row.owner_email||""),memberCount:Number(row.member_count||0)
+   }));
+ }
+ return boards().filter(b=>!b.deletedAt).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(b=>{const owner=getUserById(b.ownerId);return {...b,role:"viewer" as const,ownerName:owner?.name||"Пользователь",ownerEmail:owner?.email||"",memberCount:members().filter(m=>m.boardId===b.id).length};});
+};
+
 // Resolve deep links through RLS, never fall back to a cached inaccessible board.
 export const getBoardForUser=async(user:AuthUser,id:string):Promise<BoardSummary|null>=>{
  if(!isRemoteBackendEnabled())return (await getUserBoards(user)).find(b=>b.id===id)??null;

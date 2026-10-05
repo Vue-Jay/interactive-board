@@ -20,6 +20,7 @@ export function connectBoardWorkChannel(
   me: { userId: string; name: string; role: BoardRole },
   onState: (state: RemoteWorkState) => void,
   onLeave: (userId: string) => void,
+  publishSelf = true,
 ): BoardWorkChannel {
   if (!isRemoteBackendEnabled()) {
     return { publish: () => {}, close: () => {} };
@@ -69,6 +70,7 @@ export function connectBoardWorkChannel(
 
   const sendState = () => {
     clearTimeout(publishTimer);
+    if (!publishSelf) return;
     publishTimer = undefined;
     if (!ready || !socket || socket.readyState !== WebSocket.OPEN) return;
 
@@ -198,7 +200,7 @@ export function connectBoardWorkChannel(
   };
 
   const publish = (selectedIds: string[], editingId: string | null) => {
-    if (stopped) return;
+    if (stopped || !publishSelf) return;
     latest = { selectedIds: [...new Set(selectedIds)].slice(0, 100), editingId };
     clearTimeout(publishTimer);
     publishTimer = setTimeout(sendState, 80);

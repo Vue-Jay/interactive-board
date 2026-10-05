@@ -266,6 +266,31 @@ function Ink({ item }: { item: Item }) {
     </svg>
   );
 }
+
+function liveStroke(id: string, kind: "pen" | "marker", path: Point[], colorValue: string, weight: number): Item {
+  /*
+   * Keep the live ink preview in one immutable world coordinate system.
+   * Recomputing a stroke item's bounding box while the pointer is moving makes
+   * its containing DOM element change origin and is visible as the line
+   * "jumping" up/down or left/right.  The preview SVG already has
+   * overflow:visible, so it can stay anchored at world (0, 0) and draw the
+   * collected world points directly.  The final item is normalized only once
+   * on pointer-up by boardModel.stroke().
+   */
+  return {
+    id,
+    kind,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    text: "",
+    color: colorValue,
+    weight,
+    points: path.map((point) => ({ x: point.x, y: point.y })),
+  };
+}
+
 type Bounds = { x: number; y: number; width: number; height: number };
 type GuideState = { x?: number; y?: number };
 type ContextMenuState = { x: number; y: number } | null;
@@ -707,6 +732,81 @@ function Media({ item, boardId }: { item: Item; boardId: string }) {
   const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
   return <object key={`${item.assetId}-${item.pdfPage ?? 1}`} className="media-pdf" data={pdfSrc} type="application/pdf"><div className="media-missing">PDF: {item.name}</div></object>;
 }
+type CropRect = { x: number; y: number; width: number; height: number };
+type CropHandle = "move" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+
+function InlineImageCrop({ item, boardId, onApply, registerApply }: { item: Item; boardId: string; onApply: (blob: Blob, crop: CropRect, width: number, height: number) => Promise<void> | void; registerApply: (apply: (() => Promise<void>) | null) => void }) {
+  const [src, setSrc] = useState("");
+  const [natural, setNatural] = useState({ width: 1, height: 1 });
+  const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 });
+  const imageRef = useRef<HTMLImageElement>(null);
+  const dragRef = useRef<{ mode: CropHandle; startX: number; startY: number; crop: CropRect; box: DOMRect } | null>(null);
+  useEffect(() => {
+    let url = "", alive = true;
+    if (!item.assetId) return;
+    void getAsset(item.assetId, boardId).then((blob) => {
+      if (!blob || !alive) return;
+      url = URL.createObjectURL(blob);
+      setSrc(url);
+    });
+    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+  }, [item.assetId, boardId]);
+  const begin = (mode: CropHandle) => (event: React.PointerEvent<HTMLElement>) => {
+    const box = event.currentTarget.closest<HTMLElement>(".inline-image-crop")?.getBoundingClientRect();
+    if (!box) return;
+    event.preventDefault(); event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { mode, startX: event.clientX, startY: event.clientY, crop: { ...crop }, box };
+  };
+  const moveCrop = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current; if (!drag) return;
+    event.preventDefault(); event.stopPropagation();
+    const dx = (event.clientX - drag.startX) / Math.max(1, drag.box.width);
+    const dy = (event.clientY - drag.startY) / Math.max(1, drag.box.height);
+    const min = Math.min(.16, Math.max(.035, 28 / Math.max(80, Math.min(drag.box.width, drag.box.height))));
+    let { x, y, width, height } = drag.crop;
+    if (drag.mode === "move") {
+      x = Math.max(0, Math.min(1 - width, x + dx));
+      y = Math.max(0, Math.min(1 - height, y + dy));
+    } else {
+      let left = x, top = y, right = x + width, bottom = y + height;
+      if (drag.mode.includes("w")) left = Math.max(0, Math.min(right - min, left + dx));
+      if (drag.mode.includes("e")) right = Math.min(1, Math.max(left + min, right + dx));
+      if (drag.mode.includes("n")) top = Math.max(0, Math.min(bottom - min, top + dy));
+      if (drag.mode.includes("s")) bottom = Math.min(1, Math.max(top + min, bottom + dy));
+      x = left; y = top; width = right - left; height = bottom - top;
+    }
+    setCrop({ x, y, width, height });
+  };
+  const finish = (event: React.PointerEvent<HTMLElement>) => { event.stopPropagation(); dragRef.current = null; };
+  const apply = async () => {
+    const image = imageRef.current;
+    if (!image || !src) return;
+    const sx = Math.max(0, Math.min(natural.width - 1, Math.round(crop.x * natural.width)));
+    const sy = Math.max(0, Math.min(natural.height - 1, Math.round(crop.y * natural.height)));
+    const sw = Math.max(1, Math.min(natural.width - sx, Math.round(crop.width * natural.width)));
+    const sh = Math.max(1, Math.min(natural.height - sy, Math.round(crop.height * natural.height)));
+    const canvas = document.createElement("canvas"); canvas.width = sw; canvas.height = sh;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+    const type = item.mime === "image/jpeg" ? "image/jpeg" : "image/png";
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, .95));
+    if (blob) await onApply(blob, crop, sw, sh);
+  };
+  useEffect(() => { registerApply(apply); return () => registerApply(null); }, [crop, src, natural.width, natural.height, item.assetId]);
+  const shadeTop = { left: 0, top: 0, width: "100%", height: `${crop.y * 100}%` };
+  const shadeBottom = { left: 0, top: `${(crop.y + crop.height) * 100}%`, width: "100%", bottom: 0 };
+  const shadeLeft = { left: 0, top: `${crop.y * 100}%`, width: `${crop.x * 100}%`, height: `${crop.height * 100}%` };
+  const shadeRight = { left: `${(crop.x + crop.width) * 100}%`, top: `${crop.y * 100}%`, right: 0, height: `${crop.height * 100}%` };
+  return <div className="inline-image-crop" onPointerDown={(e)=>{e.preventDefault();e.stopPropagation()}} onPointerMove={moveCrop} onPointerUp={finish} onPointerCancel={finish}>
+    {src && <img ref={imageRef} className="inline-image-crop-source" src={src} alt="" draggable={false} onLoad={(e)=>setNatural({width:e.currentTarget.naturalWidth||1,height:e.currentTarget.naturalHeight||1})}/>} 
+    <div className="inline-crop-shade" style={shadeTop}/><div className="inline-crop-shade" style={shadeBottom}/><div className="inline-crop-shade" style={shadeLeft}/><div className="inline-crop-shade" style={shadeRight}/>
+    <div className="inline-crop-frame" style={{left:`${crop.x*100}%`,top:`${crop.y*100}%`,width:`${crop.width*100}%`,height:`${crop.height*100}%`}} onPointerDown={begin("move")}>
+      {(["nw","n","ne","e","se","s","sw","w"] as const).map((handle)=><button key={handle} type="button" className={`inline-crop-handle ${handle}`} aria-label="Изменить область обрезки" onPointerDown={begin(handle)}/>)}
+    </div>
+  </div>;
+}
+
 function Shape({ type = "rectangle", color = "#6064d4" }: { type?: ShapeType; color?: string }) {
   const paths: Partial<Record<ShapeType,string>> = {
     triangle:"M50 5 L96 95 L4 95 Z", rightTriangle:"M6 5 L6 95 L96 95 Z",
@@ -1082,10 +1182,12 @@ const itemIconName = (item: Item): IconName => {
   return "marker";
 };
 
-function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogout, onBoardChanged, initialRemoteVersion = null }: {
+function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adminInvisible = false, onBackToBoards, onLogout, onBoardChanged, initialRemoteVersion = null }: {
   authUser: AuthUser;
   boardSummary: BoardSummary;
   accountRole: AccountRole;
+  isAppAdmin?: boolean;
+  adminInvisible?: boolean;
   onBackToBoards: () => void;
   onLogout: () => void;
   onBoardChanged: (board: BoardSummary) => void;
@@ -1093,6 +1195,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
 }) {
   const canEdit = boardSummary.role !== "viewer";
   const isStudent = accountRole === "student";
+  const adminHidden = isAppAdmin && adminInvisible;
   const toolAllowedForRole = (id:Tool) => !isStudent || !STUDENT_BLOCKED_CREATE_TOOLS.has(id);
   const structurallyLockedForStudent = (item:Item|undefined|null) => !!item && isStudent && STUDENT_PROTECTED_KINDS.has(item.kind);
   const studentSelectionHasProtected = () => isStudent && selected.some(id=>structurallyLockedForStudent(itemsRef.current.find(item=>item.id===id)));
@@ -1164,6 +1267,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [lessonResult,setLessonResult]=useState(""),[lessonHomework,setLessonHomework]=useState(""),[lessonClock,setLessonClock]=useState(Date.now());
   const [lessonPanelOpen,setLessonPanelOpen]=useState(false);
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
+  const visiblePresenceUsers = useMemo(() => adminHidden ? presenceUsers.filter((user) => user.userId !== authUser.id) : presenceUsers, [presenceUsers, adminHidden, authUser.id]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
@@ -1192,6 +1296,28 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [linkMediaUrl,setLinkMediaUrl]=useState("");
   const [linkMediaTitle,setLinkMediaTitle]=useState("");
   const [linkMediaEditId,setLinkMediaEditId]=useState<string|null>(null);
+  const [imageCropEditorId,setImageCropEditorId]=useState<string|null>(null);
+  const imageCropApplyRef=useRef<(()=>Promise<void>)|null>(null);
+  const imageCropApplyingRef=useRef(false);
+  useEffect(()=>{
+    if(!imageCropEditorId)return;
+    const finishCropFromOutside=(event:PointerEvent)=>{
+      const target=event.target;
+      if(!(target instanceof Element))return;
+      const objectId=target.closest<HTMLElement>("[data-object]")?.dataset.object;
+      if(objectId===imageCropEditorId||target.closest(".inline-image-crop"))return;
+      const applyCrop=imageCropApplyRef.current;
+      if(!applyCrop||imageCropApplyingRef.current)return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      imageCropApplyingRef.current=true;
+      void applyCrop().finally(()=>{imageCropApplyingRef.current=false});
+    };
+    document.addEventListener("pointerdown",finishCropFromOutside,true);
+    return()=>document.removeEventListener("pointerdown",finishCropFromOutside,true);
+  },[imageCropEditorId]);
+  const imageTapRef=useRef<{id:string;at:number;x:number;y:number}|null>(null);
   const [shapeType, setShapeType] = useState<ShapeType>("rounded");
   const [connectorStyle, setConnectorStyle] = useState<ConnectorStyle>("arrow");
   const [connectorWeight, setConnectorWeight] = useState(3);
@@ -1293,6 +1419,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const [editing, setEditing] = useState<string | null>(null);
   const objectEditorOpen = Boolean(
     editing ||
+    imageCropEditorId ||
     linkMediaOpen ||
     tableEditorId ||
     checklistEditorId ||
@@ -2255,10 +2382,10 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     if (gesture.current || (e.target as HTMLElement).closest("textarea"))
       return;
     if (e.button !== 0 && e.button !== 1) return;
+    const target = e.target as HTMLElement;
     finishEdit();
     const start = local(e.clientX, e.clientY);
     const p = world(start);
-    const target = e.target as HTMLElement;
     if (contextMenu && !target.closest("[data-context-menu]")) setContextMenu(null);
     const connectorEndpointEl = target.closest<HTMLElement>("[data-connector-endpoint]");
     const connectorEndpoint = connectorEndpointEl?.dataset.connectorEndpoint;
@@ -2302,6 +2429,20 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     }
     const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
     const hit = itemsRef.current.find((i) => i.id === id);
+    if (e.pointerType === "touch" && hit?.kind === "image" && (tool === "select" || tool === "hand") && !space && !hit.locked) {
+      const now = performance.now();
+      const previousTap = imageTapRef.current;
+      const isDoubleTap = !!previousTap && previousTap.id === hit.id && now - previousTap.at <= 420 && Math.hypot(e.clientX - previousTap.x, e.clientY - previousTap.y) <= 28;
+      imageTapRef.current = { id: hit.id, at: now, x: e.clientX, y: e.clientY };
+      if (isDoubleTap) {
+        e.preventDefault();
+        e.stopPropagation();
+        imageTapRef.current = null;
+        setSelected([hit.id]);
+        setImageCropEditorId(hit.id);
+        return;
+      }
+    }
     const handleEl = target.closest<HTMLElement>("[data-transform-handle]");
     const transformHandle = handleEl?.dataset.transformHandle;
     if (transformHandle && hit && !hit.locked && !structurallyLockedForStudent(hit) && selected.length === 1 && selected[0] === hit.id) {
@@ -2583,7 +2724,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     };
     if (mode === "draw") {
       const ink = gesture.current.ink!;
-      setPreview(stroke(ink.id, ink.kind, [p], ink.color, ink.weight));
+      setPreview(liveStroke(ink.id, ink.kind, [p], ink.color, ink.weight));
     }
     if (mode === "connector") {
       setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, connectorStartHit?.binding));
@@ -2600,7 +2741,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       const active = gesture.current;
       if (!active) return;
       if (active.mode === "draw" && active.ink) {
-        setPreview(stroke(active.ink.id, active.ink.kind, active.path, active.ink.color, active.ink.weight));
+        setPreview(liveStroke(active.ink.id, active.ink.kind, active.path, active.ink.color, active.ink.weight));
       } else if (active.mode === "lasso") {
         setPath([...active.path]);
       } else if (active.mode === "connector") {
@@ -2787,6 +2928,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       if (e.code === "Escape") {
         if (presentation && !publicPresentation) { setPresentation(false); setPresentationTimerRunning(false); setPresentationLaser(false); setPresentationLaserPos(null); setPresentationSpotlight(false); setPresentationSpotlightPos(null); setPresentationBlackout(false); return; }
         if (frameNotesEditorId) { setFrameNotesEditorId(null); setFrameNotesDraft(""); return; }
+        if (imageCropEditorId) { setImageCropEditorId(null); return; }
         if (formulaEditorId) { closeFormulaEditor(); return; }
         if (checklistEditorId) { setChecklistEditorId(null); setChecklistDraft(null); return; }
         if (quizEditorId) { setQuizEditorId(null); setQuizDraft(null); return; }
@@ -4378,7 +4520,8 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
     boardSummary.id,
     { userId: authUser.id, name: authUser.name, role: boardSummary.role },
     setPresenceUsers,
-  ), [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+    !adminHidden,
+  ), [boardSummary.id, boardSummary.role, authUser.id, authUser.name, adminHidden]);
 
   useEffect(() => {
     const channel = connectBoardCursorChannel(
@@ -4394,6 +4537,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
           if (Object.keys(pending).length) setRemoteCursors((current) => ({ ...current, ...pending }));
         });
       },
+      !adminHidden,
     );
     cursorChannel.current = channel;
     return () => {
@@ -4404,7 +4548,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       pendingRemoteCursors.current = {};
       setRemoteCursors({});
     };
-  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name, adminHidden]);
 
   useEffect(() => {
     const channel = connectBoardViewControl(
@@ -4464,6 +4608,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         delete next[userId];
         return next;
       }),
+      !adminHidden,
     );
     workChannel.current = channel;
     return () => {
@@ -4471,11 +4616,11 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       channel.close();
       setRemoteWork({});
     };
-  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
+  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name, adminHidden]);
 
   useEffect(() => {
-    workChannel.current?.publish(selected, editing);
-  }, [selected, editing]);
+    if(!adminHidden) workChannel.current?.publish(selected, editing);
+  }, [selected, editing, adminHidden]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -4511,12 +4656,12 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
   const remoteEditorFor = (itemId: string) => remoteWorkIndex.editors.get(itemId);
   const remoteSelectorsFor = (itemId: string) => remoteWorkIndex.selectors.get(itemId) ?? [];
   const remoteEditingCount = remoteWorkIndex.editingCount;
-  const lessonStudents=presenceUsers.filter((u)=>u.userId!==authUser.id);
+  const lessonStudents=visiblePresenceUsers.filter((u)=>u.userId!==authUser.id);
   const lessonSeconds=liveLesson?Math.max(0,Math.floor((lessonClock-Date.parse(liveLesson.startedAt))/1000)):0;
   const lessonTime=`${String(Math.floor(lessonSeconds/3600)).padStart(2,"0")}:${String(Math.floor((lessonSeconds%3600)/60)).padStart(2,"0")}:${String(lessonSeconds%60).padStart(2,"0")}`;
 
   useEffect(() => {
-    if (boardSummary.role !== "owner") return;
+    if (adminHidden || boardSummary.role !== "owner") return;
     if (teacherViewBroadcastTimer.current) clearTimeout(teacherViewBroadcastTimer.current);
 
     teacherViewBroadcastTimer.current = setTimeout(() => {
@@ -4534,7 +4679,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
         teacherViewBroadcastTimer.current = null;
       }
     };
-  }, [boardSummary.role, view.x, view.y, view.zoom]);
+  }, [adminHidden, boardSummary.role, view.x, view.y, view.zoom]);
 
   useEffect(() => {
     const online = new Set(presenceUsers.map((user) => user.userId));
@@ -4579,7 +4724,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
       {lessonPanelOpen && liveLesson && <aside className="lesson-control-panel">
         <div className="lesson-control-head"><div><span className="live-lesson-dot"/><div><b>Идёт урок</b><small>{lessonTime}</small></div></div><button onClick={()=>setLessonPanelOpen(false)}>×</button></div>
         <div className="lesson-control-student"><span className="presence-avatar">{liveLesson.studentName.charAt(0).toUpperCase()}</span><div><strong>{liveLesson.studentName}</strong><small>{liveLesson.topic||"Тема не указана"}</small></div></div>
-        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{presenceUsers.length}</b>на доске</span><span><b>{guidedFollow?"Включено":"Выключено"}</b>ведение экрана</span></div><div className="lesson-control-grid">
+        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span><span><b>{guidedFollow?"Включено":"Выключено"}</b>ведение экрана</span></div><div className="lesson-control-grid">
           <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
           <button className={guidedFollow?"active":""} onClick={()=>{const next=!guidedFollow;guidedFollowRef.current=next;setGuidedFollow(next);viewControlChannel.current?.sendGuidedFollow(next);if(next){const rect=board.current?.getBoundingClientRect();if(rect){const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom)}}}}>↝<span>{guidedFollow?"Ведение включено":"Вести экран"}</span></button>
           <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
@@ -4588,7 +4733,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
           <button className={presentationLaser?"active-tool":""} onClick={()=>{setPresentationLaser(v=>!v);setPresentationSpotlight(false)}}>•<span>Лазер</span></button>
           <button className={presentationSpotlight?"active-tool":""} onClick={()=>{setPresentationSpotlight(v=>!v);setPresentationLaser(false)}}>◉<span>Прожектор</span></button>
         </div>
-        <div className="lesson-control-online"><strong>На доске сейчас</strong>{presenceUsers.map(u=><div key={u.userId}><span className="presence-avatar">{u.name.charAt(0).toUpperCase()}</span><span><b>{u.name}{u.userId===authUser.id?" · Вы":""}</b><small>{BOARD_ROLE_LABELS[u.role]}</small></span>{u.userId!==authUser.id&&<button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(u.userId,center.x,center.y,view.zoom)}}>Ко мне</button>}</div>)}</div>
+        <div className="lesson-control-online"><strong>На доске сейчас</strong>{visiblePresenceUsers.map(u=><div key={u.userId}><span className="presence-avatar">{u.name.charAt(0).toUpperCase()}</span><span><b>{u.name}{u.userId===authUser.id?" · Вы":""}</b><small>{BOARD_ROLE_LABELS[u.role]}</small></span>{u.userId!==authUser.id&&<button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(u.userId,center.x,center.y,view.zoom)}}>Ко мне</button>}</div>)}</div>
         <button className="lesson-control-finish" onClick={()=>{setLessonPanelOpen(false);setLessonFinishOpen(true)}}>Завершить урок и записать результат</button>
       </aside>}
       {lessonFinishOpen && liveLesson && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Завершить урок</h2><p>{liveLesson.studentName} · {lessonTime}</p></div><button onClick={()=>setLessonFinishOpen(false)}>×</button></div><label><span>Итог</span><textarea rows={4} value={lessonResult} onChange={e=>setLessonResult(e.target.value)}/></label><label><span>Домашнее задание</span><textarea rows={4} value={lessonHomework} onChange={e=>setLessonHomework(e.target.value)}/></label><div className="session-actions"><button className="students-primary" onClick={()=>void completeLiveLesson()}>Завершить и сохранить</button><button className="boards-secondary" onClick={()=>setLessonFinishOpen(false)}>Продолжить</button></div></section></div>}
@@ -4630,12 +4775,12 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
           {isRemoteBackendEnabled() && <details className="presence-menu">
             <summary title={realtimeStatus === "online" ? "Подключено · пользователи на доске" : realtimeStatus === "reconnecting" ? "Подключение к доске..." : "Нет подключения"}>
               <span className={`presence-live-dot connection-${realtimeStatus}`} aria-hidden="true"/>
-              <span className="presence-count">{Math.max(1, presenceUsers.length)}</span>
+              <span className="presence-count">{visiblePresenceUsers.length}</span>
             </summary>
             <div className="presence-popover">
               <div className="presence-popover-head">
                 <strong>Сейчас на доске</strong>
-                {boardSummary.role === "owner" && presenceUsers.some((user) => user.userId !== authUser.id) && <button
+                {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
                   type="button"
                   className={`presence-gather-button ${guidedFollow ? "active" : ""}`}
                   title={guidedFollow ? "Отключить обязательное следование участников" : "Включить следование всех участников за преподавателем"}
@@ -4648,7 +4793,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                     const rect = board.current?.getBoundingClientRect();
                     if (next && rect) {
                       const center = world({ x: rect.width / 2, y: rect.height / 2 });
-                      const targets = presenceUsers.filter((user) => user.userId !== authUser.id);
+                      const targets = visiblePresenceUsers.filter((user) => user.userId !== authUser.id);
                       for (const user of targets) {
                         viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
                       }
@@ -4659,7 +4804,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 >
                   {guidedFollow ? "Все следуют" : "Вести всех"}
                 </button>}
-                {boardSummary.role === "owner" && presenceUsers.some((user) => user.userId !== authUser.id) && <button
+                {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
                   type="button"
                   className="presence-gather-button"
                   title="Переместить всех остальных участников к вашей текущей области доски"
@@ -4668,7 +4813,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                     if (!rect) return;
 
                     const center = world({ x: rect.width / 2, y: rect.height / 2 });
-                    const targets = presenceUsers.filter((user) => user.userId !== authUser.id);
+                    const targets = visiblePresenceUsers.filter((user) => user.userId !== authUser.id);
 
                     for (const user of targets) {
                       viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
@@ -4680,7 +4825,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   Собрать всех
                 </button>}
               </div>
-              {presenceUsers.length ? presenceUsers.map((user) => <div className="presence-person" key={user.userId}>
+              {visiblePresenceUsers.length ? visiblePresenceUsers.map((user) => <div className="presence-person" key={user.userId}>
                 <span className="presence-avatar" aria-hidden="true">{user.name.trim().charAt(0).toUpperCase() || "U"}</span>
                 <span className="presence-person-copy">
                   <b>{user.name}{user.userId === authUser.id ? " · Вы" : ""}</b>
@@ -4700,7 +4845,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 >
                   Ко мне
                 </button>}
-              </div>) : <div className="presence-person">
+              </div>) : adminHidden ? <div className="presence-person presence-person-empty"><span className="presence-person-copy"><b>Других участников нет</b><small>Невидимка включена · вы не отображаетесь другим</small></span></div> : <div className="presence-person">
                 <span className="presence-avatar" aria-hidden="true">{authUser.name.trim().charAt(0).toUpperCase() || "U"}</span>
                 <span className="presence-person-copy">
                   <b>{authUser.name} · Вы</b>
@@ -5116,6 +5261,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             </div>
           </div>
         )}
+        
         {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} aria-label="Цвет точки" onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)} onRemovePoint={(index)=>setGraphDraft(current=>current?{...current,points:current.points.filter((_,i)=>i!==index)}:current)}/><span className="graph-preview-hint">Двойное нажатие: пустое место — добавить точку, точка — удалить</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
         {formulaEditorId && formulaDraft && (
           <div
@@ -5541,7 +5687,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
           onPointerDown={(e) => { touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -5686,6 +5832,9 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                   } else if (tool === "select" && !space && !item.locked && item.kind === "flashcard") {
                     setSelected([item.id]);
                     openFlashcardEditor(item);
+                  } else if ((tool === "select" || tool === "hand") && !space && !item.locked && item.kind === "image") {
+                    setSelected([item.id]);
+                    setImageCropEditorId(item.id);
                   }
                 }}
               >
@@ -5701,6 +5850,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
                 {item.kind === "shape" && <Shape type={item.shapeType} color={item.color}/>}
                 {item.kind === "connector" && <Connector item={item}/>}
                 {(item.kind === "image" || item.kind === "pdf") && <Media item={item} boardId={boardSummary.id}/>}
+                {item.kind === "image" && imageCropEditorId === item.id && <InlineImageCrop item={item} boardId={boardSummary.id} registerApply={(apply)=>{imageCropApplyRef.current=apply}} onApply={async(blob,crop)=>{const current=itemsRef.current.find(candidate=>candidate.id===item.id&&candidate.kind==="image");if(!current)return;const assetId=createId();await putAsset(assetId,blob,boardSummary.id);const nextWidth=Math.max(24,current.width*crop.width),nextHeight=Math.max(24,current.height*crop.height);const angle=(current.rotation??0)*Math.PI/180;const localDx=(crop.x+crop.width/2-.5)*current.width,localDy=(crop.y+crop.height/2-.5)*current.height;const rotatedDx=localDx*Math.cos(angle)-localDy*Math.sin(angle),rotatedDy=localDx*Math.sin(angle)+localDy*Math.cos(angle);const oldCenterX=current.x+current.width/2,oldCenterY=current.y+current.height/2;const nextX=oldCenterX+rotatedDx-nextWidth/2,nextY=oldCenterY+rotatedDy-nextHeight/2;commit(itemsRef.current.map(candidate=>candidate.id===current.id?{...candidate,assetId,mime:blob.type||"image/png",x:nextX,y:nextY,width:nextWidth,height:nextHeight}:candidate));setImageCropEditorId(null);setSelected([current.id]);setNotice("Изображение обрезано")}}/>}
                 {item.kind === "linkmedia" && <LinkMediaPlayer item={item}/>}
                 {item.kind === "frame" && editing !== item.id && <div className="frame-title">{item.text || "Без названия"}</div>}
                 {item.kind === "comment" && editing !== item.id && <CommentCard item={item} />}
@@ -5804,7 +5954,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               />
             </div>
           )}
-          {singleSelected && singleSelected.kind !== "connector" && selectionScreenBounds && !editing && !selectionLocked && (
+          {singleSelected && singleSelected.kind !== "connector" && selectionScreenBounds && !objectEditorOpen && !selectionLocked && (
             <div
               className="screen-transform-overlay"
               data-object={singleSelected.id}
@@ -5839,7 +5989,7 @@ function BoardApp({ authUser, boardSummary, accountRole, onBackToBoards, onLogou
               ))}
             </div>
           )}
-          {selectedItems.length > 1 && selectionScreenBounds && !editing && !selectionLocked && (
+          {selectedItems.length > 1 && selectionScreenBounds && !objectEditorOpen && !selectionLocked && (
             <div
               className="screen-transform-overlay screen-transform-group"
               style={{
@@ -6305,7 +6455,8 @@ export default function App() {
   const [route, setRoute] = useState<AppRoute>(initialRoute);
   const navigate = useCallback((path: string, replace = false) => {
     window.history[replace ? "replaceState" : "pushState"](null, "", path);
-    setRoute(parseRoute(path));
+    const url = new URL(path, window.location.href);
+    setRoute(parseRoute(url.pathname));
   }, []);
   useEffect(() => {
     const changed = () => {
@@ -6319,6 +6470,9 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getCachedCurrentUser());
   const [accountRole,setAccountRoleState]=useState<AccountRole>("student");
   const [isAppAdmin,setIsAppAdmin]=useState(false);
+  const [adminInspecting,setAdminInspecting]=useState(false);
+  const [adminInvisible,setAdminInvisible]=useState(()=>{try{return localStorage.getItem("onlinerepetitor.adminInvisible")==="1"}catch{return false}});
+  const changeAdminInvisible=useCallback((value:boolean)=>{setAdminInvisible(value);try{localStorage.setItem("onlinerepetitor.adminInvisible",value?"1":"0")}catch{}},[]);
   const [authReady, setAuthReady] = useState(() => Boolean(getCachedCurrentUser()));
   const [activeBoard, setActiveBoard] = useState<BoardSummary | null>(null);
   const boardChanged = useCallback((updated: BoardSummary) => {
@@ -6438,6 +6592,7 @@ export default function App() {
           navigate(`/board/${redeemed.board_id}`, true);
           return;
         }
+        setAdminInspecting(false);
         const board = await getBoardForUser(authUser, route.boardId);
         if (!alive) return;
         if (!board) throw new Error("Доска недоступна. Попросите владельца прислать ссылку для доступа.");
@@ -6503,7 +6658,7 @@ export default function App() {
       <>
         <Suspense fallback={<div className="board-server-overlay"><div className="board-server-card"><strong>Открываем раздел…</strong><span>Загружаем только нужный модуль.</span></div></div>}>
         {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="admin" && isAppAdmin
-          ? <AdminScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          ? <AdminScreen user={authUser} invisible={adminInvisible} onInvisibleChange={changeAdminInvisible} onOpenBoard={(board)=>{setAdminInspecting(true);void openBoard(board,()=>true)}} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="students" && accountRole==="teacher"
           ? <StudentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : section==="assignments"
@@ -6541,9 +6696,11 @@ export default function App() {
       authUser={authUser}
       boardSummary={activeBoard}
       accountRole={accountRole}
+      isAppAdmin={isAppAdmin}
+      adminInvisible={adminInvisible}
       initialRemoteVersion={remoteVersion}
       onBoardChanged={boardChanged}
-      onBackToBoards={() => { setActiveBoard(null); navigate("/"); }}
+      onBackToBoards={() => { setActiveBoard(null); if(adminInspecting){setAdminInspecting(false);navigate("/?section=admin");}else navigate("/"); }}
       onLogout={logout}
     />
   );
