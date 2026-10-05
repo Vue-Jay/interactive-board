@@ -1438,6 +1438,10 @@ button {
 .gesture-preview {
   position: absolute;
   pointer-events: none;
+  line-height: 0;
+}
+.gesture-preview > svg {
+  display: block;
 }
 .preview-connector {
   overflow: visible;

@@ -38,8 +38,8 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-const APP_BUILD_VERSION = "244";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v244";
+const APP_BUILD_VERSION = "245";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v245";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
