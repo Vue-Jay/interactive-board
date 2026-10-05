@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BOARD_ROLE_LABELS, isRemoteBackendEnabled, type AuthUser, type BoardRole } from "./authStore";
-import { createBoard, deleteBoard, deleteBoardForever, ensureUserBoards, getTrashedBoards, getUserBoards, restoreBoard, renameBoard, getBoardAccess, changeMemberRole, removeMember, type BoardAccessMember, type BoardInvitation, type BoardSummary } from "./boardStore";
+import { createBoard, deleteBoard, deleteBoardForever, ensureUserBoards, getCachedUserBoards, getTrashedBoards, getUserBoards, restoreBoard, renameBoard, getBoardAccess, changeMemberRole, removeMember, type BoardAccessMember, type BoardInvitation, type BoardSummary } from "./boardStore";
 import { boardShareUrl, clearPendingShareToken, createBoardShareLink, listBoardShareLinks, pendingShareToken, redeemBoardShareLink, revokeBoardShareLink, type BoardShareLink, type ShareRole } from "./shareLinks";
 
 type Props={user:AuthUser;accountRole:AccountRole;isAppAdmin:boolean;onOpenBoard:(b:BoardSummary)=>void;onLogout:()=>void};
@@ -17,7 +17,7 @@ import type { AccountRole } from "./accountRoleStore";
 export default function BoardsScreen({user,accountRole,isAppAdmin,onOpenBoard,onLogout:_onLogout}:Props){
  const [notificationUnreadCount,setNotificationUnreadCount]=useState(0);
  useEffect(()=>{let lastRefresh=0,inFlight=false;const refresh=()=>{if(document.visibilityState==="hidden"||inFlight||Date.now()-lastRefresh<15000)return;lastRefresh=Date.now();inFlight=true;void listNotifications().then(x=>setNotificationUnreadCount(x.filter(v=>!v.readAt).length)).catch(()=>{}).finally(()=>{inFlight=false})};refresh();const timer=window.setInterval(refresh,60000);const onVisibility=()=>{if(document.visibilityState==="visible")refresh()};window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",onVisibility);return()=>{window.clearInterval(timer);window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",onVisibility)}},[user.id,accountRole]);
- const [boards,setBoards]=useState<BoardSummary[]>([]); const [loading,setLoading]=useState(true); const [query,setQuery]=useState(""); const [editingId,setEditingId]=useState<string|null>(null); const [draftTitle,setDraftTitle]=useState("");
+ const [boards,setBoards]=useState<BoardSummary[]>(()=>getCachedUserBoards(user)); const [loading,setLoading]=useState(()=>getCachedUserBoards(user).length===0); const [query,setQuery]=useState(""); const [editingId,setEditingId]=useState<string|null>(null); const [draftTitle,setDraftTitle]=useState("");
  const [filter,setFilter]=useState<BoardFilter>("all"); const [sort,setSort]=useState<BoardSort>("recent"); const [trashOpen,setTrashOpen]=useState(false); const [trash,setTrash]=useState<BoardSummary[]>([]);
  const [manage,setManage]=useState<BoardSummary|null>(null); const [notice,setNotice]=useState(""); const [busy,setBusy]=useState(false);
  const [access,setAccess]=useState<{members:BoardAccessMember[];invites:BoardInvitation[]}>({members:[],invites:[]});
@@ -70,9 +70,23 @@ export default function BoardsScreen({user,accountRole,isAppAdmin,onOpenBoard,on
      const list=accountRole==="teacher"?await ensureUserBoards(user):await getUserBoards(user);
      if(alive)setBoards(list);
    }catch(e){
-     if(alive)setNotice(e instanceof Error?e.message:"Не удалось загрузить доски");
+     if(alive&&getCachedUserBoards(user).length===0)setNotice(e instanceof Error?e.message:"Не удалось загрузить доски");
    }finally{if(alive)setLoading(false)}
- })();return()=>{alive=false}},[user.id]);
+ })();return()=>{alive=false}},[user.id,accountRole]);
+
+ useEffect(()=>{
+   let inFlight=false,lastRefresh=0;
+   const refreshAfterWake=()=>{
+     if(document.visibilityState==="hidden"||inFlight||Date.now()-lastRefresh<5000)return;
+     lastRefresh=Date.now();inFlight=true;
+     void getUserBoards(user).then(setBoards).catch(()=>{}).finally(()=>{inFlight=false});
+   };
+   const onVisibility=()=>{if(document.visibilityState==="visible")refreshAfterWake()};
+   window.addEventListener("focus",refreshAfterWake);
+   window.addEventListener("online",refreshAfterWake);
+   document.addEventListener("visibilitychange",onVisibility);
+   return()=>{window.removeEventListener("focus",refreshAfterWake);window.removeEventListener("online",refreshAfterWake);document.removeEventListener("visibilitychange",onVisibility)};
+ },[user.id]);
 
  useEffect(()=>{if(manage){void loadAccess(manage);void loadLinks(manage)}else{setAccess({members:[],invites:[]});setShareLinks([]);setCreatedUrl("")}},[manage?.id]);
 

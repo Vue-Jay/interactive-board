@@ -26,7 +26,7 @@ const TemplatesScreen = lazy(() => import("./TemplatesScreen"));
 import { clearNotificationCache } from "./notificationsStore";
 import { clearAiBoardTransfer, peekAiBoardTransfer } from "./aiLocalStore";
 import { generateMathAi, type MathAiLevel, type MathAiMode } from "./aiMathGenerator";
-import { clearAccountAccessCache, getAccountAccess,type AccountRole } from "./accountRoleStore";
+import { clearAccountAccessCache, getAccountAccess, getCachedAccountAccess,type AccountRole } from "./accountRoleStore";
 
 import { materialBlob,markMaterialUsed,type Material } from "./materialsStore";
 import { finishLesson, getActiveLesson, startLesson, type LiveLesson } from "./lessonStore";
@@ -6468,8 +6468,8 @@ export default function App() {
     return () => window.removeEventListener("popstate", changed);
   }, []);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getCachedCurrentUser());
-  const [accountRole,setAccountRoleState]=useState<AccountRole>("student");
-  const [isAppAdmin,setIsAppAdmin]=useState(false);
+  const [accountRole,setAccountRoleState]=useState<AccountRole>(()=>getCachedAccountAccess()?.role??"student");
+  const [isAppAdmin,setIsAppAdmin]=useState(()=>getCachedAccountAccess()?.isAdmin??false);
   const [adminInspecting,setAdminInspecting]=useState(false);
   const [adminInvisible,setAdminInvisible]=useState(()=>{try{return localStorage.getItem("onlinerepetitor.adminInvisible")==="1"}catch{return false}});
   const changeAdminInvisible=useCallback((value:boolean)=>{setAdminInvisible(value);try{localStorage.setItem("onlinerepetitor.adminInvisible",value?"1":"0")}catch{}},[]);
@@ -6615,7 +6615,25 @@ export default function App() {
     return () => { alive = false; };
   }, [route, authReady, authUser, navigate, openBoard, sharePassword]);
 
-  useEffect(()=>{if(!authUser)return;let alive=true;const refresh=()=>void getAccountAccess().then(x=>{if(alive){setAccountRoleState(x.role);setIsAppAdmin(x.isAdmin)}}).catch(()=>{});refresh();const listener=()=>refresh();window.addEventListener("onlinerepetitor:account-access",listener);return()=>{alive=false;window.removeEventListener("onlinerepetitor:account-access",listener)}},[authUser?.id]);
+  useEffect(()=>{
+    if(!authUser)return;
+    let alive=true,lastRefresh=0,inFlight=false;
+    const apply=(x:Awaited<ReturnType<typeof getAccountAccess>>)=>{if(alive){setAccountRoleState(x.role);setIsAppAdmin(x.isAdmin)}};
+    const cached=getCachedAccountAccess();if(cached)apply(cached);
+    const refresh=()=>{
+      if(!alive||inFlight||document.visibilityState==="hidden"||Date.now()-lastRefresh<5000)return;
+      lastRefresh=Date.now();inFlight=true;
+      void getAccountAccess().then(apply).catch(()=>{}).finally(()=>{inFlight=false});
+    };
+    refresh();
+    const listener=()=>refresh();
+    const onVisibility=()=>{if(document.visibilityState==="visible")refresh()};
+    window.addEventListener("onlinerepetitor:account-access",listener);
+    window.addEventListener("focus",refresh);
+    window.addEventListener("online",refresh);
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{alive=false;window.removeEventListener("onlinerepetitor:account-access",listener);window.removeEventListener("focus",refresh);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",onVisibility)}
+  },[authUser?.id]);
 
   useEffect(()=>{
     const openSection=(section:string)=>{

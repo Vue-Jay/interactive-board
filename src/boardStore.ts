@@ -9,6 +9,7 @@ export type BoardAccessMember=BoardMember&{user:AuthUser|null};
 export type AdminBoardSummary=BoardSummary&{ownerName:string;ownerEmail:string;memberCount:number};
 
 const BOARDS_KEY="lesson-board.boards.v1",MEMBERS_KEY="lesson-board.board-members.v1",INVITES_KEY="lesson-board.board-invites.v1";
+const REMOTE_BOARD_CACHE_PREFIX="onlinerepetitor.user-boards.v244.";
 const read=<T,>(k:string):T[]=>{try{const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v:[]}catch{return []}};
 const write=(k:string,v:unknown)=>localStorage.setItem(k,JSON.stringify(v));
 const boards=()=>read<BoardSummary>(BOARDS_KEY),members=()=>read<BoardMember>(MEMBERS_KEY),invites=()=>read<BoardInvitation>(INVITES_KEY);const norm=(s:string)=>s.trim().toLowerCase();
@@ -19,21 +20,37 @@ const claimLocal=(user:AuthUser)=>{const matched=invites().filter(i=>norm(i.emai
 
 const rowToBoard=(row:any,role:BoardRole):BoardSummary=>({id:row.id,title:row.title,ownerId:row.owner_id,role,createdAt:row.created_at,updatedAt:row.updated_at,deletedAt:row.deleted_at??null,purgeAfter:row.purge_after??null,purgeQueued:!!row.purge_queued,purgeAssetCount:Number(row.purge_asset_count??0)});
 
+const remoteBoardCacheKey=(userId:string)=>`${REMOTE_BOARD_CACHE_PREFIX}${userId}`;
+export const getCachedUserBoards=(user:AuthUser):BoardSummary[]=>{
+ if(!isRemoteBackendEnabled())return[];
+ try{const parsed=JSON.parse(localStorage.getItem(remoteBoardCacheKey(user.id))||"[]");return Array.isArray(parsed)?parsed.filter(x=>x&&typeof x.id==="string"&&typeof x.title==="string"&&["owner","editor","viewer"].includes(x.role)):[]}catch{return[]}
+};
+const rememberUserBoards=(user:AuthUser,value:BoardSummary[])=>{try{localStorage.setItem(remoteBoardCacheKey(user.id),JSON.stringify(value))}catch{/* Ignore storage quota/private mode errors. */}return value};
+
 export const getUserBoards=async(user:AuthUser):Promise<BoardSummary[]>=>{
  if(isRemoteBackendEnabled()){
-   await claimRemoteInvitations();
-   const [bs,ms]=await Promise.all([
-     remoteRequest<any[]>("/rest/v1/boards?deleted_at=is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&order=updated_at.desc"),
-     remoteRequest<any[]>(`/rest/v1/board_members?select=board_id,role&user_id=eq.${encodeURIComponent(user.id)}`),
-   ]);
-   const roleMap=new Map(ms.map(m=>[m.board_id,m.role as BoardRole]));
-   // Admin RLS may allow reading every board. “My boards” must still contain
-   // only boards the current user actually owns or participates in.
-   return bs
-     .filter(row=>row.owner_id===user.id || roleMap.has(row.id))
-     .map(row=>rowToBoard(row,row.owner_id===user.id?"owner":roleMap.get(row.id)!));
+   const stale=getCachedUserBoards(user);
+   // Claiming old email invitations is useful, but it must never block the dashboard
+   // while Supabase is waking up after a long idle period.
+   void claimRemoteInvitations().catch(()=>{});
+   try{
+     const [bs,ms]=await Promise.all([
+       remoteRequest<any[]>("/rest/v1/boards?deleted_at=is.null&select=id,title,owner_id,created_at,updated_at,deleted_at&order=updated_at.desc"),
+       remoteRequest<any[]>(`/rest/v1/board_members?select=board_id,role&user_id=eq.${encodeURIComponent(user.id)}`),
+     ]);
+     const roleMap=new Map(ms.map(m=>[m.board_id,m.role as BoardRole]));
+     // Admin RLS may allow reading every board. “My boards” must still contain
+     // only boards the current user actually owns or participates in.
+     const result=bs
+       .filter(row=>row.owner_id===user.id || roleMap.has(row.id))
+       .map(row=>rowToBoard(row,row.owner_id===user.id?"owner":roleMap.get(row.id)!));
+     return rememberUserBoards(user,result);
+   }catch(error){
+     if(stale.length)return stale;
+     throw error;
+   }
  }
- claimLocal(user);const ms=members();const out:BoardSummary[]=[];for(const b of boards()){if(b.ownerId===user.id)out.push({...b,role:"owner"});else{const m=ms.find(x=>x.boardId===b.id&&x.userId===user.id);if(m)out.push({...b,role:m.role})}}return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+ claimLocal(user);const ms=members();const out:BoardSummary[]=[];for(const b of boards()){if(b.ownerId===user.id)out.push({...b,role:"owner"});else{const m=ms.find(x=>x.boardId===b.id&&m.userId===user.id);if(m)out.push({...b,role:m.role})}}return out.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
 };
 
 export const ensureUserBoards=async(user:AuthUser)=>{const list=await getUserBoards(user);if(list.length)return list;return [await createBoard(user,"Моя доска",true)]};

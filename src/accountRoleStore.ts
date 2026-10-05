@@ -1,4 +1,4 @@
-import { isRemoteBackendEnabled,remoteRequest } from "./backend";
+import { getCachedRemoteSession, isRemoteBackendEnabled,remoteRequest } from "./backend";
 export type AccountRole="teacher"|"student";
 export type TeacherStatus="none"|"pending"|"approved"|"rejected";
 export type SubscriptionPlan="free"|"teacher"|"pro";
@@ -7,14 +7,37 @@ export type TeacherRequest={userId:string;name:string;email:string;status:Teache
 export type AdminUser={userId:string;name:string;email:string;role:AccountRole;teacherStatus:TeacherStatus;isAdmin:boolean;subscriptionPlan:SubscriptionPlan;subscriptionUntil:string|null;createdAt:string|null};
 
 const KEY="onlinerepetitor.account-role.v81",CACHE_MS=30_000;
+const PERSISTENT_CACHE_PREFIX="onlinerepetitor.account-access.v244.";
 let cache:{at:number;value:AccountAccess}|null=null;
 let inFlight:Promise<AccountAccess>|null=null;
 const plan=(x:any):SubscriptionPlan=>x==="pro"?"pro":x==="teacher"||x==="basic"?"teacher":"free";
 const localAccess=():AccountAccess=>({role:localStorage.getItem(KEY)==="student"?"student":"teacher",teacherStatus:"approved",isAdmin:false,requestedAt:null,reviewedAt:null,subscriptionPlan:"free",subscriptionUntil:null});
 const mapAccess=(x:any):AccountAccess=>({role:x?.role==="teacher"?"teacher":"student",teacherStatus:["pending","approved","rejected"].includes(x?.teacher_status)?x.teacher_status:"none",isAdmin:!!x?.is_admin,requestedAt:x?.requested_at??null,reviewedAt:x?.reviewed_at??null,subscriptionPlan:plan(x?.subscription_plan),subscriptionUntil:x?.subscription_until??null});
-const remember=(v:AccountAccess)=>{cache={at:Date.now(),value:v};return v};
+const currentRemoteUserId=()=>getCachedRemoteSession()?.user?.id||"";
+const cacheKey=()=>`${PERSISTENT_CACHE_PREFIX}${currentRemoteUserId()}`;
+const savePersistent=(value:AccountAccess)=>{const id=currentRemoteUserId();if(!id)return;try{localStorage.setItem(cacheKey(),JSON.stringify({at:Date.now(),value}))}catch{/* Storage can be unavailable in private mode. */}};
+export const getCachedAccountAccess=():AccountAccess|null=>{
+ if(!isRemoteBackendEnabled())return localAccess();
+ if(cache)return cache.value;
+ const id=currentRemoteUserId();if(!id)return null;
+ try{
+  const raw=localStorage.getItem(cacheKey());if(!raw)return null;
+  const parsed=JSON.parse(raw);const value=parsed?.value;
+  if(!value||!(value.role==="teacher"||value.role==="student"))return null;
+  const normalized:AccountAccess={role:value.role,teacherStatus:["none","pending","approved","rejected"].includes(value.teacherStatus)?value.teacherStatus:"none",isAdmin:!!value.isAdmin,requestedAt:value.requestedAt??null,reviewedAt:value.reviewedAt??null,subscriptionPlan:plan(value.subscriptionPlan),subscriptionUntil:value.subscriptionUntil??null};
+  cache={at:Number(parsed?.at)||0,value:normalized};return normalized;
+ }catch{return null}
+};
+const remember=(v:AccountAccess)=>{cache={at:Date.now(),value:v};savePersistent(v);return v};
 export function clearAccountAccessCache(){cache=null}
-export async function getAccountAccess():Promise<AccountAccess>{if(!isRemoteBackendEnabled())return localAccess();if(cache&&Date.now()-cache.at<CACHE_MS)return cache.value;if(inFlight)return inFlight;inFlight=(async()=>remember(mapAccess(await remoteRequest("/rest/v1/rpc/get_my_account_access",{method:"POST",body:"{}"}))))().finally(()=>{inFlight=null});return inFlight}
+export async function getAccountAccess():Promise<AccountAccess>{
+ if(!isRemoteBackendEnabled())return localAccess();
+ const stale=getCachedAccountAccess();
+ if(cache&&Date.now()-cache.at<CACHE_MS)return cache.value;
+ if(inFlight)return inFlight;
+ inFlight=(async()=>remember(mapAccess(await remoteRequest("/rest/v1/rpc/get_my_account_access",{method:"POST",body:"{}"}))))().finally(()=>{inFlight=null});
+ try{return await inFlight}catch(error){if(stale)return stale;throw error}
+}
 export async function getAccountRole():Promise<AccountRole>{return (await getAccountAccess()).role}
 export async function requestTeacherAccess():Promise<AccountAccess>{if(!isRemoteBackendEnabled()){localStorage.setItem(KEY,"teacher");return localAccess()}clearAccountAccessCache();return remember(mapAccess(await remoteRequest("/rest/v1/rpc/request_teacher_access",{method:"POST",body:"{}"})))}
 export async function setStudentRole():Promise<AccountAccess>{localStorage.setItem(KEY,"student");clearAccountAccessCache();if(!isRemoteBackendEnabled())return localAccess();await remoteRequest("/rest/v1/rpc/set_my_account_role",{method:"POST",body:JSON.stringify({p_role:"student"})});return getAccountAccess()}

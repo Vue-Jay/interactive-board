@@ -14,19 +14,53 @@ const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim().re
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
 const SESSION_KEY = "lesson-board.supabase.session.v1";
 const REMEMBERED_SESSION_KEY = "lesson-board.supabase.remembered-session.v1";
-const NETWORK_TIMEOUT_MS = 12000;
+const NETWORK_TIMEOUT_MS = 20000;
+const RETRY_DELAY_MS = 700;
 
 let refreshInFlight: Promise<BackendSession | null> | null = null;
 const getInFlight = new Map<string, Promise<unknown>>();
 
+const wait = (ms:number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
+const isAbortLike = (error:unknown) => error instanceof DOMException && error.name === "AbortError" || error instanceof Error && /aborted|aborterror/i.test(error.message);
 const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
   const controller = new AbortController();
+  const upstream = init.signal;
+  const forwardAbort = () => controller.abort();
+  if (upstream) {
+    if (upstream.aborted) controller.abort();
+    else upstream.addEventListener("abort", forwardAbort, { once: true });
+  }
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (isAbortLike(error) && !upstream?.aborted) throw new Error("Сервер долго отвечает. Соединение будет повторено автоматически.");
+    throw error;
   } finally {
     window.clearTimeout(timer);
+    upstream?.removeEventListener("abort", forwardAbort);
   }
+};
+
+const fetchReadWithRetry = async (input: RequestInfo | URL, init: RequestInit = {}, attempts = 2) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try { return await fetchWithTimeout(input, init); }
+    catch (error) {
+      lastError = error;
+      if (attempt + 1 >= attempts || init.signal?.aborted) break;
+      if (document.visibilityState === "hidden") {
+        await new Promise<void>(resolve => {
+          const wake = () => { if (document.visibilityState === "visible") { document.removeEventListener("visibilitychange", wake); resolve(); } };
+          document.addEventListener("visibilitychange", wake);
+          window.setTimeout(() => { document.removeEventListener("visibilitychange", wake); resolve(); }, 5000);
+        });
+      } else {
+        await wait(RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось связаться с сервером");
 };
 
 export const isRemoteBackendEnabled = () => Boolean(url && anonKey);
@@ -132,7 +166,7 @@ const doRefreshRemoteSession = async (session: BackendSession): Promise<BackendS
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ refresh_token: session.refresh_token }),
-  });
+  }, 30000);
   if (!response.ok) {
     if (response.status === 400 || response.status === 401) saveSession(null);
     return null;
@@ -187,7 +221,10 @@ const performRemoteRequest = async <T>(path: string, init: RequestInit = {}): Pr
     headers.set("apikey", anonKey);
     headers.set("Authorization", `Bearer ${token}`);
     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    return fetchWithTimeout(`${url}${path}`, { ...init, headers });
+    const request = { ...init, headers };
+    return (init.method || "GET").toUpperCase() === "GET"
+      ? fetchReadWithRetry(`${url}${path}`, request)
+      : fetchWithTimeout(`${url}${path}`, request);
   };
 
   let response = await send(session.access_token);
