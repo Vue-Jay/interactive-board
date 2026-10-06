@@ -38,8 +38,7 @@ if (!root) {
 
 createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
 
-const APP_BUILD_VERSION = "245";
-const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v245";
+const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v246";
 
 async function clearLegacyAppShell() {
   if (!("serviceWorker" in navigator)) return false;
@@ -53,49 +52,12 @@ async function clearLegacyAppShell() {
   return hadController || registrations.length > 0;
 }
 
-let lastBuildCheckAt = 0;
-let buildCheckInFlight: Promise<void> | null = null;
-
-function checkForNewBuild(force = false): Promise<void> {
-  const now = Date.now();
-  if (!force && now - lastBuildCheckAt < 60_000) return buildCheckInFlight ?? Promise.resolve();
-  if (buildCheckInFlight) return buildCheckInFlight;
-  lastBuildCheckAt = now;
-  buildCheckInFlight = (async () => {
-  try {
-    const response = await fetch(`/version.json?t=${now}`, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache" },
-    });
-    if (!response.ok) return;
-    const payload = await response.json() as { version?: string };
-    if (payload.version && payload.version !== APP_BUILD_VERSION) {
-      window.dispatchEvent(new CustomEvent("or-build-available", { detail: { version: payload.version } }));
-    }
-  } catch {
-    // Offline/temporary network failure should not interrupt an active lesson.
-  } finally {
-    buildCheckInFlight = null;
-  }
-  })();
-  return buildCheckInFlight;
-}
-
 window.addEventListener("load", () => {
   // Clean up obsolete service workers/caches without force-reloading an active lesson.
   // The next normal navigation will naturally use the clean app shell.
   void clearLegacyAppShell()
     .then((hadLegacyShell) => {
       if (hadLegacyShell) sessionStorage.setItem(UPDATE_RELOAD_GUARD, "1");
-      void checkForNewBuild(true);
     })
     .catch((error) => console.warn("Legacy app-shell cleanup failed", error));
 });
-
-// Build checks are deliberately sparse and never reload the current page.
-// An online lesson must not jump/restart just because a deployment happened.
-window.addEventListener("focus", () => { void checkForNewBuild(); });
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void checkForNewBuild();
-});
-window.setInterval(() => { void checkForNewBuild(); }, 5 * 60_000);
