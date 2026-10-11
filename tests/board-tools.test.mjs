@@ -65,7 +65,7 @@ test("incremental brush movement retains both halves of a stroke",()=>{
 });
 test("eraser has dedicated capture listeners and keeps tool registry",()=>{
  const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
- const registered=[...app.matchAll(/\\{ id: "(select|hand|lasso|pen|marker|eraser|connector|frame|comment|table|formula|graph|checklist|quiz|flashcard|cover|sticky|text|shape|media|linkmedia)", icon:/g)].map(m=>m[1]);
+ const registered=[...app.matchAll(/\{ id: "(select|hand|lasso|pen|marker|eraser|connector|frame|comment|table|formula|graph|checklist|quiz|flashcard|cover|sticky|text|shape|media|linkmedia)", icon:/g)].map(m=>m[1]);
  assert.equal(new Set(registered).size,21);
  assert.ok(app.includes('onPointerDownCapture='));
  assert.ok(app.includes('onPointerMoveCapture='));
