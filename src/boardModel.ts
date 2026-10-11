@@ -120,7 +120,7 @@ const connectorRoutings: ConnectorRouting[] = ["straight","elbow"];
 const binding = (v: unknown): v is ConnectorBinding => !!v && typeof v === "object" && typeof (v as ConnectorBinding).itemId === "string" && finite((v as ConnectorBinding).nx) && finite((v as ConnectorBinding).ny) && (v as ConnectorBinding).nx >= 0 && (v as ConnectorBinding).nx <= 1 && (v as ConnectorBinding).ny >= 0 && (v as ConnectorBinding).ny <= 1;
 
 export function parseDocument(raw: string): DocumentData {
-  if (raw.length > 10 * 1024 * 1024) throw new Error("Файл слишком большой");
+  if (raw.length > 24 * 1024 * 1024) throw new Error("Файл слишком большой");
   const d = JSON.parse(raw);
   // Convert old mixed item arrays and new separate ink collections through the
   // same strict stroke validation. No legacy drawing is discarded.
