@@ -65,6 +65,7 @@ import {
 
 import { eraseInkAlongPath } from "./inkEraser";
 import { inkIdsInLasso } from "./inkLasso";
+import { hitTestInk } from "./inkHitTest";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { changesSinceLastVisit, recentBoardHistory } from "./boardHistoryUtils";
@@ -329,7 +330,7 @@ type Gesture = {
 const tools: { id: Tool; icon: IconName; label: string; dividerAfter?: boolean }[] = [
   { id: "select", icon: "select", label: "Выделение · V / М" },
   { id: "hand", icon: "hand", label: "Рука · H / Р", dividerAfter: true },
-  { id: "lasso", icon: "lasso", label: "Петля: выделить объекты и стереть рисунок · Q / Й" },
+  { id: "lasso", icon: "lasso", label: "Петля · выделение всех объектов · Q / Й" },
   { id: "pen", icon: "pen", label: "Карандаш · P / З" },
   { id: "marker", icon: "marker", label: "Маркер · M / Ь" },
   { id: "eraser", icon: "eraser", label: "Ластик · E / У", dividerAfter: true },
@@ -2631,25 +2632,27 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       }
     }
     else if (g.mode === "lasso") {
-      const directHits =
-        g.path.length < 3
-          ? []
-          : itemsRef.current.filter((item) =>
-              !item.hidden && !isInkItem(item) && inside(
-                { x: item.x + item.width / 2, y: item.y + item.height / 2 },
-                g.path,
-              ),
-            );
-      const hitGroups = new Set(directHits.map((item) => item.groupId).filter(Boolean));
-      const hits = itemsRef.current
-        .filter((item) => !item.hidden && !isInkItem(item) &&
-          (directHits.some((hit) => hit.id === item.id) || (item.groupId && hitGroups.has(item.groupId))))
-        .map((item) => item.id);
-      setSelected(g.additive ? [...new Set([...g.ids, ...hits])] : hits);
-      if (canEdit && g.path.length >= 3) {
-        const erased = inkIdsInLasso(itemsRef.current, g.path);
-        if (erased.size) commit(itemsRef.current.filter(item => !erased.has(item.id)));
+      // Lasso is a *selection* tool, never destructive. Ink is stored as
+      // individual objects and uses geometric stroke/polygon intersection.
+      const inkHits = inkIdsInLasso(itemsRef.current, g.path);
+      const selectedGroups = new Set<string>();
+      const selectedIds = new Set<string>(inkHits);
+      if (g.path.length >= 3) {
+        for (const item of itemsRef.current) {
+          if (item.hidden || isInkItem(item)) continue;
+          if (inside({x:item.x+item.width/2,y:item.y+item.height/2},g.path)) {
+            selectedIds.add(item.id);
+            if (item.groupId) selectedGroups.add(item.groupId);
+          }
+        }
+        if (selectedGroups.size) {
+          for (const item of itemsRef.current)
+            if (!item.hidden && item.groupId && selectedGroups.has(item.groupId))
+              selectedIds.add(item.id);
+        }
       }
+      const hits=[...selectedIds];
+      setSelected(g.additive ? [...new Set([...g.ids,...hits])] : hits);
     }
     setPath([]);
     setPreview(null);
@@ -2707,8 +2710,16 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         return;
       }
     }
-    const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
-    const hit = itemsRef.current.find((i) => i.id === id && !isInkItem(i));
+    let id=target.closest<HTMLElement>("[data-object]")?.dataset.object;
+    if ((tool==="select"||tool==="hand") && !space &&
+        !target.closest("[data-transform-handle],[data-group-transform-handle],[data-connector-endpoint]")) {
+      // The Canvas layer is not a DOM object. Resolve a pen stroke only when
+      // clicked, in its original stacking order above a hit DOM object.
+      const domIndex=id?itemsRef.current.findIndex(item=>item.id===id):-1;
+      const picked=hitTestInk(itemsRef.current,p,7/Math.max(0.1,view.zoom),domIndex);
+      if(picked)id=picked.id;
+    }
+    const hit=itemsRef.current.find(item=>item.id===id);
     // Formula touch manipulation has its own direct drag path. Text spans and
     // nested fraction glyphs must not defer to browser text-selection gestures.
     if (hit?.kind === "formula" && (e.pointerType === "touch" || e.pointerType === "pen") &&
@@ -4576,8 +4587,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
-  const visibleObjects = useMemo(() => visibleItems.filter(item => !isInkItem(item)), [visibleItems]);
-  const objectCount = useMemo(() => items.filter(item => !isInkItem(item)).length, [items]);
+  const visibleObjects = visibleItems;
+  const objectCount = items.length;
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
   // Rasterize unselected, unlocked pen/marker runs in every role. Selected
   // ink remains a real DOM object for handles, moving and rotating. The
@@ -4595,8 +4606,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       if (bounds) layers.push({ kind: "ink", key: "ink-" + run[0].id, strokes: run, bounds });
       run = [];
     };
+    // A few selected strokes may show their editing handles individually.
+    // Large lasso selections remain batched to avoid thousands of DOM nodes.
+    const detailedInkSelection = selectedIds.size <= 24;
     for (const item of visibleItems) {
-      if (isInkItem(item) && item.points?.length) run.push(item);
+      if (isInkItem(item) && item.points?.length &&
+          !(detailedInkSelection && selectedIds.has(item.id))) run.push(item);
       else { flush(); layers.push({ kind: "item", key: item.id, item }); }
     }
     flush();
@@ -4654,7 +4669,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const rows: Item[] = [];
     for (let indexValue = items.length - 1; indexValue >= 0; indexValue--) {
       const item = items[indexValue];
-      if (isInkItem(item)) continue;
       if (item.groupId) {
         if (seenGroups.has(item.groupId)) continue;
         seenGroups.add(item.groupId);
@@ -5572,7 +5586,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   </div>
                 );
               })}
-              {!objectCount && <div className="layers-empty">Нет отдельных объектов. Рисунки находятся на слое карандаша и маркера.</div>}
+              {!objectCount && <div className="layers-empty">На доске пока нет объектов</div>}
             </div>
           </aside>
         )}
@@ -6057,8 +6071,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             e.preventDefault();
             finishEdit();
             const point = local(e.clientX, e.clientY);
-            const id = (e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
-            const hit = itemsRef.current.find((item) => item.id === id && !isInkItem(item));
+            let id=(e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
+            const domIndex=id?itemsRef.current.findIndex(item=>item.id===id):-1;
+            const strokeHit=hitTestInk(itemsRef.current,world(point),7/Math.max(.1,view.zoom),domIndex);
+            if(strokeHit)id=strokeHit.id;
+            const hit=itemsRef.current.find(item=>item.id===id);
             if (hit) {
               const family = familyIdsFor(hit);
               if (!family.every((member) => selected.includes(member))) setSelected(family);
