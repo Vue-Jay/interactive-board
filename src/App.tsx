@@ -2619,7 +2619,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     else if (g.mode === "draw" && g.ink)
       commit([
         ...g.before,
-        stroke(g.ink.id, g.ink.kind, g.path, g.ink.color, g.ink.weight),
+        stroke(g.ink.id, g.ink.kind, g.path, g.ink.color, g.ink.weight, g.view.zoom),
       ]);
     else if (g.mode === "connector") {
       const startPoint = g.path[0];
@@ -4589,6 +4589,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
   const visibleObjects = visibleItems;
   const objectCount = items.length;
+  const drawingCount = useMemo(() => items.filter(isInkItem).length, [items]);
+  // Only actual objects need minimap markers; strokes are already rasterized.
+  const minimapObjects = useMemo(() => visibleItems.filter(item => !isInkItem(item)), [visibleItems]);
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
   // Rasterize unselected, unlocked pen/marker runs in every role. Selected
   // ink remains a real DOM object for handles, moving and rotating. The
@@ -4652,7 +4655,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const miniH = Math.max(1, miniBottom - miniY);
   // Retain minimap React elements between camera frames. Their geometry
   // depends on content/bounds and selection, not on every pointer movement.
-  const minimapMarkers = useMemo(() => visibleObjects.slice(0, 400).map(item => (
+  const minimapMarkers = useMemo(() => minimapObjects.slice(0, 400).map(item => (
     <span
       key={item.id}
       className={`minimap-item ${selectedIds.has(item.id) ? "selected" : ""}`}
@@ -4663,12 +4666,17 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         height: `${Math.max(1.2, (item.height / miniH) * 100)}%`,
       }}
     />
-  )), [visibleObjects, selectedIds, miniX, miniY, miniW, miniH]);
+  )), [minimapObjects, selectedIds, miniX, miniY, miniW, miniH]);
   const layerRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Item[] = [];
+    let shownInk=0;
     for (let indexValue = items.length - 1; indexValue >= 0; indexValue--) {
       const item = items[indexValue];
+      // Keep the layer panel cheap even when it contains 10,000 strokes.
+      // The 80 most recent strokes can be accessed individually here;
+      // all of them remain selectable with lasso or by clicking the canvas.
+      if (isInkItem(item) && ++shownInk > 80) continue;
       if (item.groupId) {
         if (seenGroups.has(item.groupId)) continue;
         seenGroups.add(item.groupId);
@@ -5536,6 +5544,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               <button onClick={() => setLayersOpen(false)} aria-label="Закрыть слои"><Icon name="close" size={17} /></button>
             </div>
             <div className="layers-list">
+              {drawingCount>80 && <div className="layers-empty">Рисунки: {drawingCount} штрихов. В списке показаны последние 80; остальные можно выделить петлёй или нажатием на штрих.</div>}
               {layerRows.map((item) => {
                 const family = item.groupId ? items.filter((candidate) => candidate.groupId === item.groupId) : [item];
                 const isSelected = family.every((candidate) => selected.includes(candidate.id));
