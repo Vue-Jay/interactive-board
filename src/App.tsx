@@ -1791,7 +1791,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       }
       if (isRemoteBackendEnabled()) {
         setSaveStatus("Сохранение на сервер…");
-        void pushRemoteSnapshot(data, fingerprint);
+        const pending=pushRemoteSnapshot(data,fingerprint);
+        remoteSavePromise.current=pending;
+        void pending.finally(()=>{
+          if(remoteSavePromise.current===pending)remoteSavePromise.current=null;
+        });
       } else {
         setSaveStatus("Сохранено в браузере");
       }
