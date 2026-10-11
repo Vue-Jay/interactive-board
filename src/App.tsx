@@ -2711,7 +2711,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           mode:"drag",
           start,
           view,
-          before:itemsRef.current.map(deepItem),
+          before:itemsRef.current,
           ids:movableIds,
           path:[p],
           additive:false,
@@ -2726,7 +2726,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         mode:"hand-smart",
         start,
         view,
-        before:itemsRef.current.map(deepItem),
+        before:itemsRef.current,
         ids:movableIds,
         path:[p],
         additive:false,
@@ -4547,10 +4547,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     height: boardRect.height / view.zoom,
   } : null;
   const miniPad = 30;
-  const miniX = Math.min(minimapBounds.x, visibleWorld?.x ?? minimapBounds.x) - miniPad;
-  const miniY = Math.min(minimapBounds.y, visibleWorld?.y ?? minimapBounds.y) - miniPad;
-  const miniRight = Math.max(minimapBounds.x + minimapBounds.width, visibleWorld ? visibleWorld.x + visibleWorld.width : minimapBounds.x + minimapBounds.width) + miniPad;
-  const miniBottom = Math.max(minimapBounds.y + minimapBounds.height, visibleWorld ? visibleWorld.y + visibleWorld.height : minimapBounds.y + minimapBounds.height) + miniPad;
+  // Stable content coordinates: panning should move only the viewport outline,
+  // not rebuild up to 400 minimap markers and resize the entire miniature.
+  const miniX = minimapBounds.x - miniPad;
+  const miniY = minimapBounds.y - miniPad;
+  const miniRight = minimapBounds.x + minimapBounds.width + miniPad;
+  const miniBottom = minimapBounds.y + minimapBounds.height + miniPad;
   const miniW = Math.max(1, miniRight - miniX);
   const miniH = Math.max(1, miniBottom - miniY);
   // Retain minimap React elements between camera frames. Their geometry
