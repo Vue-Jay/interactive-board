@@ -72,3 +72,13 @@ test("eraser has dedicated capture listeners and keeps tool registry",()=>{
  assert.ok(app.includes('onPointerUpCapture='));
  assert.ok(app.includes('eraseInkAt(before,g.last,p'));
 });
+
+test("eraser movement uses frame batching instead of global connector updates",()=>{
+ const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+ assert.ok(app.includes("const advanceEraser=(point:Point)=>"));
+ assert.ok(app.includes("if(next!==before){g.dirty=true;displayErasedInk(next);}"));
+ assert.ok(app.includes("eraserPendingPoint.current=world(local(e.clientX,e.clientY))"));
+ assert.ok(app.includes("requestAnimationFrame(()=>"));
+ assert.ok(app.includes("if(dirty)commit(itemsRef.current)"));
+ assert.ok(app.includes("setLiveEraserCursor(cursor.x,cursor.y)"));
+});
