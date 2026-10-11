@@ -82,3 +82,12 @@ test("eraser movement uses frame batching instead of global connector updates",(
  assert.ok(app.includes("if(dirty)commit(itemsRef.current)"));
  assert.ok(app.includes("setLiveEraserCursor(cursor.x,cursor.y)"));
 });
+
+test("eraser hover does not render the entire board or broadcast cursor each mouse event",()=>{
+ const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+ assert.ok(app.includes('if(tool==="eraser"){if(!eraserSession.current)'));
+ assert.ok(app.includes("setLiveEraserCursor(p.x,p.y)"));
+ assert.ok(!app.includes("setEraserCursor("));
+ assert.ok(!app.includes("eraserCursor &&"));
+ assert.ok(app.includes('el.style.visibility="visible"'));
+});
