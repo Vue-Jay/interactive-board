@@ -36,7 +36,20 @@ if (!root) {
   throw new Error("Не найден корневой элемент #root");
 }
 
-createRoot(root).render(<ErrorBoundary><App /></ErrorBoundary>);
+const isConfirmationPage = window.location.pathname === "/auth/confirmed";
+const confirmParams = new URLSearchParams(window.location.search);
+const confirmHash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+const confirmationError = confirmParams.get("error_description") || confirmHash.get("error_description");
+createRoot(root).render(
+  isConfirmationPage
+    ? <main style={{minHeight:"100dvh",display:"grid",placeItems:"center",background:"#f5f7fc",fontFamily:"system-ui,sans-serif",padding:24}}>
+        <section style={{maxWidth:460,padding:36,borderRadius:20,background:"white",boxShadow:"0 8px 40px #14234d18",textAlign:"center"}}>
+          <h1>{confirmationError ? "Не удалось подтвердить почту" : "Почта подтверждена"}</h1>
+          <p>{confirmationError || "Адрес электронной почты подтверждён. Теперь можно закрыть эту вкладку и войти в OnlineRepetitor."}</p>
+        </section>
+      </main>
+    : <ErrorBoundary><App /></ErrorBoundary>
+);
 
 const UPDATE_RELOAD_GUARD = "onlinerepetitor.legacy-shell-cleanup.v246";
 
