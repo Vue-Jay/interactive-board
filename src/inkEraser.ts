@@ -87,3 +87,34 @@ export function eraseInkAt(items:Item[],from:Point,to:Point,radius:number):Item[
   }
   return changed?output:items;
 }
+
+/**
+ * Apply a complete eraser gesture only once, after the immediate canvas preview.
+ * Process candidate strokes independently so unrelated items on large teacher
+ * boards are never scanned once per pointer movement.
+ */
+export function eraseInkAlongPath(items: Item[], path: Point[], radius: number): Item[] {
+  if (!path.length || radius <= 0) return items;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of path){
+    minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);
+    maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);
+  }
+  const output:Item[]=[];
+  let changed=false;
+  for(const item of items){
+    if((item.kind!=="pen"&&item.kind!=="marker") || item.locked || item.hidden || !item.points?.length ||
+      item.x>maxX+radius+50 || item.x+item.width<minX-radius-50 ||
+      item.y>maxY+radius+50 || item.y+item.height<minY-radius-50){
+      output.push(item);
+      continue;
+    }
+    let fragments:Item[]=[item];
+    for(let i=0;i<path.length && fragments.length;i++){
+      fragments=eraseInkAt(fragments,path[Math.max(0,i-1)],path[i],radius);
+    }
+    if(fragments.length!==1 || fragments[0]!==item)changed=true;
+    output.push(...fragments);
+  }
+  return changed?output:items;
+}
