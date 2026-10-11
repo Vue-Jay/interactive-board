@@ -81,7 +81,35 @@ export type Item = {
   mediaUrl?: string;
   mediaTitle?: string;
 };
-export type DocumentData = { version: 1; title: string; view: View; items: Item[] };
+// Ink is stored in its own drawing collection, not in regular board objects.
+// "after" preserves its visual position relative to normal items on old boards.
+export type InkEntry = { after: number; stroke: Item };
+export type DocumentData = { version: 1; title: string; view: View; items: Item[]; ink?: InkEntry[] };
+export const isInkItem = (item: Item): boolean => item.kind === "pen" || item.kind === "marker";
+
+export function expandDocumentInk(data: DocumentData): Item[] {
+  const ink = data.ink ?? [];
+  if (!ink.length) return data.items;
+  const output: Item[] = [];
+  let cursor = 0;
+  for (let index = 0; index <= data.items.length; index++) {
+    while (cursor < ink.length && ink[cursor].after === index)
+      output.push(ink[cursor++].stroke);
+    if (index < data.items.length) output.push(data.items[index]);
+  }
+  return output;
+}
+
+export function packDocumentInk(data: DocumentData): DocumentData {
+  const all = expandDocumentInk(data);
+  const items: Item[] = [];
+  const ink: InkEntry[] = [];
+  for (const item of all) {
+    if (isInkItem(item)) ink.push({ after: items.length, stroke: item });
+    else items.push(item);
+  }
+  return { version: 1, title: data.title, view: data.view, items, ...(ink.length ? { ink } : {}) };
+}
 export const STORAGE_KEY = "lesson-board.document.v1";
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e9;
 const point = (v: unknown): boolean => !!v && typeof v === "object" && finite((v as Point).x) && finite((v as Point).y);
@@ -94,6 +122,22 @@ const binding = (v: unknown): v is ConnectorBinding => !!v && typeof v === "obje
 export function parseDocument(raw: string): DocumentData {
   if (raw.length > 10 * 1024 * 1024) throw new Error("Файл слишком большой");
   const d = JSON.parse(raw);
+  // Convert old mixed item arrays and new separate ink collections through the
+  // same strict stroke validation. No legacy drawing is discarded.
+  if (d?.ink != null) {
+    if (!Array.isArray(d.items) || !Array.isArray(d.ink) ||
+        d.ink.length + d.items.length > 10000) throw new Error("Повреждён слой рисунков");
+    let previousAfter = -1;
+    for (const entry of d.ink) {
+      if (!entry || !Number.isInteger(entry.after) ||
+          entry.after < 0 || entry.after > d.items.length ||
+          entry.after < previousAfter || !entry.stroke ||
+          !["pen", "marker"].includes(entry.stroke.kind))
+        throw new Error("Повреждён штрих в слое рисунков");
+      previousAfter = entry.after;
+    }
+    d.items = expandDocumentInk(d as DocumentData);
+  }
   const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"];
   if (!d || d.version !== 1 || typeof d.title !== "string" || d.title.length > 10000 || !point(d.view) || !finite(d.view.zoom) || d.view.zoom < .1 || d.view.zoom > 8 || !Array.isArray(d.items) || d.items.length > 10000) throw new Error("Неверный формат доски");
   const ids = new Set<string>();
@@ -203,7 +247,7 @@ export function parseDocument(raw: string): DocumentData {
       if (i.color != null && !color(i.color)) throw new Error("Повреждён цвет шторки");
     }
   }
-  return {
+  return packDocumentInk({
     version: 1,
     title: d.title,
     view: { x: d.view.x, y: d.view.y, zoom: d.view.zoom },
@@ -284,7 +328,7 @@ export function parseDocument(raw: string): DocumentData {
       ...(i.locked === true ? { locked: true } : {}),
       ...(i.hidden === true ? { hidden: true } : {}),
     })),
-  };
+  });
 }
 
 export function stroke(id: string, kind: "pen" | "marker", path: Point[], colorValue: string, weight: number): Item {
