@@ -195,3 +195,57 @@ export async function ensureBoardAssets(boardId: string, document: DocumentData)
     }
   }));
 }
+
+const displayPreviews = new Map<string, Promise<Blob | null>>();
+const DISPLAY_PREVIEW_LIMIT = 12;
+export function getDisplayAsset(id: string, boardId: string): Promise<Blob | null> {
+  const key = boardId + "/" + id;
+  const existing = displayPreviews.get(key);
+  if (existing) return existing;
+  const pending = (async () => {
+    const blob = await getAsset(id, boardId);
+    if (!blob || !["image/jpeg", "image/png", "image/webp"].includes(blob.type) ||
+        typeof createImageBitmap !== "function") return blob;
+    let bitmap: ImageBitmap | undefined;
+    try {
+      // Existing high-resolution attachments get a smaller display-only copy.
+      bitmap = await createImageBitmap(blob);
+      const longest = Math.max(bitmap.width, bitmap.height);
+      if (longest <= 2048) return blob;
+      const scale = 2048 / longest;
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      let preview: Blob | null = null;
+      if (typeof OffscreenCanvas !== "undefined") {
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return blob;
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        preview = await canvas.convertToBlob({ type: "image/webp", quality: 0.86 });
+      } else if (typeof document !== "undefined") {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return blob;
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        preview = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", 0.86));
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      return preview || blob;
+    } catch {
+      return blob;
+    } finally {
+      bitmap?.close();
+    }
+  })();
+  displayPreviews.set(key, pending);
+  while (displayPreviews.size > DISPLAY_PREVIEW_LIMIT) {
+    const oldest = displayPreviews.keys().next().value;
+    if (oldest === undefined) break;
+    displayPreviews.delete(oldest);
+  }
+  void pending.catch(() => { if (displayPreviews.get(key) === pending) displayPreviews.delete(key); });
+  return pending;
+}
