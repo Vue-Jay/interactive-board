@@ -3759,12 +3759,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const nextText = replaceAll ? cleaned : formulaDraft.text.slice(0, start) + cleaned + formulaDraft.text.slice(end);
     setFormulaDraft({ ...formulaDraft, text: nextText });
     window.setTimeout(() => {
-      formulaInput.current?.focus();
       formulaInput.current?.setSelectionRange(selectStart, selectEnd);
     }, 0);
   };
 
-  const pasteFormulaSource = async () => { if(!formulaDraft)return; try{const value=(await navigator.clipboard.readText()).slice(0,10000);if(!value.trim()){setNotice("Буфер обмена пуст");return}setFormulaDraft({...formulaDraft,text:value});window.setTimeout(()=>formulaInput.current?.focus(),0)}catch{setNotice("Браузер не дал прочитать буфер обмена")} };
+  const pasteFormulaSource = async () => { if(!formulaDraft)return; try{const value=(await navigator.clipboard.readText()).slice(0,10000);if(!value.trim()){setNotice("Буфер обмена пуст");return}setFormulaDraft({...formulaDraft,text:value})}catch{setNotice("Браузер не дал прочитать буфер обмена")} };
   const copyFormulaSource = async () => {
     if (!formulaDraft) return;
     try {
