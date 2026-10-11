@@ -7969,3 +7969,9 @@ option{background:#fff;color:#343741}
 .board.eraser-live .board-object.object-marker:not(.locked) {
   visibility: hidden !important;
 }
+
+/* Canvas-backed ink participates in the live eraser preview in every role.
+   Hide the raster layer while the brush preview displays its masked strokes. */
+.board.eraser-live .viewer-ink-canvas {
+  visibility: hidden !important;
+}
