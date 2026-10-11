@@ -4520,7 +4520,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     return layers;
   }, [visibleItems, selectedIds]);
   const renderEntries = useMemo(() => {
-    if (!boardViewportSize.width || !boardViewportSize.height) return inkLayers;
+    // Wait for ResizeObserver before mounting a heavy board. Without viewport
+    // dimensions the old renderer mounted every single object at startup.
+    if (!boardViewportSize.width || !boardViewportSize.height) return [] as typeof inkLayers;
     const margin = 180 / Math.max(0.1, view.zoom);
     const left = -view.x / view.zoom - margin, top = -view.y / view.zoom - margin;
     const right = (boardViewportSize.width - view.x) / view.zoom + margin;
@@ -5944,7 +5946,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             e.preventDefault();
             finishEdit();
             const point = local(e.clientX, e.clientY);
-            const id = (e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
+            let id = (e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
+            const domIndex = id ? itemsRef.current.findIndex(item => item.id === id) : -1;
+            const ink = hitTestInk(itemsRef.current, world(point), 9 / Math.max(0.1, view.zoom), domIndex, new Set(selected));
+            if (ink) id = ink.id;
             const hit = itemsRef.current.find((item) => item.id === id);
             if (hit) {
               const family = familyIdsFor(hit);
