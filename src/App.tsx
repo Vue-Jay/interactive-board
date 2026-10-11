@@ -4474,6 +4474,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
   const renderedItems = useMemo(() => {
+    // Read-only mode renders through viewerLayers instead; avoid doing
+    // an otherwise wasted scan through every stroke at every camera frame.
+    if (!canEdit) return [] as Item[];
     if (!boardViewportSize.width || !boardViewportSize.height || visibleItems.length < 30) return visibleItems;
     // The previous 420px overscan kept too many images, PDFs and ink objects
     // mounted even when far outside the viewport. Keep a modest buffer for
@@ -4486,7 +4489,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const keep = new Set(selected);
     if (editing) keep.add(editing);
     return visibleItems.filter((item) => keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
-  }, [visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selected, editing]);
+  }, [canEdit, visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selected, editing]);
   // Group consecutive ink strokes into raster layers on read-only boards.
   // Splitting groups at every non-ink object preserves the exact stacking order
   // relative to images, PDFs, shapes and text; board data is never modified.
