@@ -2776,7 +2776,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if (mode === "erase") display(eraseInk(gesture.current.before, gesture.current.path, eraserSize / 2 / view.zoom));
     // Desktop mouse drag keeps double-click semantics. Touch must be captured immediately,
     // otherwise Android may retarget/cancel the pointer before selection drag starts.
-    if (mode !== "drag" || e.pointerType === "touch") board.current!.setPointerCapture(e.pointerId);
+    if (e.pointerType === "touch" || e.pointerType === "pen") { e.preventDefault(); e.stopPropagation(); }
+    if (mode !== "drag" || e.pointerType === "touch" || e.pointerType === "pen") board.current!.setPointerCapture(e.pointerId);
   };
   const scheduleGesturePaint = () => {
     if (gesturePaintFrame.current != null) return;
