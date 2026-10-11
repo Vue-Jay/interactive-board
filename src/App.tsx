@@ -3349,6 +3349,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   }, []);
 
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item] as const)), [items]);
+  const selectedIds = useMemo(() => new Set(selected), [selected]);
   const selectedItems = useMemo(() => selected.map((id) => itemById.get(id)).filter((item): item is Item => Boolean(item)), [selected, itemById]);
   const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
   const selectionBounds = boundsOf(selectedItems);
@@ -4487,10 +4488,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const top = -view.y / view.zoom - margin;
     const right = (boardViewportSize.width - view.x) / view.zoom + margin;
     const bottom = (boardViewportSize.height - view.y) / view.zoom + margin;
-    const keep = new Set(selected);
-    if (editing) keep.add(editing);
-    return visibleItems.filter((item) => keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
-  }, [canEdit, visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selected, editing]);
+    const keep = selectedIds;
+    return visibleItems.filter((item) => item.id === editing || keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
+  }, [canEdit, visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selectedIds, editing]);
   // Group consecutive ink strokes into raster layers on read-only boards.
   // Splitting groups at every non-ink object preserves the exact stacking order
   // relative to images, PDFs, shapes and text; board data is never modified.
@@ -4500,7 +4500,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       | { kind: "ink"; key: string; strokes: Item[]; bounds: Bounds }
       | { kind: "item"; key: string; item: Item };
     const layers: Layer[] = [];
-    const selectedIds = new Set(selected);
     let run: Item[] = [];
     const flush = () => {
       if (!run.length) return;
@@ -4520,7 +4519,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }
     flush();
     return layers;
-  }, [canEdit, visibleItems, selected]);
+  }, [canEdit, visibleItems, selectedIds]);
   const renderEntries = useMemo(() => {
     if (!viewerLayers) return renderedItems.map(item => ({ kind: "item" as const, key: item.id, item }));
     if (!boardViewportSize.width || !boardViewportSize.height) return viewerLayers;
@@ -4554,7 +4553,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const minimapMarkers = useMemo(() => visibleItems.slice(0, 400).map(item => (
     <span
       key={item.id}
-      className={`minimap-item ${selected.includes(item.id) ? "selected" : ""}`}
+      className={`minimap-item ${selectedIds.has(item.id) ? "selected" : ""}`}
       style={{
         left: `${((item.x - miniX) / miniW) * 100}%`,
         top: `${((item.y - miniY) / miniH) * 100}%`,
@@ -4562,7 +4561,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         height: `${Math.max(1.2, (item.height / miniH) * 100)}%`,
       }}
     />
-  )), [visibleItems, selected, miniX, miniY, miniW, miniH]);
+  )), [visibleItems, selectedIds, miniX, miniY, miniW, miniH]);
   const layerRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Item[] = [];
@@ -6043,7 +6042,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               <div
                 data-object={item.id}
                 key={item.id}
-                className={`board-object object-${item.kind} ${selected.includes(item.id) ? "selected" : ""} ${item.locked ? "locked" : ""}`}
+                className={`board-object object-${item.kind} ${selectedIds.has(item.id) ? "selected" : ""} ${item.locked ? "locked" : ""}`}
                 style={{
                   left: item.x,
                   top: item.y,
