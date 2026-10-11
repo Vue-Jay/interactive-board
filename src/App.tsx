@@ -9,6 +9,7 @@ import {
   useState,
   type PointerEvent as PE,
 } from "react";
+import { flushSync } from "react-dom";
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import GeometryInstruments from "./GeometryInstruments";
@@ -58,7 +59,7 @@ import {
   type DocumentData,
 } from "./boardModel";
 
-import { eraseInkAt } from "./inkEraser";
+import { eraseInkAlongPath } from "./inkEraser";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -1463,9 +1464,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const lastViewSerialized = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
-  const eraserSession = useRef<{pointer:number;last:Point;zoom:number;dirty:boolean}|null>(null);
-  const eraserFrame=useRef<number|null>(null);
-  const eraserPendingPoint=useRef<Point|null>(null);
+  const eraserSession = useRef<{pointer:number;last:Point;zoom:number;path:Point[]}|null>(null);
+  const eraserPreviewCanvas=useRef<HTMLCanvasElement>(null);
+  const eraserPreviewRatio=useRef(1);
   const eraserCursorElement = useRef<HTMLDivElement>(null);
   const setLiveEraserCursor=(x:number,y:number)=>{
     const el=eraserCursorElement.current;
@@ -1906,32 +1907,109 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       if (pending) setItems(pending);
     });
   };
-  // The eraser only changes ink. Running connector reconciliation on every
-  // pointermove is prohibitively expensive on large teacher-owned boards.
-  const displayErasedInk = (next: Item[]) => {
-    itemsRef.current=next;
-    pendingDisplayItems.current=next;
-    if(displayFrame.current!==null)return;
-    displayFrame.current=requestAnimationFrame(()=>{
-      displayFrame.current=null;
-      const pending=pendingDisplayItems.current;
-      pendingDisplayItems.current=null;
-      if(pending)setItems(pending);
-    });
+  // The original SVG strokes are replaced with a lightweight, instant canvas
+  // preview while erasing. This keeps the brush responsive on teacher boards
+  // without forcing the entire React object tree to render on every pointermove.
+  const beginEraserPreview=()=>{
+    const canvas=eraserPreviewCanvas.current;
+    const host=board.current;
+    if(!canvas||!host)return;
+    const rect=host.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)return;
+    const ratio=Math.min(2,window.devicePixelRatio||1);
+    eraserPreviewRatio.current=ratio;
+    canvas.width=Math.max(1,Math.round(rect.width*ratio));
+    canvas.height=Math.max(1,Math.round(rect.height*ratio));
+    const ctx=canvas.getContext("2d");
+    if(!ctx)return;
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    ctx.clearRect(0,0,rect.width,rect.height);
+    const z=view.zoom;
+    const left=-view.x/z,top=-view.y/z;
+    const right=(rect.width-view.x)/z,bottom=(rect.height-view.y)/z;
+    ctx.setTransform(ratio*z,0,0,ratio*z,ratio*view.x,ratio*view.y);
+    for(const item of itemsRef.current){
+      if((item.kind!=="pen"&&item.kind!=="marker")||item.hidden||item.locked||!item.points?.length)continue;
+      const pad=(item.weight??3)/2;
+      if(item.x+item.width+pad<left||item.x-pad>right||item.y+item.height+pad<top||item.y-pad>bottom)continue;
+      ctx.save();
+      if(item.rotation){
+        const cx=item.x+item.width/2,cy=item.y+item.height/2;
+        ctx.translate(cx,cy);ctx.rotate(item.rotation*Math.PI/180);ctx.translate(-cx,-cy);
+      }
+      ctx.globalAlpha=item.kind==="marker"?.32:1;
+      ctx.strokeStyle=item.color??"#000000";
+      ctx.fillStyle=item.color??"#000000";
+      ctx.lineWidth=item.weight??3;
+      ctx.lineJoin="round";
+      ctx.lineCap="round";
+      const pts=item.points;
+      if(pts.length===1){
+        ctx.beginPath();
+        ctx.arc(item.x+pts[0].x,item.y+pts[0].y,(item.weight??3)/2,0,Math.PI*2);
+        ctx.fill();
+      }else{
+        ctx.beginPath();
+        ctx.moveTo(item.x+pts[0].x,item.y+pts[0].y);
+        for(let i=1;i<pts.length;i++)ctx.lineTo(item.x+pts[i].x,item.y+pts[i].y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    canvas.style.display="block";
+    host.classList.add("eraser-live");
   };
-  const advanceEraser=(point:Point)=>{
+  const previewEraserSegment=(from:Point,to:Point)=>{
+    const canvas=eraserPreviewCanvas.current;
+    if(!canvas||canvas.style.display!=="block")return;
+    const ctx=canvas.getContext("2d");
+    if(!ctx)return;
+    const ratio=eraserPreviewRatio.current;
+    ctx.save();
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation="destination-out";
+    ctx.lineWidth=eraserSize;
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.beginPath();
+    ctx.moveTo(from.x,from.y);
+    ctx.lineTo(to.x,to.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(to.x,to.y,eraserSize/2,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  };
+  const stopEraserPreview=()=>{
+    board.current?.classList.remove("eraser-live");
+    const canvas=eraserPreviewCanvas.current;
+    if(canvas)canvas.style.display="none";
+  };
+  const recordEraserPoint=(point:Point)=>{
     const g=eraserSession.current;
     if(!g)return;
-    const before=itemsRef.current;
-    const next=eraseInkAt(before,g.last,point,eraserSize/2/g.zoom);
-    g.last=point;
-    if(next!==before){g.dirty=true;displayErasedInk(next);}
+    if(Math.hypot(point.x-g.last.x,point.y-g.last.y)>.1){
+      g.path.push(point);
+      g.last=point;
+    }
   };
-  const flushEraserFrame=()=>{
-    if(eraserFrame.current!==null){cancelAnimationFrame(eraserFrame.current);eraserFrame.current=null;}
-    const point=eraserPendingPoint.current;
-    eraserPendingPoint.current=null;
-    if(point)advanceEraser(point);
+  const finishEraser=(point:Point|null)=>{
+    const g=eraserSession.current;
+    if(!g)return;
+    if(point)recordEraserPoint(point);
+    eraserSession.current=null;
+    // The model is changed once per gesture, as one undo/history operation.
+    const before=itemsRef.current;
+    const next=eraseInkAlongPath(before,g.path,eraserSize/2/g.zoom);
+    if(next!==before){
+      // Keep the canvas preview until the actual SVG fragments have painted.
+      flushSync(()=>{
+        commit(next);
+        setItems(itemsRef.current);
+      });
+    }
+    stopEraserPreview();
   };
   const currentDocument = (): DocumentData => ({
     version: 1,
@@ -5737,52 +5815,43 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
           onPointerDownCapture={(e) => {
-            if(tool!=="eraser" || presentation || e.button!==0)return;
+            if(tool!=="eraser"||presentation||e.button!==0)return;
             if(!canEdit){setNotice("У вас доступ только для просмотра");return;}
             e.preventDefault();e.stopPropagation();
             if(gesture.current)end();
-            const p=world(local(e.clientX,e.clientY));
-            const before=itemsRef.current;
-            eraserSession.current={pointer:e.pointerId,last:p,zoom:view.zoom,dirty:false};
+            const screen=local(e.clientX,e.clientY);
+            const p=world(screen);
+            eraserSession.current={pointer:e.pointerId,last:p,zoom:view.zoom,path:[p]};
             setSelected([]);
-            const next=eraseInkAt(before,p,p,eraserSize/2/view.zoom);
-            if(next!==before){ if(eraserSession.current)eraserSession.current.dirty=true; displayErasedInk(next); }
+            beginEraserPreview();
+            previewEraserSegment(screen,screen);
+            setLiveEraserCursor(screen.x,screen.y);
             board.current?.setPointerCapture(e.pointerId);
           }}
           onPointerMoveCapture={(e) => {
             const g=eraserSession.current;
             if(!g||g.pointer!==e.pointerId)return;
             e.preventDefault();e.stopPropagation();
-            eraserPendingPoint.current=world(local(e.clientX,e.clientY));
-            if(eraserFrame.current===null){
-              eraserFrame.current=requestAnimationFrame(()=>{
-                eraserFrame.current=null;
-                const p=eraserPendingPoint.current;
-                eraserPendingPoint.current=null;
-                if(p)advanceEraser(p);
-              });
-            }
-            const cursor=local(e.clientX,e.clientY);
-            setLiveEraserCursor(cursor.x,cursor.y);
+            const screen=local(e.clientX,e.clientY);
+            const previous={x:g.last.x*g.zoom+view.x,y:g.last.y*g.zoom+view.y};
+            previewEraserSegment(previous,screen);
+            recordEraserPoint(world(screen));
+            setLiveEraserCursor(screen.x,screen.y);
           }}
           onPointerUpCapture={(e) => {
             const g=eraserSession.current;
             if(!g||g.pointer!==e.pointerId)return;
             e.preventDefault();e.stopPropagation();
-            flushEraserFrame();
-            advanceEraser(world(local(e.clientX,e.clientY)));
-            const dirty=g.dirty;
-            eraserSession.current=null;
-            if(dirty)commit(itemsRef.current);
+            const screen=local(e.clientX,e.clientY);
+            const previous={x:g.last.x*g.zoom+view.x,y:g.last.y*g.zoom+view.y};
+            previewEraserSegment(previous,screen);
+            finishEraser(world(screen));
             if(board.current?.hasPointerCapture(e.pointerId))board.current.releasePointerCapture(e.pointerId);
           }}
           onPointerCancelCapture={(e) => {
-            if(eraserSession.current?.pointer===e.pointerId){
-              flushEraserFrame();
-              const dirty=eraserSession.current?.dirty;
-              eraserSession.current=null;
-              if(dirty)commit(itemsRef.current);
-            }
+            if(eraserSession.current?.pointer!==e.pointerId)return;
+            e.preventDefault();e.stopPropagation();
+            finishEraser(null);
           }}
           onPointerDown={(e) => { if(tool==="eraser")return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
           onPointerMove={(e) => { if(tool==="eraser"){if(!eraserSession.current){const p=local(e.clientX,e.clientY);setLiveEraserCursor(p.x,p.y);}return;} if(eraserSession.current)return; touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
@@ -5834,7 +5903,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => { if(eraserSession.current){flushEraserFrame();const dirty=eraserSession.current?.dirty;eraserSession.current=null;if(dirty)commit(itemsRef.current);}else end(true); }}
+          onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else end(true); }}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
@@ -6014,6 +6083,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               </div>
             )}
           </div>
+          <canvas ref={eraserPreviewCanvas} aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:50,display:"none"}} />
           {presentation && presentationLaser && presentationLaserPos && !presentationBlackout && <div className="presentation-laser-dot" style={{ left: presentationLaserPos.x, top: presentationLaserPos.y }} aria-hidden="true" />}
           {presentation && presentationSpotlight && presentationSpotlightPos && !presentationBlackout && (
             <div
