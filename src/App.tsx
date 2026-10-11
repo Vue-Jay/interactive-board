@@ -4455,8 +4455,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
   const renderedItems = useMemo(() => {
-    if (!boardViewportSize.width || !boardViewportSize.height || visibleItems.length < 120) return visibleItems;
-    const margin = 420 / Math.max(.1, view.zoom);
+    if (!boardViewportSize.width || !boardViewportSize.height || visibleItems.length < 30) return visibleItems;
+    // The previous 420px overscan kept too many images, PDFs and ink objects
+    // mounted even when far outside the viewport. Keep a modest buffer for
+    // smooth panning while avoiding expensive DOM/iframe work.
+    const margin = 160 / Math.max(.1, view.zoom);
     const left = -view.x / view.zoom - margin;
     const top = -view.y / view.zoom - margin;
     const right = (boardViewportSize.width - view.x) / view.zoom + margin;
