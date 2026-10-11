@@ -7961,3 +7961,11 @@ option{background:#fff;color:#343741}
   .geometry-instrument-centered .geometry-instrument-actions {top:-64px;}
   .geometry-instrument-centered .geometry-instrument-actions button {min-width:38px;height:38px;}
 }
+
+/* During an eraser gesture the original strokes are replaced by a canvas
+   preview. The canvas uses destination-out so ink vanishes under the brush
+   immediately, including on very large teacher-owned boards. */
+.board.eraser-live .board-object.object-pen:not(.locked),
+.board.eraser-live .board-object.object-marker:not(.locked) {
+  visibility: hidden !important;
+}
