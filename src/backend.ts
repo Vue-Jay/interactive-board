@@ -309,6 +309,19 @@ export type RemoteSaveResult = {
   document?: unknown;
 };
 
+export const adminSaveRemoteBoardDocument = async (
+  boardId: string,
+  document: unknown,
+  expectedVersion: number | null,
+): Promise<RemoteSaveResult> =>
+  remoteRequest<RemoteSaveResult>("/rest/v1/rpc/admin_save_board_document", {
+    method: "POST",
+    body: JSON.stringify({
+      p_board_id: boardId, p_document: document,
+      p_expected_version: expectedVersion,
+    }),
+  });
+
 export const saveRemoteBoardDocument = async (
   boardId: string,
   document: unknown,
