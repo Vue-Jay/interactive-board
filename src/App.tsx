@@ -49,6 +49,9 @@ import { connectAttachmentApprovalChannel, type AttachmentApprovalChannel, type 
 import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "./boardSync";
 import {
   parseDocument,
+  packDocumentInk,
+  expandDocumentInk,
+  isInkItem,
   stroke,
   type ShapeType,
   type ConnectorStyle,
@@ -61,7 +64,7 @@ import {
 } from "./boardModel";
 
 import { eraseInkAlongPath } from "./inkEraser";
-import { hitTestInk } from "./inkHitTest";
+import { inkIdsInLasso } from "./inkLasso";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -1481,7 +1484,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const viewRef = useRef(view);
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewSerialized = useRef<string | null>(null);
-  const [items, setItems] = useState<Item[]>(initial.data.items);
+  const [items, setItems] = useState<Item[]>(() => expandDocumentInk(initial.data));
   const itemsRef = useRef(items);
   const eraserSession = useRef<{pointer:number;last:Point;zoom:number;path:Point[]}|null>(null);
   const eraserPreviewCanvas=useRef<HTMLCanvasElement>(null);
@@ -1564,7 +1567,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const applyUpdate=()=>{updateReady?.waiting?.postMessage({type:"SKIP_WAITING"})};
   const installApp=async()=>{const p=installPrompt as (Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>})|null;if(!p)return;await p.prompt();await p.userChoice;setInstallPrompt(null)};
   const clipboard = useRef<Item[]>([]);
-  const history = useRef<Item[][]>([initial.data.items]);
+  const history = useRef<Item[][]>([expandDocumentInk(initial.data)]);
   const index = useRef(0);
 
   const snapshot = useRef<DocumentData | null>(null);
@@ -1762,14 +1765,14 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   // A gesture is saved only when completed; in-progress text is saved too.
   useEffect(() => {
     if (saveBlocked || gesture.current || eraserSession.current) return;
-    const data: DocumentData = {
+    const data: DocumentData = packDocumentInk({
       version: 1,
       title,
       view: viewRef.current,
       items: editing
         ? items.map((i) => (i.id === editing ? { ...i, text: draft } : i))
         : items,
-    };
+    });
     snapshot.current = data;
     if (!canEdit) return;
     // Do not hash/stringify the entire board on every keystroke or React update.
@@ -1862,7 +1865,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const exportBoard = async () => {
-    const data: DocumentData = {
+    const data: DocumentData = packDocumentInk({
       version: 1,
       title,
       view,
@@ -1871,7 +1874,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             i.id === editing ? { ...i, text: draft } : i,
           )
         : itemsRef.current,
-    };
+    });
     try {
       setNotice("Подготавливаем переносимую копию…");
       const assets: { id: string; name: string; mime: string; data: string }[] = [];
@@ -2030,7 +2033,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }
     stopEraserPreview();
   };
-  const currentDocument = (): DocumentData => ({
+  const currentDocument = (): DocumentData => packDocumentInk({
     version: 1,
     title,
     view,
@@ -2049,8 +2052,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     setTool("select");
     setTitle(data.title);
     if (!fromRemote) setView(data.view);
-    display(data.items);
-    history.current = [data.items];
+    const allItems = expandDocumentInk(data);
+    display(allItems);
+    history.current = [allItems];
     index.current = 0;
     snapshot.current = data;
     setSaveBlocked(false);
@@ -4765,13 +4769,18 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         // to choose between "my" and "server" versions.
         const local = parseDocument(JSON.stringify(currentDocument()));
         const remote = data;
-        const remoteIds = new Set(remote.items.map(item => item.id));
-        const localOnly = local.items.filter(item => !remoteIds.has(item.id));
-        const merged: DocumentData = {
+        // Merge both normal objects and drawing strokes by stable ids.
+        // Drawings remain in the separate ink collection after packing.
+        const remoteItems = expandDocumentInk(remote);
+        const localItems = expandDocumentInk(local);
+        const remoteIds = new Set(remoteItems.map(item => item.id));
+        const localOnly = localItems.filter(item => !remoteIds.has(item.id));
+        const merged: DocumentData = packDocumentInk({
           ...remote,
           view: local.view,
-          items: [...remote.items, ...localOnly],
-        };
+          items: [...remoteItems, ...localOnly],
+          ink: undefined,
+        });
 
         remoteVersion.current = row.version;
         acknowledgedDocument.current = documentFingerprint(remote);
