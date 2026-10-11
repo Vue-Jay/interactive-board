@@ -3,7 +3,7 @@ import type { DocumentData } from "./boardModel";
 
 export type BoardHistoryEntry={
  id:number; version:number; saved_at:string; saved_by:string|null; saved_by_name:string|null;
- item_count:number; title:string; added_count:number; changed_count:number; removed_count:number;
+ item_count:number; ink_count?:number; title:string; added_count:number; changed_count:number; removed_count:number;
 };
 
 export type BoardActivityEntry={
