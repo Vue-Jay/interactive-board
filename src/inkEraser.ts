@@ -72,7 +72,6 @@ export function eraseInk(items:Item[],brushPath:Point[],radius:number):Item[] {
   let result:Item[]=items;
   for(let j=1;j<path.length;j++){
     const c=path[j-1],d=path[j];
-    const box=brushBounds([c,d],radius+32);
     const next:Item[]=[];
     let sweepChanged=false;
     for(const item of result){
@@ -89,7 +88,8 @@ export function eraseInk(items:Item[],brushPath:Point[],radius:number):Item[] {
         next.push(item);continue;
       }
       const runs:Point[][]=[];
-      let run:Point[]=[pts[0]];
+      let run:Point[]=[];
+      if(distSq(pts[0],c,d)> (radius+(item.weight??1)/2)**2) run=[pts[0]];
       let hit=false;
       for(let i=1;i<pts.length;i++){
         const a=pts[i-1],b=pts[i];
@@ -111,7 +111,6 @@ export function eraseInk(items:Item[],brushPath:Point[],radius:number):Item[] {
     }
     if(sweepChanged){result=next;changed=true;}
     // Avoid unnecessary allocations/rendering for strokes out of range.
-    void box;
   }
   return changed?result:items;
 }
