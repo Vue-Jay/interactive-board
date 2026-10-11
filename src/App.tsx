@@ -6033,7 +6033,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             </svg>
             {renderEntries.map((entry) => {
               if (entry.kind === "ink") return (
-                <ViewerInkLayer key={entry.key} strokes={entry.strokes}
+                <ViewerInkLayer key={entry.key} strokes={entry.strokes} bounds={entry.bounds}
                   view={view} viewport={boardViewportSize} />
               );
               const item = entry.item;
