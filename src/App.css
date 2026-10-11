@@ -7856,3 +7856,15 @@ option{background:#fff;color:#343741}
   }
   .mobile-undo-redo button:disabled { opacity: .35; }
 }
+
+/* Independent draggable school geometry overlays. */
+.geometry-tools {position:absolute;inset:0;pointer-events:none;z-index:85;}
+.geometry-picker {position:absolute;bottom:calc(74px + env(safe-area-inset-bottom,0px));left:12px;display:flex;gap:5px;pointer-events:auto;flex-wrap:wrap;max-width:calc(100vw - 24px)}
+.geometry-picker button {border:1px solid #93a9c0;border-radius:9px;padding:7px 11px;background:#fff;color:#23394b;font-size:12px;box-shadow:0 2px 8px #0002;cursor:pointer}
+.geometry-picker button.active {background:#d5eefd;border-color:#247ab1}
+.geometry-instrument {position:absolute;pointer-events:auto;touch-action:none;cursor:grab;user-select:none;width:max-content;filter:drop-shadow(0 3px 6px #0002)}
+.geometry-instrument:active {cursor:grabbing}
+.geometry-instrument-actions {display:flex;align-items:center;gap:3px;margin-bottom:6px;padding:4px;background:#fff;border:1px solid #adc1d0;border-radius:9px;width:max-content}
+.geometry-instrument-actions span {font-size:12px;padding:0 8px;color:#20394d}
+.geometry-instrument-actions button {height:28px;min-width:28px;border:0;border-radius:6px;background:#e7eef6;color:#1c394d;font-size:17px;cursor:pointer}
+@media(max-width:900px),(pointer:coarse) {.geometry-picker{left:8px;bottom:calc(64px + env(safe-area-inset-bottom,0px))}.geometry-picker button{padding:6px 8px}}
