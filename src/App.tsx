@@ -2430,7 +2430,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const p = world(start);
     // Erasing has priority over resize handles, selected objects, and formula
     // touch-drag. It always targets ink, regardless of the DOM element tapped.
-    if (tool === "eraser" && !space && canEdit && e.button === 0) {
+    if (tool === "eraser" && canEdit && e.button === 0) {
       e.preventDefault();
       e.stopPropagation();
       finishEdit();
@@ -5654,11 +5654,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         )}
 <nav className="mobile-board-tools" aria-label="Основные инструменты">
           <div className="mobile-tool-cluster mobile-tool-cluster-navigation" aria-label="Навигация">
-            {mobileDockTools.slice(0,3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+            {mobileDockTools.slice(0,3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} />}</div>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} />}</div>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
@@ -5666,19 +5666,19 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
           <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions">{!isStudent&&<button type="button" onClick={()=>{setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}} aria-label="AI-помощник" title="AI-помощник"><Icon name="robot" size={18}/></button>}<button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
-            {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
+            {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
           </div>
         </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
           <div className="toolbar-pinned" aria-label="Навигация: выбор, рука, петля">
-            {(["select","hand","lasso"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
+            {(["select","hand","lasso"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
           </div>
           <span className="toolbar-section-line" aria-hidden="true"/>
           <div className="toolbar-list">
             {tools.filter((t)=>t.id!=="select"&&t.id!=="hand"&&t.id!=="lasso"&&toolAllowedForRole(t.id)).map((t)=>{
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
-                <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
+                <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();if(t.id==="eraser")setSpace(false);setTool(t.id);setMobileToolsOpen(false)}}>
                   <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
                 </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
@@ -5731,7 +5731,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
           onPointerDownCapture={(e) => {
-            if (tool !== "eraser" || presentation || !canEdit || space || e.button !== 0) return;
+            if (tool !== "eraser" || presentation || !canEdit || e.button !== 0) return;
             // Capture-phase handling runs before nested objects and editor overlays
             // can stop bubbling. This makes erasing work on top of existing ink.
             touchStart(e);
@@ -5742,7 +5742,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             if (tool !== "eraser" || gesture.current?.mode !== "erase" || pinchState.current) return;
             move(e);
           }}
-          onPointerDown={(e) => { if (tool === "eraser" && !presentation && canEdit && !space) return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
+          onPointerDown={(e) => { if (tool === "eraser" && !presentation && canEdit) return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
           onPointerMove={(e) => { touchMove(e); if(tool==="eraser" && gesture.current?.mode==="erase") return; if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -5792,7 +5792,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => end(true)}
+          onLostPointerCapture={() => end(gesture.current?.mode !== "erase")}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
