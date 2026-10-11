@@ -6720,6 +6720,8 @@ export default function App() {
   const [accountRole,setAccountRoleState]=useState<AccountRole>(()=>getCachedAccountAccess()?.role??"student");
   const [isAppAdmin,setIsAppAdmin]=useState(()=>getCachedAccountAccess()?.isAdmin??false);
   const [adminInspecting,setAdminInspecting]=useState(false);
+  const [adminEdit,setAdminEdit]=useState(()=>{try{return localStorage.getItem("onlinerepetitor.adminEdit")==="1"}catch{return false}});
+  const changeAdminEdit=useCallback((value:boolean)=>{setAdminEdit(value);try{localStorage.setItem("onlinerepetitor.adminEdit",value?"1":"0")}catch{}},[]);
   const [adminInvisible,setAdminInvisible]=useState(()=>{try{return localStorage.getItem("onlinerepetitor.adminInvisible")==="1"}catch{return false}});
   const changeAdminInvisible=useCallback((value:boolean)=>{setAdminInvisible(value);try{localStorage.setItem("onlinerepetitor.adminInvisible",value?"1":"0")}catch{}},[]);
   const [authReady, setAuthReady] = useState(() => Boolean(getCachedCurrentUser()));
@@ -6925,7 +6927,7 @@ export default function App() {
       <>
         <Suspense fallback={<div className="board-server-overlay"><div className="board-server-card"><strong>Открываем раздел…</strong><span>Загружаем только нужный модуль.</span></div></div>}>
         {route.kind === "home" && (()=>{const section=new URLSearchParams(window.location.search).get("section");return section==="admin" && isAppAdmin
-          ? <AdminScreen user={authUser} invisible={adminInvisible} onInvisibleChange={changeAdminInvisible} onOpenBoard={(board)=>{setAdminInspecting(true);void openBoard(board,()=>true)}} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
+          ? <AdminScreen user={authUser} invisible={adminInvisible} onInvisibleChange={changeAdminInvisible} adminEdit={adminEdit} onAdminEditChange={changeAdminEdit} onOpenBoard={(board)=>{setAdminInspecting(true);void openBoard(board,()=>true)}} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} />
           : section==="students" && accountRole==="teacher"
           ? <StudentsScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : section==="assignments"
@@ -6964,7 +6966,7 @@ export default function App() {
       boardSummary={activeBoard}
       accountRole={accountRole}
       isAppAdmin={isAppAdmin}
-      adminMaintenance={adminInspecting && isAppAdmin}
+      adminMaintenance={adminInspecting && isAppAdmin && adminEdit}
       adminInvisible={adminInvisible}
       initialRemoteVersion={remoteVersion}
       onBoardChanged={boardChanged}
