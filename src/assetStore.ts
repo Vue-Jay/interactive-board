@@ -80,7 +80,49 @@ const assetPath = (boardId: string, id: string) => {
   return `${boardId}/${id}`;
 };
 
+
+// Downsample oversized photographs before upload. This reduces both transfer size and
+// decoded texture memory on mobile. Preserve PNG/GIF/SVG and small images unchanged.
+async function optimizeImage(blob: Blob): Promise<Blob> {
+  if (!["image/jpeg", "image/webp"].includes(blob.type) || blob.size < 350_000 ||
+      typeof createImageBitmap !== "function") return blob;
+  let bitmap: ImageBitmap | undefined;
+  try {
+    bitmap = await createImageBitmap(blob);
+    const longest = Math.max(bitmap.width, bitmap.height);
+    if (longest <= 2560) return blob;
+    const ratio = 2560 / longest;
+    const width = Math.max(1, Math.round(bitmap.width * ratio));
+    const height = Math.max(1, Math.round(bitmap.height * ratio));
+    let optimized: Blob | null = null;
+    if (typeof OffscreenCanvas !== "undefined") {
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext("2d");
+      if (!context) return blob;
+      context.drawImage(bitmap, 0, 0, width, height);
+      optimized = await canvas.convertToBlob({ type: "image/webp", quality: 0.85 });
+    } else if (typeof document !== "undefined") {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) return blob;
+      context.drawImage(bitmap, 0, 0, width, height);
+      optimized = await new Promise<Blob | null>(resolve =>
+        canvas.toBlob(resolve, "image/webp", 0.85));
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    return optimized && optimized.size < blob.size * 0.9 ? optimized : blob;
+  } catch {
+    return blob;
+  } finally {
+    bitmap?.close();
+  }
+}
+
 export async function putAsset(id: string, blob: Blob, boardId: string) {
+  blob = await optimizeImage(blob);
   if (!isRemoteBackendEnabled()) return putLocalAsset(id, blob);
   if (blob.size > 50 * 1024 * 1024 || !(blob.type.startsWith("image/") || blob.type === "application/pdf")) {
     throw new Error("Нужно изображение или PDF размером до 50 МБ");
