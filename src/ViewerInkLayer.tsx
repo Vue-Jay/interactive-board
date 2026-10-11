@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef } from "react";
 import type { Item, View } from "./boardModel";
 
 type ViewportSize = { width: number; height: number };
+type InkBounds = { x: number; y: number; width: number; height: number };
 type RasterCache = {
   left: number; top: number; right: number; bottom: number;
   zoom: number; width: number; height: number; strokes: Item[];
@@ -14,9 +15,9 @@ type RasterCache = {
  * No board data or ink geometry is changed.
  */
 const ViewerInkLayer = memo(function ViewerInkLayer({
-  strokes, view, viewport,
+  strokes, bounds, view, viewport,
 }: {
-  strokes: Item[]; view: View; viewport: ViewportSize;
+  strokes: Item[]; bounds: InkBounds; view: View; viewport: ViewportSize;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cacheRef = useRef<RasterCache | null>(null);
@@ -28,17 +29,35 @@ const ViewerInkLayer = memo(function ViewerInkLayer({
     const worldRight = worldLeft + viewport.width / zoom;
     const worldBottom = worldTop + viewport.height / zoom;
     const cached = cacheRef.current;
+    const padding = 40 / zoom;
+    const tileBuffer = 320 / zoom;
     const minBuffer = 70 / zoom;
+    const boundLeft = bounds.x - padding;
+    const boundTop = bounds.y - padding;
+    const boundRight = bounds.x + bounds.width + padding;
+    const boundBottom = bounds.y + bounds.height + padding;
+    // A cached tile can be reused if it contains the visible portion of
+    // this batch, even when the viewport itself extends beyond its bounds.
+    const requiredLeft = Math.max(worldLeft - minBuffer, boundLeft);
+    const requiredTop = Math.max(worldTop - minBuffer, boundTop);
+    const requiredRight = Math.min(worldRight + minBuffer, boundRight);
+    const requiredBottom = Math.min(worldBottom + minBuffer, boundBottom);
     if (cached && cached.strokes === strokes && cached.zoom === zoom &&
         cached.width === viewport.width && cached.height === viewport.height &&
-        worldLeft >= cached.left + minBuffer && worldTop >= cached.top + minBuffer &&
-        worldRight <= cached.right - minBuffer && worldBottom <= cached.bottom - minBuffer) return;
+        cached.left <= requiredLeft && cached.top <= requiredTop &&
+        cached.right >= requiredRight && cached.bottom >= requiredBottom) return;
 
-    const buffer = 320 / zoom;
-    const left = worldLeft - buffer, top = worldTop - buffer;
-    const cssWidth = viewport.width / zoom + buffer * 2;
-    const cssHeight = viewport.height / zoom + buffer * 2;
-    const ratio = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    // Rasterize only the intersection of the nearby viewport and this group's
+    // actual world bounds, rather than allocating a full viewport canvas for
+    // every layer separated by a photo or PDF.
+    const left = Math.max(worldLeft - tileBuffer, boundLeft);
+    const top = Math.max(worldTop - tileBuffer, boundTop);
+    const right = Math.min(worldRight + tileBuffer, boundRight);
+    const bottom = Math.min(worldBottom + tileBuffer, boundBottom);
+    if (right <= left || bottom <= top) return;
+    const cssWidth = right - left;
+    const cssHeight = bottom - top;
+    const ratio = Math.min(1.25, Math.max(1, window.devicePixelRatio || 1));
     const pixelWidth = Math.max(1, Math.ceil(cssWidth * zoom * ratio));
     const pixelHeight = Math.max(1, Math.ceil(cssHeight * zoom * ratio));
     const factor = Math.min(1, 4096 / Math.max(pixelWidth, pixelHeight));
@@ -53,7 +72,6 @@ const ViewerInkLayer = memo(function ViewerInkLayer({
     if (!ctx) return;
     const scale = zoom * actualRatio;
     ctx.setTransform(scale, 0, 0, scale, -left * scale, -top * scale);
-    const right = left + cssWidth, bottom = top + cssHeight;
     for (const item of strokes) {
       if (item.hidden || !item.points?.length) continue;
       const weight = item.weight ?? 3, pad = weight / 2;
@@ -88,7 +106,7 @@ const ViewerInkLayer = memo(function ViewerInkLayer({
       left, top, right, bottom, zoom,
       width: viewport.width, height: viewport.height, strokes,
     };
-  }, [strokes, view.x, view.y, view.zoom, viewport.width, viewport.height]);
+  }, [strokes, bounds, view.x, view.y, view.zoom, viewport.width, viewport.height]);
 
   return <canvas ref={canvasRef} className="viewer-ink-canvas" aria-hidden="true"
     style={{ position: "absolute", pointerEvents: "none", maxWidth: "none", maxHeight: "none" }} />;
