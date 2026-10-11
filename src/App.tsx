@@ -2428,6 +2428,28 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     finishEdit();
     const start = local(e.clientX, e.clientY);
     const p = world(start);
+    // Erasing has priority over resize handles, selected objects, and formula
+    // touch-drag. It always targets ink, regardless of the DOM element tapped.
+    if (tool === "eraser" && !space && canEdit && e.button === 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      finishEdit();
+      setSelected([]);
+      const before = itemsRef.current;
+      gesture.current = {
+        pointer:e.pointerId,
+        mode:"erase",
+        start,
+        view,
+        before,
+        ids:[],
+        path:[p],
+        additive:false,
+      };
+      display(eraseInk(before,[p],eraserSize/2/view.zoom));
+      board.current?.setPointerCapture(e.pointerId);
+      return;
+    }
     if (contextMenu && !target.closest("[data-context-menu]")) setContextMenu(null);
     const connectorEndpointEl = target.closest<HTMLElement>("[data-connector-endpoint]");
     const connectorEndpoint = connectorEndpointEl?.dataset.connectorEndpoint;
