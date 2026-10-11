@@ -1459,6 +1459,22 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     } catch {/* Fall back to the view stored in the board document. */}
     return initial.data.view;
   });
+  const viewerPanFrame = useRef<number | null>(null);
+  const viewerPendingPan = useRef<View | null>(null);
+  const scheduleViewerPan = (next: View) => {
+    viewerPendingPan.current = next;
+    if (viewerPanFrame.current !== null) return;
+    viewerPanFrame.current = requestAnimationFrame(() => {
+      viewerPanFrame.current = null;
+      const pending = viewerPendingPan.current;
+      viewerPendingPan.current = null;
+      if (pending) setView(pending);
+    });
+  };
+  useEffect(() => () => {
+    if (viewerPanFrame.current !== null) cancelAnimationFrame(viewerPanFrame.current);
+    viewerPendingPan.current = null;
+  }, []);
   const viewRef = useRef(view);
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewSerialized = useRef<string | null>(null);
@@ -2956,11 +2972,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         display(g.before.map(item=>g.ids.includes(item.id)?{...item,x:item.x+worldDx,y:item.y+worldDy}:item));
       } else {
         setGuides({});
-        setView({...g.view,x:g.view.x+dx,y:g.view.y+dy});
+        if (!canEdit) scheduleViewerPan({...g.view,x:g.view.x+dx,y:g.view.y+dy});
+        else setView({...g.view,x:g.view.x+dx,y:g.view.y+dy});
       }
     } else if (g.mode === "pan") {
       setGuides({});
-      setView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
+      if (!canEdit) scheduleViewerPan({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
+      else setView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
     } else if (g.mode === "drag") {
       let worldDx = dx / g.view.zoom;
       let worldDy = dy / g.view.zoom;
