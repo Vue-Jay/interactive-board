@@ -2641,7 +2641,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           mode: "drag",
           start,
           view,
-          before: itemsRef.current.map(deepItem),
+          before: itemsRef.current,
           ids: movableIds,
           path: [p],
           additive: false,
