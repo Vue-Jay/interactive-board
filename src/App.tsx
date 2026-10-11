@@ -5468,7 +5468,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   </div>
                 );
               })}
-              {!items.length && <div className="layers-empty">На доске пока нет объектов</div>}
+              {!objectCount && <div className="layers-empty">Нет отдельных объектов. Рисунки находятся на слое карандаша и маркера.</div>}
             </div>
           </aside>
         )}
