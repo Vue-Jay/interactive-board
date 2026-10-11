@@ -65,6 +65,18 @@ export const listAdminBoards=async():Promise<AdminBoardSummary[]>=>{
  return boards().filter(b=>!b.deletedAt).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(b=>{const owner=getUserById(b.ownerId);return {...b,role:"viewer" as const,ownerName:owner?.name||"Пользователь",ownerEmail:owner?.email||"",memberCount:members().filter(m=>m.boardId===b.id).length};});
 };
 
+// Server-authorized workspace includes both owned boards and invitations.
+export const listAdminUserWorkspace=async(userId:string):Promise<AdminBoardSummary[]>=>{
+  if(!isRemoteBackendEnabled())return (await listAdminBoards()).filter(x=>x.ownerId===userId);
+  const rows=await remoteRequest<any[]>("/rest/v1/rpc/admin_list_user_workspace",{
+    method:"POST",body:JSON.stringify({p_user_id:userId}),
+  });
+  return (rows||[]).map(row=>({
+    ...rowToBoard(row,"viewer"),ownerName:String(row.owner_name||"Пользователь"),
+    ownerEmail:String(row.owner_email||""),memberCount:Number(row.member_count||0),
+  }));
+};
+
 // Resolve deep links through RLS, never fall back to a cached inaccessible board.
 export const getBoardForUser=async(user:AuthUser,id:string):Promise<BoardSummary|null>=>{
  if(!isRemoteBackendEnabled())return (await getUserBoards(user)).find(b=>b.id===id)??null;
