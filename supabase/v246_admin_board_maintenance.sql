@@ -50,10 +50,10 @@ grant execute on function public.admin_save_board_document(uuid,jsonb,bigint) to
 -- This checks the same server-owned role, not a client-side flag.
 create or replace function public.admin_can_maintain_boards()
 returns boolean language sql stable security definer set search_path=public,pg_temp
-as $
+as $$
  select exists(select 1 from public.profiles
    where id=auth.uid() and coalesce(is_admin,false)=true);
-$;
+$$;
 revoke all on function public.admin_can_maintain_boards() from public,anon;
 grant execute on function public.admin_can_maintain_boards() to authenticated;
 
@@ -80,7 +80,7 @@ create or replace function public.admin_list_user_workspace(p_user_id uuid)
 returns table(
  id uuid,title text,owner_id uuid,created_at timestamptz,updated_at timestamptz,
  deleted_at timestamptz,owner_name text,owner_email text,member_count bigint
-) language plpgsql security definer set search_path=public,pg_temp as $
+) language plpgsql security definer set search_path=public,pg_temp as $$
 begin
  if not public.admin_can_maintain_boards() then
    raise exception 'Administrator privileges required' using errcode='42501';
@@ -97,7 +97,7 @@ begin
    and (b.owner_id=p_user_id or exists(
      select 1 from public.board_members m where m.board_id=b.id and m.user_id=p_user_id))
  order by b.updated_at desc;
-end; $;
+end; $$
 revoke all on function public.admin_list_user_workspace(uuid) from public,anon;
 grant execute on function public.admin_list_user_workspace(uuid) to authenticated;
 
