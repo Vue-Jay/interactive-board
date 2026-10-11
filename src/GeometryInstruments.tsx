@@ -5,6 +5,15 @@ const labels: Record<Instrument, string> = {ruler:"Линейка",triangle:"У�
 export default function GeometryInstruments({mobile = false}:{mobile?:boolean}) {
   const [tool,setTool] = useState<Instrument|null>(null);
   const [open,setOpen] = useState(false);
+  const [menuPosition,setMenuPosition] = useState({left:72,top:120});
+  const toggleMenu=(element:HTMLButtonElement)=>{
+    const rect=element.getBoundingClientRect();
+    const menuWidth=158;
+    const left=mobile ? Math.min(Math.max(8,rect.left-45),window.innerWidth-menuWidth-8) : Math.min(rect.right+8,window.innerWidth-menuWidth-8);
+    const top=mobile ? Math.max(8,rect.top-62) : Math.max(8,Math.min(rect.top,window.innerHeight-62));
+    setMenuPosition({left,top});
+    setOpen(value=>!value);
+  };
   const rotationGesture = useRef<{pointer:number;startAngle:number;original:number;centerX:number;centerY:number}|null>(null);
   const [position,setPosition] = useState({x:90,y:100});
   const [rotation,setRotation] = useState(0);
@@ -37,14 +46,14 @@ export default function GeometryInstruments({mobile = false}:{mobile?:boolean}) 
   };
   return <>
     <div className={`geometry-tools ${mobile?"geometry-tools-mobile":""}`} onPointerDown={e=>e.stopPropagation()}>
-      <button type="button" className={`geometry-trigger ${open||tool?"active":""}`} title="Линейка, угольник и транспортир" aria-label="Измерительные инструменты" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>
+      <button type="button" className={`geometry-trigger ${open||tool?"active":""}`} title="Линейка, угольник и транспортир" aria-label="Измерительные инструменты" aria-expanded={open} onClick={e=>toggleMenu(e.currentTarget)}>
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 18 17.5 4.5l3 3L7 21H4z"/><path d="m13 9 2 2M10 12l2 2M7 15l2 2"/></svg>
       </button>
-      {open&&<div className="geometry-picker" role="group" aria-label="Измерительные инструменты">
+      {open&&createPortal(<div className="geometry-picker geometry-picker-portal" style={{left:menuPosition.left,top:menuPosition.top}} role="group" aria-label="Измерительные инструменты">
         {(["ruler","triangle","protractor"] as const).map(id=><button type="button" key={id} className={tool===id?"active":""} title={labels[id]} aria-label={labels[id]} onClick={()=>select(id)}>
           {id==="ruler"?<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 7v5m4-5v3m4-3v5m4-5v3"/></svg>:id==="triangle"?<svg viewBox="0 0 24 24"><path d="M3 3v18h18z"/><path d="M8 13v4h4z"/></svg>:<svg viewBox="0 0 24 24"><path d="M2 20a10 10 0 0 1 20 0z"/><path d="M12 20V9M6 20l3-8m9 8-3-8"/></svg>}
         </button>)}
-      </div>}
+      </div>,document.body)}
     </div>
     {tool&&createPortal(<div className="geometry-instrument" style={{left:position.x,top:position.y,transform:`rotate(${rotation}deg) scale(${scale})`,transformOrigin:"0 0"}} onPointerDown={down} onPointerMove={move} onPointerUp={()=>setDrag(null)} onPointerCancel={()=>setDrag(null)}>
       <div className="geometry-instrument-actions">
