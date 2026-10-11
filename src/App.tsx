@@ -4621,13 +4621,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
       (_teacherView) => { /* Continuous following removed; one-time focus remains supported. */ },
-      (guided) => {
-        guidedFollowRef.current = guided.enabled;
-        setGuidedFollow(guided.enabled);
-        setNotice(guided.enabled
-          ? `${guided.senderName} включил режим общего следования`
-          : `${guided.senderName} выключил режим общего следования`);
-      },
+      (_guided) => { /* Deprecated follow broadcasts are ignored. */ },
     );
 
     viewControlChannel.current = channel;
@@ -4769,7 +4763,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       {lessonPanelOpen && liveLesson && <aside className="lesson-control-panel">
         <div className="lesson-control-head"><div><span className="live-lesson-dot"/><div><b>Идёт урок</b><small>{lessonTime}</small></div></div><button onClick={()=>setLessonPanelOpen(false)}>×</button></div>
         <div className="lesson-control-student"><span className="presence-avatar">{liveLesson.studentName.charAt(0).toUpperCase()}</span><div><strong>{liveLesson.studentName}</strong><small>{liveLesson.topic||"Тема не указана"}</small></div></div>
-        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span><span><b>{guidedFollow?"Включено":"Выключено"}</b>ведение экрана</span></div><div className="lesson-control-grid">
+        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span></div><div className="lesson-control-grid">
           <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
 
           <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
@@ -4825,30 +4819,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             <div className="presence-popover">
               <div className="presence-popover-head">
                 <strong>Сейчас на доске</strong>
-                {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
-                  type="button"
-                  className={`presence-gather-button ${guidedFollow ? "active" : ""}`}
-                  title={guidedFollow ? "Отключить обязательное следование участников" : "Включить следование всех участников за преподавателем"}
-                  onClick={() => {
-                    const next = !guidedFollow;
-                    guidedFollowRef.current = next;
-                    setGuidedFollow(next);
-                    viewControlChannel.current?.sendGuidedFollow(next);
-
-                    const rect = board.current?.getBoundingClientRect();
-                    if (next && rect) {
-                      const center = world({ x: rect.width / 2, y: rect.height / 2 });
-                      const targets = visiblePresenceUsers.filter((user) => user.userId !== authUser.id);
-                      for (const user of targets) {
-                        viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
-                      }
-                    }
-
-                    setNotice(next ? "Все участники следуют за вами" : "Общее следование отключено");
-                  }}
-                >
-                  {guidedFollow ? "Все следуют" : "Вести всех"}
-                </button>}
                 {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
                   type="button"
                   className="presence-gather-button"
