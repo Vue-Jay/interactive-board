@@ -11,6 +11,7 @@ import {
 } from "react";
 import "./App.css";
 import AuthScreen from "./AuthScreen";
+import GeometryInstruments from "./GeometryInstruments";
 import BoardsScreen from "./BoardsScreen";
 const StudentsScreen = lazy(() => import("./StudentsScreen"));
 const AssignmentsScreen = lazy(() => import("./AssignmentsScreen"));
@@ -5028,6 +5029,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         </div>
       </header>
       <main className="workspace">
+        <GeometryInstruments />
         <div className="mobile-undo-redo" aria-label="История изменений">
           <button type="button" disabled={index.current === 0} onClick={() => undo(-1)} aria-label="Отменить"><Icon name="undo" size={19}/></button>
           <button type="button" disabled={index.current === history.current.length - 1} onClick={() => undo(1)} aria-label="Повторить"><Icon name="redo" size={19}/></button>
