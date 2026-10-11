@@ -122,6 +122,7 @@ for each row execute function public.capture_board_document_history();
 insert into public.board_document_history(board_id,version,document,saved_at,saved_by)
 select bd.board_id,bd.version,bd.document,coalesce(bd.updated_at,now()),bd.updated_by
 from public.board_documents bd
+where true
 on conflict(board_id,version) do nothing;
 
 create or replace function public.list_board_history(p_board_id uuid,p_limit integer default 30)
