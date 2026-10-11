@@ -2138,7 +2138,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const commit = (next: Item[]) => {
     if (!canEdit) { setNotice("У вас доступ только для просмотра"); return; }
     const normalized = syncBoundConnectors(next);
-    if (JSON.stringify(normalized) === JSON.stringify(history.current[index.current]))
+    // Most drawing gestures only add/remove strokes. Compare identities first,
+    // and serialize only genuinely changed items instead of megabytes of ink.
+    const baseline = history.current[index.current];
+    if (baseline?.length === normalized.length &&
+        normalized.every((item, pos) => item === baseline[pos] ||
+          JSON.stringify(item) === JSON.stringify(baseline[pos])))
       return;
     history.current = history.current.slice(0, index.current + 1);
     history.current.push(normalized);
