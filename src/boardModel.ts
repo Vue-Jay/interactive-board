@@ -328,26 +328,67 @@ export function parseDocument(raw: string): DocumentData {
   });
 }
 
-export function stroke(id: string, kind: "pen" | "marker", path: Point[], colorValue: string, weight: number): Item {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of path) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
+// Keep visually identical strokes lightweight in saved JSON and undo history:
+// simplify sub-pixel pointer jitter and round long floating-point coordinates.
+// This never changes the visible pencil/marker width or older saved strokes.
+export function simplifyStrokePath(path: readonly Point[], zoom = 1): Point[] {
+  if (path.length < 3) return path.map(p => ({ x:p.x, y:p.y }));
+  const epsilon = Math.max(0.035, 0.35 / Math.max(0.1, zoom));
+  const minStepSquared = (epsilon * 0.35) ** 2;
+  const filtered: Point[] = [path[0]];
+  for (let i=1; i<path.length-1; i++) {
+    const last = filtered[filtered.length-1], p = path[i];
+    const dx = p.x-last.x, dy = p.y-last.y;
+    if (dx*dx+dy*dy >= minStepSquared) filtered.push(p);
   }
-  const x = minX - weight / 2, y = minY - weight / 2;
+  filtered.push(path[path.length-1]);
+  if (filtered.length <= 2) return filtered.map(p => ({...p}));
+  const keep = new Uint8Array(filtered.length);
+  keep[0] = keep[filtered.length-1] = 1;
+  const segments: Array<[number, number]> = [[0, filtered.length-1]];
+  const limitSquared=epsilon*epsilon;
+  while (segments.length) {
+    const [first,last] = segments.pop()!;
+    const a=filtered[first], b=filtered[last];
+    const vx=b.x-a.x, vy=b.y-a.y, lengthSquared=vx*vx+vy*vy;
+    let mostDistant=-1, index=-1;
+    for (let i=first+1; i<last; i++) {
+      const p=filtered[i];
+      const t=lengthSquared>0 ? Math.max(0,Math.min(1,
+        ((p.x-a.x)*vx+(p.y-a.y)*vy)/lengthSquared)) : 0;
+      const dx=p.x-(a.x+t*vx), dy=p.y-(a.y+t*vy);
+      const d=dx*dx+dy*dy;
+      if(d>mostDistant){mostDistant=d;index=i}
+    }
+    if (index>=0 && mostDistant>limitSquared) {
+      keep[index]=1;
+      segments.push([first,index],[index,last]);
+    }
+  }
+  const result:Point[]=[];
+  for (let i=0; i<filtered.length; i++)
+    if(keep[i])result.push({x:filtered[i].x,y:filtered[i].y});
+  return result;
+}
+
+export function stroke(
+ id: string, kind: "pen" | "marker", path: Point[],
+ colorValue: string, weight: number, zoom = 1
+): Item {
+  const reduced=simplifyStrokePath(path,zoom);
+  const precise=(value:number)=>Math.round(value*100)/100;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of reduced){
+    minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);
+    maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);
+  }
+  const x=precise(minX-weight/2),y=precise(minY-weight/2);
   return {
-    id,
-    kind,
-    x,
-    y,
-    width: Math.max(weight, maxX - minX + weight),
-    height: Math.max(weight, maxY - minY + weight),
-    text: "",
-    color: colorValue,
-    weight,
-    points: path.map(p => ({ x: p.x - x, y: p.y - y })),
+    id,kind,x,y,
+    width:Math.max(weight,precise(maxX-minX+weight)),
+    height:Math.max(weight,precise(maxY-minY+weight)),
+    text:"",color:colorValue,weight,
+    points:reduced.map(p=>({x:precise(p.x-x),y:precise(p.y-y)})),
   };
 }
 
