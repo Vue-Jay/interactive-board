@@ -5,7 +5,7 @@ const labels: Record<Instrument, string> = {ruler:"Линейка",triangle:"У�
 export default function GeometryInstruments({mobile = false}:{mobile?:boolean}) {
   const [tool,setTool] = useState<Instrument|null>(null);
   const [open,setOpen] = useState(false);
-  const rotationGesture = useRef<{pointer:number;startAngle:number;original:number}|null>(null);
+  const rotationGesture = useRef<{pointer:number;startAngle:number;original:number;centerX:number;centerY:number}|null>(null);
   const [position,setPosition] = useState({x:90,y:100});
   const [rotation,setRotation] = useState(0);
   const [scale,setScale] = useState(1);
@@ -26,15 +26,13 @@ export default function GeometryInstruments({mobile = false}:{mobile?:boolean}) 
     const rect=e.currentTarget.parentElement?.parentElement?.getBoundingClientRect();
     if(!rect)return;
     const centerX=rect.left+rect.width/2,centerY=rect.top+rect.height/2;
-    rotationGesture.current={pointer:e.pointerId,startAngle:Math.atan2(e.clientY-centerY,e.clientX-centerX)*180/Math.PI,original:rotation};
+    rotationGesture.current={pointer:e.pointerId,startAngle:Math.atan2(e.clientY-centerY,e.clientX-centerX)*180/Math.PI,original:rotation,centerX,centerY};
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const rotateMove=(e:PointerEvent<HTMLButtonElement>)=>{
     const g=rotationGesture.current;if(!g||g.pointer!==e.pointerId)return;
     e.preventDefault();e.stopPropagation();
-    const rect=e.currentTarget.parentElement?.parentElement?.getBoundingClientRect();
-    if(!rect)return;
-    const angle=Math.atan2(e.clientY-(rect.top+rect.height/2),e.clientX-(rect.left+rect.width/2))*180/Math.PI;
+    const angle=Math.atan2(e.clientY-g.centerY,e.clientX-g.centerX)*180/Math.PI;
     setRotation(g.original+angle-g.startAngle);
   };
   return <>
