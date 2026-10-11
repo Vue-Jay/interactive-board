@@ -91,3 +91,10 @@ test("eraser hover does not render the entire board or broadcast cursor each mou
  assert.ok(!app.includes("eraserCursor &&"));
  assert.ok(app.includes('el.style.visibility="visible"'));
 });
+
+test("autosave waits until eraser stroke ends and only commits once",()=>{
+ const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+ assert.ok(app.includes("if (saveBlocked || gesture.current || eraserSession.current) return;"));
+ assert.ok(app.includes("if(dirty)commit(itemsRef.current)"));
+ assert.ok(app.includes("eraserSession.current=null;"));
+});
