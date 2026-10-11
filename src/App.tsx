@@ -5731,6 +5731,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
           onPointerDownCapture={(e) => {
+            if (tool === "eraser" && !canEdit && e.button === 0) { setNotice("Доска открыта в режиме просмотра: стирание недоступно. Проверьте права доступа к доске."); return; }
             if (tool !== "eraser" || presentation || !canEdit || e.button !== 0) return;
             // Capture-phase handling runs before nested objects and editor overlays
             // can stop bubbling. This makes erasing work on top of existing ink.
