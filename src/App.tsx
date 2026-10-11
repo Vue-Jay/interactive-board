@@ -1715,15 +1715,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [flushSave]);
-  useEffect(() => {
-    if (editing) {
-      editor.current?.focus({ preventScroll: true });
-      const item = itemsRef.current.find((candidate) => candidate.id === editing);
-      if (item?.kind === "frame") editor.current?.setSelectionRange(0, editor.current.value.length);
-      else editor.current?.setSelectionRange(editor.current.value.length, editor.current.value.length);
-    }
-  }, [editing]);
-
   const refreshDiscussions=useCallback(async()=>{setDiscussionRows(await listBoardComments(boardSummary.id))},[boardSummary.id]);
   const refreshDiscussionParticipants=useCallback(async()=>{setDiscussionParticipants(await listBoardCommentParticipants(boardSummary.id))},[boardSummary.id]);
   const openDiscussions=async(focusId:string|null=null)=>{
@@ -3731,7 +3722,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     setFormulaEditorId(item.id);
     setFormulaDraft({ text: item.text, fontSize: Math.max(12, Math.min(96, item.fontSize ?? 28)), color: item.color ?? "#20242c" });
     setFormulaPaletteTab("basic");
-    window.setTimeout(() => { formulaInput.current?.focus(); formulaInput.current?.setSelectionRange(item.text.length, item.text.length); }, 0);
   };
 
   const closeFormulaEditor = () => {
@@ -4717,7 +4707,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
 
   return (
     <div className={`app ${presentation ? "presentation-mode" : ""} ${!canEdit ? "viewer-mode" : ""} ${publicPresentation ? "public-presentation-mode" : ""}`}>
-      {linkMediaOpen&&<div className="access-backdrop link-media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkMediaOpen(false)}}><section className="access-modal link-media-dialog"><div className="access-head"><div><h2>{linkMediaEditId?"Изменить мультимедиа":"Мультимедиа по ссылке"}</h2><p>Файл не загружается в OnlineRepetitor и не занимает Storage.</p></div><button onClick={()=>setLinkMediaOpen(false)}>×</button></div><label className="link-media-field"><span>Ссылка</span><input autoFocus value={linkMediaUrl} onChange={e=>setLinkMediaUrl(e.target.value)} placeholder="YouTube, Vimeo, MP3, MP4 или другая http/https ссылка"/></label><label className="link-media-field"><span>Название</span><input value={linkMediaTitle} onChange={e=>setLinkMediaTitle(e.target.value)} placeholder="Необязательно"/></label><div className="link-media-support"><strong>Внутренний плеер</strong><span>YouTube и Vimeo открываются внутри доски. Прямые ссылки на MP3/MP4/WebM и другие поддерживаемые браузером файлы используют встроенный HTML5-плеер. Для остальных ссылок показывается безопасная карточка перехода.</span></div><div className="access-actions"><button onClick={()=>setLinkMediaOpen(false)}>Отмена</button><button className="boards-create" onClick={saveLinkMedia}>{linkMediaEditId?"Сохранить":"Добавить на доску"}</button></div></section></div>}
+      {linkMediaOpen&&<div className="access-backdrop link-media-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setLinkMediaOpen(false)}}><section className="access-modal link-media-dialog"><div className="access-head"><div><h2>{linkMediaEditId?"Изменить мультимедиа":"Мультимедиа по ссылке"}</h2><p>Файл не загружается в OnlineRepetitor и не занимает Storage.</p></div><button onClick={()=>setLinkMediaOpen(false)}>×</button></div><label className="link-media-field"><span>Ссылка</span><input value={linkMediaUrl} onChange={e=>setLinkMediaUrl(e.target.value)} placeholder="YouTube, Vimeo, MP3, MP4 или другая http/https ссылка"/></label><label className="link-media-field"><span>Название</span><input value={linkMediaTitle} onChange={e=>setLinkMediaTitle(e.target.value)} placeholder="Необязательно"/></label><div className="link-media-support"><strong>Внутренний плеер</strong><span>YouTube и Vimeo открываются внутри доски. Прямые ссылки на MP3/MP4/WebM и другие поддерживаемые браузером файлы используют встроенный HTML5-плеер. Для остальных ссылок показывается безопасная карточка перехода.</span></div><div className="access-actions"><button onClick={()=>setLinkMediaOpen(false)}>Отмена</button><button className="boards-create" onClick={saveLinkMedia}>{linkMediaEditId?"Сохранить":"Добавить на доску"}</button></div></section></div>}
 
       {sharing && <ShareDialog board={boardSummary} user={authUser} onClose={() => setSharing(false)}/>}
       {lessonOpen && <div className="access-backdrop"><section className="access-modal lesson-live-modal"><div className="access-head"><div><h2>Начать урок</h2><p>Текущая доска станет рабочим пространством занятия.</p></div><button onClick={()=>setLessonOpen(false)}>×</button></div><label><span>Ученик</span><select value={lessonStudentId} onChange={e=>setLessonStudentId(e.target.value)}><option value="">Выберите</option>{lessonStudents.map(u=><option key={u.userId} value={u.userId}>{u.name}</option>)}</select></label><label><span>Тема</span><input value={lessonTopic} onChange={e=>setLessonTopic(e.target.value)} placeholder="Тема занятия"/></label><div className="session-actions"><button className="students-primary" onClick={()=>void beginLiveLesson()}>Начать и запустить таймер</button><button className="boards-secondary" onClick={()=>setLessonOpen(false)}>Отмена</button></div></section></div>}
@@ -5256,7 +5246,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 <div><strong>Заметки к фрейму</strong><span>Видны только вам при подготовке и во время показа</span></div>
                 <button onClick={() => { setFrameNotesEditorId(null); setFrameNotesDraft(""); }} aria-label="Закрыть"><Icon name="close" size={17}/></button>
               </div>
-              <textarea value={frameNotesDraft} onChange={(e) => setFrameNotesDraft(e.target.value)} placeholder="Подсказки, вопросы аудитории, тайминг, важные акценты…" autoFocus />
+              <textarea value={frameNotesDraft} onChange={(e) => setFrameNotesDraft(e.target.value)} placeholder="Подсказки, вопросы аудитории, тайминг, важные акценты…" />
               <div className="notes-editor-footer"><span>{frameNotesDraft.length} / 20000</span><div><button className="secondary" onClick={() => { setFrameNotesEditorId(null); setFrameNotesDraft(""); }}>Отмена</button><button className="primary" onClick={saveFrameNotes}><Icon name="check" size={15}/> Сохранить</button></div></div>
             </div>
           </div>
@@ -5316,7 +5306,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                     onChange={(e) => setFormulaDraft({ ...formulaDraft, text: e.target.value.slice(0, 10000) })}
                     spellCheck={false}
                     placeholder="Например: x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}"
-                    autoFocus
                   />
                   <div className={`formula-syntax-status ${formulaSyntaxIssue(formulaDraft.text) ? "issue" : "ok"}`}>
                     {formulaSyntaxIssue(formulaDraft.text) || "Синтаксис выглядит нормально"}
@@ -5418,7 +5407,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               <div className="flashcard-editor-header"><div><strong>Карточка вопрос–ответ</strong><span>Лицевая и обратная стороны одной учебной карточки</span></div><button onClick={() => { setFlashcardEditorId(null); setFlashcardDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
               <div className="flashcard-editor-body">
                 <section className="flashcard-editor-compose">
-                  <label><span>Вопрос / лицевая сторона</span><textarea value={flashcardDraft.front} maxLength={5000} autoFocus onChange={(e) => setFlashcardDraft({ ...flashcardDraft, front: e.target.value })} placeholder="Что нужно вспомнить?"/></label>
+                  <label><span>Вопрос / лицевая сторона</span><textarea value={flashcardDraft.front} maxLength={5000} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, front: e.target.value })} placeholder="Что нужно вспомнить?"/></label>
                   <label><span>Ответ / обратная сторона</span><textarea value={flashcardDraft.back} maxLength={5000} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, back: e.target.value })} placeholder="Ответ или пояснение"/></label>
                   <div className="flashcard-editor-settings">
                     <label><span>Размер текста</span><input type="range" min="10" max="48" value={flashcardDraft.fontSize} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, fontSize: Number(e.target.value) })}/><strong>{flashcardDraft.fontSize}px</strong></label>
@@ -5449,7 +5438,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               </div>
               <div className="quiz-editor-body">
                 <section className="quiz-editor-compose">
-                  <label className="quiz-question-editor"><span>Вопрос</span><textarea value={quizDraft.question} maxLength={2000} onChange={(e) => setQuizDraft({ ...quizDraft, question: e.target.value })} autoFocus placeholder="Введите вопрос…"/></label>
+                  <label className="quiz-question-editor"><span>Вопрос</span><textarea value={quizDraft.question} maxLength={2000} onChange={(e) => setQuizDraft({ ...quizDraft, question: e.target.value })} placeholder="Введите вопрос…"/></label>
                   <div className="quiz-options-editor-head"><span>Варианты ответа</span><small>Нажмите кружок слева, чтобы назначить правильный ответ</small></div>
                   <div className="quiz-options-editor">
                     {quizDraft.options.map((option, indexValue) => (
