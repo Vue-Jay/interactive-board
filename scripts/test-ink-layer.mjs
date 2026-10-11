@@ -41,6 +41,14 @@ assert.deepEqual(ids(packed),["p","t","m","im","q"],"strokes remain separate edi
 assert.equal(packed.ink,undefined);
 const polygon=[p(40,-10),p(60,-10),p(60,10),p(40,10)];
 const selection=lasso.inkIdsInLasso(packed.items,polygon);
+const denseSquare=[];
+for(let i=0;i<=100;i++)denseSquare.push(p(40+20*i/100,-10));
+for(let i=1;i<=100;i++)denseSquare.push(p(60,-10+20*i/100));
+for(let i=1;i<=100;i++)denseSquare.push(p(60-20*i/100,10));
+for(let i=1;i<100;i++)denseSquare.push(p(40,10-20*i/100));
+assert.ok(lasso.inkIdsInLasso(packed.items,denseSquare,1).has("p"),
+ "long pointer lasso must still select crossing strokes after simplification");
+
 assert.ok(selection.has("p"),"lasso must select crossing strokes");
 assert.ok(!selection.has("m"),"lasso must not select distant strokes");
 assert.ok(!selection.has("t"),"non-ink objects use their own lasso semantics");
