@@ -3768,6 +3768,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const saveGraphEditor=()=>{if(!graphEditorId||!graphDraft){closeGraphEditor();return} const d={...graphDraft,xMin:Math.min(graphDraft.xMin,graphDraft.xMax-1),xMax:Math.max(graphDraft.xMax,graphDraft.xMin+1),yMin:Math.min(graphDraft.yMin,graphDraft.yMax-1),yMax:Math.max(graphDraft.yMax,graphDraft.yMin+1)}; commit(itemsRef.current.map(item=>item.id===graphEditorId?{...item,graphType:d.type,graphExpression:d.expression,graphConnectPoints:d.connectPoints,graphA:d.a,graphB:d.b,graphC:d.c,graphXMin:d.xMin,graphXMax:d.xMax,graphYMin:d.yMin,graphYMax:d.yMax,graphGrid:d.grid,graphPoints:d.points,graphShowLabels:d.showLabels,graphSnap:d.snap,graphAxisLabels:d.axisLabels,graphGridStep:d.gridStep,graphShowCurve:d.showCurve,graphProjections:d.projections,graphSegments:d.segments,graphAngles:d.angles,graphCircles:d.circles,graphPolygons:d.polygons,graphMidpoints:d.midpoints}:item)); closeGraphEditor(); setNotice("График сохранён")};
 
   const openFormulaEditor = (item: Item) => {
+    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "formula" || item.locked) return;
     if (editing) finishEdit();
     setSelected([item.id]);
@@ -3917,6 +3918,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const openChecklistEditor = (item: Item) => {
+    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "checklist" || item.locked) return;
     const entries = item.checklistItems?.length ? [...item.checklistItems] : ["Новый пункт"];
     const done = entries.map((_, index) => item.checklistDone?.[index] === true);
@@ -3949,6 +3951,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   });
 
   const openQuizEditor = (item: Item) => {
+    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "quiz" || item.locked) return;
     const options = item.quizOptions?.length ? [...item.quizOptions] : ["Вариант 1", "Вариант 2"];
     setSelected([item.id]);
@@ -4004,6 +4007,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const openFlashcardEditor = (item: Item) => {
+    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "flashcard" || item.locked) return;
     setSelected([item.id]);
     setFlashcardEditorId(item.id);
@@ -5558,7 +5562,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               className="edit-selected"
               onClick={() => {
                 const item = itemsRef.current.find((i) => i.id === selected[0]);
-                if (!item) return;
+                if (!item || !canEdit || structurallyLockedForStudent(item)) return;
                 if (item.kind === "table") openTableEditor(item); else if (item.kind === "formula") openFormulaEditor(item); else if (item.kind === "checklist") openChecklistEditor(item); else if (item.kind === "quiz") openQuizEditor(item); else if (item.kind === "flashcard") openFlashcardEditor(item); else startEdit(item);
               }}
             >
@@ -5823,6 +5827,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                         : "#fff",
                 }}
                 onDoubleClick={() => {
+                  if (!canEdit || structurallyLockedForStudent(item)) return;
                   const remoteEditor = remoteEditorFor(item.id);
                   if (remoteEditor) {
                     setNotice(`${remoteEditor.name} уже редактирует этот объект`);
