@@ -4545,6 +4545,20 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const miniBottom = Math.max(minimapBounds.y + minimapBounds.height, visibleWorld ? visibleWorld.y + visibleWorld.height : minimapBounds.y + minimapBounds.height) + miniPad;
   const miniW = Math.max(1, miniRight - miniX);
   const miniH = Math.max(1, miniBottom - miniY);
+  // Retain minimap React elements between camera frames. Their geometry
+  // depends on content/bounds and selection, not on every pointer movement.
+  const minimapMarkers = useMemo(() => visibleItems.slice(0, 400).map(item => (
+    <span
+      key={item.id}
+      className={`minimap-item ${selected.includes(item.id) ? "selected" : ""}`}
+      style={{
+        left: `${((item.x - miniX) / miniW) * 100}%`,
+        top: `${((item.y - miniY) / miniH) * 100}%`,
+        width: `${Math.max(1.2, (item.width / miniW) * 100)}%`,
+        height: `${Math.max(1.2, (item.height / miniH) * 100)}%`,
+      }}
+    />
+  )), [visibleItems, selected, miniX, miniY, miniW, miniH]);
   const layerRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Item[] = [];
@@ -6660,18 +6674,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 }));
               }}
             >
-              {visibleItems.slice(0, 400).map((item) => (
-                <span
-                  key={item.id}
-                  className={`minimap-item ${selected.includes(item.id) ? "selected" : ""}`}
-                  style={{
-                    left: `${((item.x - miniX) / miniW) * 100}%`,
-                    top: `${((item.y - miniY) / miniH) * 100}%`,
-                    width: `${Math.max(1.2, (item.width / miniW) * 100)}%`,
-                    height: `${Math.max(1.2, (item.height / miniH) * 100)}%`,
-                  }}
-                />
-              ))}
+              {minimapMarkers}
               {visibleWorld && (
                 <span
                   className="minimap-viewport"
