@@ -27,5 +27,5 @@ const rotated = {
 };
 assert.equal(hitTestInk([rotated], { x: 150, y: 100 }, 3)?.id, "rotated", "rotated line");
 assert.equal(hitTestInk([rotated], { x: 140, y: 100 }, 3), null, "rotated line miss");
-assert.equal(hitTestInk([{...a,locked:true}], {x:50,y:0}, 3), null, "locked ink remains DOM");
+assert.equal(hitTestInk([{...a,locked:true}], {x:50,y:0}, 3)?.id, "one", "locked ink can be selected");
 console.log("Ink canvas hit-tests passed.");
