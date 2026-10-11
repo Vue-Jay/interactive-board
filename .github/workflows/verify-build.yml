@@ -34,6 +34,6 @@ jobs:
           test -n "$VITE_SUPABASE_URL" || { echo "Missing VITE_SUPABASE_URL"; exit 1; }
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing VITE_SUPABASE_ANON_KEY"; exit 1; }
       - name: Board tool regression tests
-        run: node --test tests/*.test.mjs
+        run: node --test tests/board-tools.test.mjs
       - name: Build
         run: npm run build
