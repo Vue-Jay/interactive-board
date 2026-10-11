@@ -48,7 +48,6 @@ import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "
 import {
   parseDocument,
   stroke,
-  eraseInk,
   type ShapeType,
   type ConnectorStyle,
   type ConnectorRouting,
@@ -59,6 +58,7 @@ import {
   type DocumentData,
 } from "./boardModel";
 
+import { eraseInkAt } from "./inkEraser";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -1464,6 +1464,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const lastViewSerialized = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
+  const eraserSession = useRef<{pointer:number;last:Point;zoom:number}|null>(null);
   const displayFrame = useRef<number | null>(null);
   const pendingDisplayItems = useRef<Item[] | null>(null);
   const gesturePaintFrame = useRef<number | null>(null);
@@ -2422,7 +2423,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       board.current.releasePointerCapture(g.pointer);
   };
   const down = (e: PE<HTMLElement>) => {
-    if (gesture.current || (e.target as HTMLElement).closest("textarea"))
+    if (gesture.current || eraserSession.current || (e.target as HTMLElement).closest("textarea"))
       return;
     if (e.button !== 0 && e.button !== 1) return;
     const target = e.target as HTMLElement;
@@ -2609,9 +2610,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       setPath([p]);
     } else if (tool === "pen" || tool === "marker") {
       mode = "draw";
-      setSelected([]);
-    } else if (tool === "eraser") {
-      mode = "erase";
       setSelected([]);
     } else if (tool === "connector") {
       mode = "connector";
@@ -2802,7 +2800,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if (mode === "connector") {
       setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, connectorStartHit?.binding));
     }
-    if (mode === "erase") display(eraseInk(gesture.current.before, gesture.current.path, eraserSize / 2 / view.zoom));
     // Desktop mouse drag keeps double-click semantics. Touch must be captured immediately,
     // otherwise Android may retarget/cancel the pointer before selection drag starts.
     if (e.pointerType === "touch" || e.pointerType === "pen") { e.preventDefault(); e.stopPropagation(); }
@@ -2970,11 +2967,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       g.connectorEndBinding = magnetic?.binding;
       g.path = [g.path[0], point];
       scheduleGesturePaint();
-    } else if (g.mode === "erase") {
-      const point = world(p), last = g.path[g.path.length - 1];
-      if (Math.hypot(point.x-last.x,point.y-last.y)*view.zoom < 2) return;
-      g.path.push(point);
-      display(eraseInk(g.before,g.path,eraserSize/2/view.zoom));
     } else {
       const point = world(p),
         last = g.path[g.path.length - 1];
@@ -5709,8 +5701,50 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
-          onPointerDown={(e) => { touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerDownCapture={(e) => {
+            if(tool!=="eraser" || presentation || e.button!==0)return;
+            if(!canEdit){setNotice("У вас доступ только для просмотра");return;}
+            e.preventDefault();e.stopPropagation();
+            if(gesture.current)end();
+            const p=world(local(e.clientX,e.clientY));
+            const before=itemsRef.current;
+            eraserSession.current={pointer:e.pointerId,last:p,zoom:view.zoom};
+            setSelected([]);
+            const next=eraseInkAt(before,p,p,eraserSize/2/view.zoom);
+            if(next!==before)display(next);
+            board.current?.setPointerCapture(e.pointerId);
+          }}
+          onPointerMoveCapture={(e) => {
+            const g=eraserSession.current;
+            if(!g||g.pointer!==e.pointerId)return;
+            e.preventDefault();e.stopPropagation();
+            const p=world(local(e.clientX,e.clientY));
+            const before=itemsRef.current;
+            const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
+            g.last=p;
+            if(next!==before)display(next);
+            setEraserCursor(local(e.clientX,e.clientY));
+          }}
+          onPointerUpCapture={(e) => {
+            const g=eraserSession.current;
+            if(!g||g.pointer!==e.pointerId)return;
+            e.preventDefault();e.stopPropagation();
+            const p=world(local(e.clientX,e.clientY));
+            const before=itemsRef.current;
+            const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
+            if(next!==before)display(next);
+            eraserSession.current=null;
+            commit(itemsRef.current);
+            if(board.current?.hasPointerCapture(e.pointerId))board.current.releasePointerCapture(e.pointerId);
+          }}
+          onPointerCancelCapture={(e) => {
+            if(eraserSession.current?.pointer===e.pointerId){
+              eraserSession.current=null;
+              commit(itemsRef.current);
+            }
+          }}
+          onPointerDown={(e) => { if(tool==="eraser")return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
+          onPointerMove={(e) => { if(eraserSession.current)return; touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -5759,7 +5793,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => end(true)}
+          onLostPointerCapture={() => { if(eraserSession.current){eraserSession.current=null;commit(itemsRef.current);}else end(true); }}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
