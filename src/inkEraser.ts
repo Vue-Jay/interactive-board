@@ -9,28 +9,53 @@ const distance2 = (p:Point,a:Point,b:Point) => {
 const at=(a:Point,b:Point,t:number):Point=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
 const equal=(a:Point,b:Point)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y)<.00001;
 const push=(points:Point[],p:Point)=>{if(!points.length||!equal(points[points.length-1],p))points.push(p)};
+// Exact intersection of a stroke segment with the capsule swept by the eraser.
+// It handles very long straight lines without the precision loss of iterative
+// ternary search, which previously missed narrow partial erasures.
 function cutInterval(a:Point,b:Point,c:Point,d:Point,r:number):[number,number]|null {
-  const within=(t:number)=>distance2(at(a,b,t),c,d)<=r*r;
-  let lo=0,hi=1;
-  // Convex minimum: 12 iterations are sufficient at board pixel precision.
-  for(let n=0;n<12;n++){
-    const l=(2*lo+hi)/3,u=(lo+2*hi)/3;
-    if(distance2(at(a,b,l),c,d)<distance2(at(a,b,u),c,d))hi=u;else lo=l;
+  const vx=b.x-a.x,vy=b.y-a.y;
+  const vv=vx*vx+vy*vy,rr=r*r;
+  if(vv<1e-12)return distance2(a,c,d)<=rr?[0,1]:null;
+  const intervals:[number,number][]=[];
+  const circle=(center:Point)=>{
+    const dx=a.x-center.x,dy=a.y-center.y;
+    const qb=2*(dx*vx+dy*vy),qc=dx*dx+dy*dy-rr;
+    const discriminant=qb*qb-4*vv*qc;
+    if(discriminant<0)return;
+    const root=Math.sqrt(Math.max(0,discriminant));
+    const lo=Math.max(0,(-qb-root)/(2*vv));
+    const hi=Math.min(1,(-qb+root)/(2*vv));
+    if(lo<=hi)intervals.push([lo,hi]);
+  };
+  circle(c);
+  const dx=d.x-c.x,dy=d.y-c.y;
+  const length=Math.hypot(dx,dy);
+  if(length>1e-12){
+    circle(d);
+    const ux=dx/length,uy=dy/length;
+    const sx=(a.x-c.x)*ux+(a.y-c.y)*uy;
+    const ds=vx*ux+vy*uy;
+    const sy=-(a.x-c.x)*uy+(a.y-c.y)*ux;
+    const dyPerT=-vx*uy+vy*ux;
+    let low=0,high=1;
+    const constrain=(initial:number,velocity:number,min:number,max:number)=>{
+      if(Math.abs(velocity)<1e-12)return initial>=min&&initial<=max;
+      const t0=(min-initial)/velocity,t1=(max-initial)/velocity;
+      low=Math.max(low,Math.min(t0,t1));
+      high=Math.min(high,Math.max(t0,t1));
+      return low<=high;
+    };
+    if(constrain(sx,ds,0,length)&&constrain(sy,dyPerT,-r,r)){
+      intervals.push([low,high]);
+    }
   }
-  const mid=(lo+hi)/2;
-  if(!within(mid)&&!within(0)&&!within(1))return null;
-  let from=0,to=1;
-  if(!within(0)){
-    let l=0,u=mid;
-    for(let n=0;n<15;n++){const m=(l+u)/2;if(within(m))u=m;else l=m}
-    from=u;
+  if(!intervals.length)return null;
+  let start=1,end=0;
+  for(const [lo,hi] of intervals){
+    start=Math.min(start,lo);
+    end=Math.max(end,hi);
   }
-  if(!within(1)){
-    let l=mid,u=1;
-    for(let n=0;n<15;n++){const m=(l+u)/2;if(within(m))l=m;else u=m}
-    to=l;
-  }
-  return [from,to];
+  return [start,end];
 }
 function piece(source:Item,points:Point[]):Item {
   const weight=source.weight??3;
