@@ -2498,10 +2498,17 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   });
 
   const touchStart=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch")return;touchPoints.current.set(e.pointerId,local(e.clientX,e.clientY));if(touchPoints.current.size===2){end(true);const pts=[...touchPoints.current.values()];const dx=pts[1].x-pts[0].x,dy=pts[1].y-pts[0].y;pinchState.current={distance:Math.max(1,Math.hypot(dx,dy)),center:{x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2},view:{...view}};setPanning(true)}};
-  const touchMove=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch"||!touchPoints.current.has(e.pointerId))return;touchPoints.current.set(e.pointerId,local(e.clientX,e.clientY));const pinch=pinchState.current;if(!pinch||touchPoints.current.size<2)return;e.preventDefault();const pts=[...touchPoints.current.values()];const center={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};const distance=Math.max(1,Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y));const z=Math.max(.1,Math.min(8,pinch.view.zoom*distance/pinch.distance));const wx=(pinch.center.x-pinch.view.x)/pinch.view.zoom,wy=(pinch.center.y-pinch.view.y)/pinch.view.zoom;setView({zoom:z,x:center.x-wx*z,y:center.y-wy*z})};
+  const touchMove=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch"||!touchPoints.current.has(e.pointerId))return;touchPoints.current.set(e.pointerId,local(e.clientX,e.clientY));const pinch=pinchState.current;if(!pinch||touchPoints.current.size<2)return;e.preventDefault();const pts=[...touchPoints.current.values()];const center={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};const distance=Math.max(1,Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y));const z=Math.max(.1,Math.min(8,pinch.view.zoom*distance/pinch.distance));const wx=(pinch.center.x-pinch.view.x)/pinch.view.zoom,wy=(pinch.center.y-pinch.view.y)/pinch.view.zoom;scheduleViewerPan({zoom:z,x:center.x-wx*z,y:center.y-wy*z})};
   const touchEnd=(e: PE<HTMLElement>)=>{if(e.pointerType!=="touch")return;touchPoints.current.delete(e.pointerId);if(touchPoints.current.size<2){pinchState.current=null;setPanning(false)}};
 
   const end = (cancel = false) => {
+    if (viewerPanFrame.current !== null) {
+      cancelAnimationFrame(viewerPanFrame.current);
+      viewerPanFrame.current = null;
+    }
+    const pendingPan = viewerPendingPan.current;
+    viewerPendingPan.current = null;
+    if (pendingPan && !cancel) setView(pendingPan);
     const g = gesture.current;
     if (!g) return;
     gesture.current = null;
@@ -2974,13 +2981,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         display(g.before.map(item=>g.ids.includes(item.id)?{...item,x:item.x+worldDx,y:item.y+worldDy}:item));
       } else {
         setGuides({});
-        if (!canEdit) scheduleViewerPan({...g.view,x:g.view.x+dx,y:g.view.y+dy});
-        else setView({...g.view,x:g.view.x+dx,y:g.view.y+dy});
+        scheduleViewerPan({...g.view,x:g.view.x+dx,y:g.view.y+dy});
       }
     } else if (g.mode === "pan") {
       setGuides({});
-      if (!canEdit) scheduleViewerPan({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
-      else setView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
+      scheduleViewerPan({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
     } else if (g.mode === "drag") {
       let worldDx = dx / g.view.zoom;
       let worldDy = dy / g.view.zoom;
