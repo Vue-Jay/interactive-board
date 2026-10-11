@@ -2471,6 +2471,36 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }
     const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
     const hit = itemsRef.current.find((i) => i.id === id);
+    // Formula touch manipulation has its own direct drag path. Text spans and
+    // nested fraction glyphs must not defer to browser text-selection gestures.
+    if (hit?.kind === "formula" && (e.pointerType === "touch" || e.pointerType === "pen") &&
+        (tool === "select" || tool === "hand") && !space && canEdit &&
+        !hit.locked && !structurallyLockedForStudent(hit) &&
+        !target.closest("[data-transform-handle]")) {
+      const family = familyIdsFor(hit);
+      const movableIds = family.filter((member) => {
+        const candidate = itemsRef.current.find((item) => item.id === member);
+        return !!candidate && !candidate.locked && !structurallyLockedForStudent(candidate);
+      });
+      if (movableIds.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelected(family);
+        gesture.current = {
+          pointer: e.pointerId,
+          mode: "drag",
+          start,
+          view,
+          before: itemsRef.current.map(deepItem),
+          ids: movableIds,
+          path: [p],
+          additive: false,
+          dragging: true,
+        };
+        board.current?.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     if (e.pointerType === "touch" && hit?.kind === "image" && (tool === "select" || tool === "hand") && !space && !hit.locked) {
       const now = performance.now();
       const previousTap = imageTapRef.current;
