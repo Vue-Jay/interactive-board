@@ -1607,6 +1607,38 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       pendingDisplayItems.current = null;
     };
   }, []);
+  // Read recent server revisions once on entry, without blocking board rendering.
+  useEffect(()=>{
+    if(!isRemoteBackendEnabled())return;
+    let active=true;
+    let previousVersion:number|null=null;
+    try{
+      const stored=localStorage.getItem(historyVisitKey);
+      if(stored!==null){
+        const value=Number(stored);
+        if(Number.isSafeInteger(value)&&value>=0)previousVersion=value;
+      }
+    }catch{/* local history marker is optional */}
+    void listBoardHistory(boardSummary.id,20).then(rows=>{
+      if(!active)return;
+      const recent=changesSinceLastVisit(rows,previousVersion,5);
+      setRecentChanges(recent);
+      setRecentChangesOpen(recent.length>0);
+    }).catch(()=>{/* The full history remains available manually. */});
+    return()=>{active=false};
+  },[boardSummary.id,historyVisitKey]);
+
+  // Mark server revisions seen when the user actually leaves this board.
+  useEffect(()=>{
+    const markSeen=()=>{
+      const version=remoteVersion.current;
+      if(version===null||!Number.isSafeInteger(version)||version<0)return;
+      try{localStorage.setItem(historyVisitKey,String(version))}catch{/* ignore */}
+    };
+    window.addEventListener("pagehide",markSeen);
+    return()=>{markSeen();window.removeEventListener("pagehide",markSeen)};
+  },[historyVisitKey]);
+
   useEffect(() => {
     localStorage.setItem("lesson-board.grid-mode", gridMode);
   }, [gridMode]);
