@@ -2634,7 +2634,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     else if (g.mode === "lasso") {
       // Lasso is a *selection* tool, never destructive. Ink is stored as
       // individual objects and uses geometric stroke/polygon intersection.
-      const inkHits = inkIdsInLasso(itemsRef.current, g.path);
+      const inkHits = inkIdsInLasso(itemsRef.current, g.path, g.view.zoom);
       const selectedGroups = new Set<string>();
       const selectedIds = new Set<string>(inkHits);
       if (g.path.length >= 3) {
@@ -3465,9 +3465,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const selectedIds = useMemo(() => new Set(selected), [selected]);
   const selectedItems = useMemo(() => selected.map((id) => itemById.get(id)).filter((item): item is Item => Boolean(item)), [selected, itemById]);
   const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
-  const selectionBounds = boundsOf(selectedItems);
-  const selectionLocked = selectedItems.some((item) => item.locked);
-  const selectionHasGroup = selectedItems.some((item) => item.groupId);
+  const selectionBounds = useMemo(() => boundsOf(selectedItems), [selectedItems]);
+  const selectionLocked = useMemo(() => selectedItems.some((item) => item.locked), [selectedItems]);
+  const selectionHasGroup = useMemo(() => selectedItems.some((item) => item.groupId), [selectedItems]);
   const selectionScreenBounds = selectionBounds ? {
     left: selectionBounds.x * view.zoom + view.x,
     top: selectionBounds.y * view.zoom + view.y,
