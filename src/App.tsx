@@ -57,7 +57,7 @@ import {
   type Item,
   type DocumentData,
 } from "./boardModel";
-import { ensureBoardAssets, getAsset, putAsset } from "./assetStore";
+import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
 import { subscribeBoardComments } from "./commentRealtime";
@@ -751,7 +751,7 @@ const Media = memo(function Media({ item, boardId }: { item: Item; boardId: stri
     let url = "";
     let alive = true;
     if (!nearViewport || !item.assetId) return;
-    void getAsset(item.assetId, boardId).then((blob) => {
+    void (item.kind === "image" ? getDisplayAsset(item.assetId, boardId) : getAsset(item.assetId, boardId)).then((blob) => {
       if (!blob || !alive) return;
       url = URL.createObjectURL(blob);
       setSrc(url);
