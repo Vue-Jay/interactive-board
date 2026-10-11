@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from "react";
+import { useRef, useState, type RefObject, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 
 type Instrument = "ruler" | "triangle" | "protractor";
@@ -9,7 +9,7 @@ const dimensions: Record<Instrument, [number, number]> = { ruler: [410,88], tria
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max,n));
 const angleTo = (e: PointerEvent<HTMLElement>, point: Point) => Math.atan2(e.clientY-point.y,e.clientX-point.x)*180/Math.PI;
 
-export default function GeometryInstruments({ mobile = false }: { mobile?: boolean }) {
+export default function GeometryInstruments({ mobile = false, view, boardRef }: { mobile?: boolean; view: {x:number;y:number;zoom:number}; boardRef: RefObject<HTMLElement | null> }) {
   const [tool,setTool] = useState<Instrument|null>(null);
   const [open,setOpen] = useState(false);
   const [menuPosition,setMenuPosition] = useState({ left:72,top:120 });
@@ -18,6 +18,18 @@ export default function GeometryInstruments({ mobile = false }: { mobile?: boole
   const [scale,setScale] = useState(1);
   const gesture = useRef<Gesture|null>(null);
   const normalizedRotation = ((rotation%360)+360)%360;
+  const boardRect = boardRef.current?.getBoundingClientRect();
+  const zoom = Math.max(0.01,view.zoom);
+  const screenPosition = {
+    x:(boardRect?.left ?? 0)+view.x+position.x*zoom,
+    y:(boardRect?.top ?? 0)+view.y+position.y*zoom,
+  };
+  const visualScale = zoom*scale;
+  const [nativeWidth,nativeHeight] = dimensions[tool ?? "ruler"];
+  const radians = rotation * Math.PI / 180;
+  const rotatedHalfHeight = (Math.abs(Math.sin(radians))*nativeWidth+Math.abs(Math.cos(radians))*nativeHeight)*visualScale/2;
+  const toolbarOffset = -rotatedHalfHeight-57;
+
   const toggleMenu=(element:HTMLButtonElement)=>{
     const rect=element.getBoundingClientRect();
     const menuWidth=158;
@@ -27,19 +39,23 @@ export default function GeometryInstruments({ mobile = false }: { mobile?: boole
   };
   const select=(id:Instrument)=>{
     const [width,height]=dimensions[id];
-    setTool(id);setOpen(false);setRotation(0);setScale(Math.min(1,(window.innerWidth-70)/width,(window.innerHeight-140)/height));
-    setPosition({x:clamp(window.innerWidth/2,width/4,window.innerWidth-width/4),y:clamp(window.innerHeight/2,120,window.innerHeight-90)});
+    const rect=boardRef.current?.getBoundingClientRect();
+    if(!rect)return;
+    setTool(id);setOpen(false);setRotation(0);
+    setScale(Math.min(1,(rect.width-70)/Math.max(1,width*zoom),(rect.height-140)/Math.max(1,height*zoom)));
+    // An instrument is anchored to the board's world-space coordinates.
+    setPosition({x:(rect.width/2-view.x)/zoom,y:(rect.height/2-view.y)/zoom});
   };
   const start=(e:PointerEvent<HTMLElement>,mode:Gesture["mode"])=>{
     e.preventDefault();e.stopPropagation();
-    gesture.current={pointer:e.pointerId,mode,startX:e.clientX,startY:e.clientY,x:position.x,y:position.y,angle:rotation,startAngle:angleTo(e,position)};
+    gesture.current={pointer:e.pointerId,mode,startX:e.clientX,startY:e.clientY,x:position.x,y:position.y,angle:rotation,startAngle:angleTo(e,screenPosition)};
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const moving=(e:PointerEvent<HTMLElement>)=>{
     const g=gesture.current;if(!g||e.pointerId!==g.pointer)return;
     e.preventDefault();e.stopPropagation();
-    if(g.mode==="move")setPosition({x:g.x+e.clientX-g.startX,y:g.y+e.clientY-g.startY});
-    else setRotation(g.angle+angleTo(e,{x:g.x,y:g.y})-g.startAngle);
+    if(g.mode==="move")setPosition({x:g.x+(e.clientX-g.startX)/zoom,y:g.y+(e.clientY-g.startY)/zoom});
+    else setRotation(g.angle+angleTo(e,screenPosition)-g.startAngle);
   };
   const finish=(e:PointerEvent<HTMLElement>)=>{
     if(gesture.current?.pointer===e.pointerId)gesture.current=null;
@@ -56,8 +72,8 @@ export default function GeometryInstruments({ mobile = false }: { mobile?: boole
         </button>)}
       </div>,document.body)}
     </div>
-    {tool&&createPortal(<div className="geometry-instrument geometry-instrument-centered" style={{left:position.x,top:position.y}}>
-      <div className="geometry-instrument-actions" onPointerDown={e=>e.stopPropagation()}>
+    {tool&&createPortal(<div className="geometry-instrument geometry-instrument-centered" style={{left:screenPosition.x,top:screenPosition.y}}>
+      <div className="geometry-instrument-actions" style={{top:toolbarOffset}} onPointerDown={e=>e.stopPropagation()}>
         <span>{labels[tool]}</span>
         <span className="geometry-angle-readout" title="Угол поворота">{Math.round(normalizedRotation)}°</span>
         <button type="button" className="geometry-rotation-handle" onPointerDown={e=>start(e,"rotate")} onPointerMove={moving} onPointerUp={finish} onPointerCancel={finish} aria-label="Вращать вокруг центра" title="Удерживайте и ведите вокруг центра">⟳</button>
@@ -66,7 +82,7 @@ export default function GeometryInstruments({ mobile = false }: { mobile?: boole
         <button type="button" onClick={()=>setScale(v=>clamp(+(v+.1).toFixed(2),.4,2.5))} aria-label="Увеличить">+</button>
         <button type="button" onClick={()=>setTool(null)} aria-label="Убрать инструмент">×</button>
       </div>
-      <div className="geometry-instrument-body" style={{width:dimensions[tool][0],height:dimensions[tool][1],transform:`translate(-50%,-50%) rotate(${rotation}deg) scale(${scale})`,transformOrigin:"center center"}}
+      <div className="geometry-instrument-body" style={{width:dimensions[tool][0],height:dimensions[tool][1],transform:`translate(-50%,-50%) rotate(${rotation}deg) scale(${visualScale})`,transformOrigin:"center center"}}
         onPointerDown={e=>start(e,"move")} onPointerMove={moving} onPointerUp={finish} onPointerCancel={finish}>
       {tool==="ruler"&&<svg width="410" height="88" viewBox="0 0 410 88" aria-label="Линейка с делениями"><rect x="3" y="3" width="404" height="82" rx="5" fill="#fce8a5" fillOpacity=".85" stroke="#805e25"/>{Array.from({length:41},(_,i)=><g key={i}><line x1={5+i*10} y1="45" x2={5+i*10} y2={i%10===0?13:i%5===0?23:34} stroke="#624c30" strokeWidth="1"/>{i%10===0&&<text x={5+i*10} y="62" textAnchor="middle" fontSize="12" fill="#543f26">{i/10}</text>}</g>)}</svg>}
       {tool==="triangle"&&<svg width="340" height="260" viewBox="0 0 340 260" aria-label="Прямоугольный угольник"><path d="M8 8 L8 250 L330 250 Z" fill="#afe5ee" fillOpacity=".7" stroke="#367b88" strokeWidth="2"/><path d="M55 127 L55 215 L171 215 Z" fill="white" fillOpacity=".8" stroke="#367b88"/>{Array.from({length:17},(_,i)=><line key={i} x1={10+i*20} y1="249" x2={10+i*20} y2={i%5===0?229:238} stroke="#367b88"/>)}</svg>}
