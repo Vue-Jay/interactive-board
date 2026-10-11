@@ -13,6 +13,7 @@ import { flushSync } from "react-dom";
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import GeometryInstruments from "./GeometryInstruments";
+import ViewerInkLayer from "./ViewerInkLayer";
 import BoardsScreen from "./BoardsScreen";
 const StudentsScreen = lazy(() => import("./StudentsScreen"));
 const AssignmentsScreen = lazy(() => import("./AssignmentsScreen"));
@@ -4486,6 +4487,49 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if (editing) keep.add(editing);
     return visibleItems.filter((item) => keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
   }, [visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selected, editing]);
+  // Group consecutive ink strokes into raster layers on read-only boards.
+  // Splitting groups at every non-ink object preserves the exact stacking order
+  // relative to images, PDFs, shapes and text; board data is never modified.
+  const viewerLayers = useMemo(() => {
+    if (canEdit) return null;
+    type Layer =
+      | { kind: "ink"; key: string; strokes: Item[]; bounds: Bounds }
+      | { kind: "item"; key: string; item: Item };
+    const layers: Layer[] = [];
+    const selectedIds = new Set(selected);
+    let run: Item[] = [];
+    const flush = () => {
+      if (!run.length) return;
+      if (run.length >= 8) {
+        const bounds = boundsOf(run);
+        if (bounds) layers.push({ kind: "ink", key: "ink-" + run[0].id, strokes: run, bounds });
+        else for (const item of run) layers.push({ kind: "item", key: item.id, item });
+      } else for (const item of run) layers.push({ kind: "item", key: item.id, item });
+      run = [];
+    };
+    for (const item of visibleItems) {
+      if ((item.kind === "pen" || item.kind === "marker") && !selectedIds.has(item.id)) run.push(item);
+      else {
+        flush();
+        layers.push({ kind: "item", key: item.id, item });
+      }
+    }
+    flush();
+    return layers;
+  }, [canEdit, visibleItems, selected]);
+  const renderEntries = useMemo(() => {
+    if (!viewerLayers) return renderedItems.map(item => ({ kind: "item" as const, key: item.id, item }));
+    if (!boardViewportSize.width || !boardViewportSize.height) return viewerLayers;
+    const margin = 220 / Math.max(0.1, view.zoom);
+    const left = -view.x / view.zoom - margin, top = -view.y / view.zoom - margin;
+    const right = (boardViewportSize.width - view.x) / view.zoom + margin;
+    const bottom = (boardViewportSize.height - view.y) / view.zoom + margin;
+    return viewerLayers.filter(layer => {
+      const bounds = layer.kind === "ink" ? layer.bounds : layer.item;
+      return bounds.x + bounds.width >= left && bounds.x <= right &&
+        bounds.y + bounds.height >= top && bounds.y <= bottom;
+    });
+  }, [viewerLayers, renderedItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom]);
   const minimapBounds = allBounds ?? { x: -400, y: -300, width: 800, height: 600 };
   const boardRect = board.current?.getBoundingClientRect();
   const visibleWorld = boardRect ? {
@@ -5970,7 +6014,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 return <g key={`comment-link-${comment.id}`}><line x1={sx} y1={sy} x2={ex} y2={ey} /><circle cx={ex} cy={ey} r={4} /></g>;
               })}
             </svg>
-            {renderedItems.map((item) => (
+            {renderEntries.map((entry) => {
+              if (entry.kind === "ink") return (
+                <ViewerInkLayer key={entry.key} strokes={entry.strokes}
+                  view={view} viewport={boardViewportSize} />
+              );
+              const item = entry.item;
+              return (
               <div
                 data-object={item.id}
                 key={item.id}
@@ -6094,7 +6144,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                     </div>
                   ))}
               </div>
-            ))}
+              );
+            })}
             {preview && (
               <div
                 className={`gesture-preview preview-${preview.kind}`}
