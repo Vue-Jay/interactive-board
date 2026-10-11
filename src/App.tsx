@@ -48,6 +48,7 @@ import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "
 import {
   parseDocument,
   stroke,
+  eraseInk,
   type ShapeType,
   type ConnectorStyle,
   type ConnectorRouting,
@@ -57,7 +58,7 @@ import {
   type Item,
   type DocumentData,
 } from "./boardModel";
-import { eraseInk } from "./inkEraser";
+
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -2969,6 +2970,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       g.connectorEndBinding = magnetic?.binding;
       g.path = [g.path[0], point];
       scheduleGesturePaint();
+    } else if (g.mode === "erase") {
+      const point = world(p), last = g.path[g.path.length - 1];
+      if (Math.hypot(point.x-last.x,point.y-last.y)*view.zoom < 2) return;
+      g.path.push(point);
+      display(eraseInk(g.before,g.path,eraserSize/2/view.zoom));
     } else {
       const point = world(p),
         last = g.path[g.path.length - 1];
@@ -5703,42 +5709,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
-          onPointerDownCapture={(e) => {
-            if (tool === "eraser" && !canEdit && e.button === 0) { setNotice("Доска открыта в режиме просмотра: стирание недоступно. Проверьте права доступа к доске."); return; }
-            if (tool !== "eraser" || presentation || !canEdit || e.button !== 0) return;
-            // Eraser owns its own pointer lifecycle, entirely separate from
-            // dragging/transforming objects. Handle it before child event handlers.
-            touchStart(e);
-            if (touchPoints.current.size >= 2) return;
-            if (gesture.current) return;
-            e.preventDefault();
-            e.stopPropagation();
-            if (editing) finishEdit();
-            const cursor = local(e.clientX,e.clientY);
-            const point = world(cursor);
-            const before = itemsRef.current;
-            setSelected([]);
-            gesture.current={pointer:e.pointerId,mode:"erase",start:cursor,view:{...view},before,ids:[],path:[point],additive:false};
-            const changed = eraseInk(before,[point],eraserSize/2/view.zoom);
-            if(changed!==before)display(changed);
-            board.current?.setPointerCapture(e.pointerId);
-          }}
-          onPointerMoveCapture={(e) => {
-            if (tool !== "eraser" || gesture.current?.mode !== "erase" || pinchState.current) return;
-            const g=gesture.current;
-            if(!g || g.mode!=="erase" || g.pointer!==e.pointerId)return;
-            e.preventDefault();
-            const point=world(local(e.clientX,e.clientY));
-            const last=g.path[g.path.length-1];
-            if(Math.hypot(point.x-last.x,point.y-last.y)*g.view.zoom < 1.5)return;
-            const before=itemsRef.current;
-            const changed=eraseInk(before,[last,point],eraserSize/2/g.view.zoom);
-            g.path=[point];
-            if(changed!==before)display(changed);
-            setEraserCursor(local(e.clientX,e.clientY));
-          }}
-          onPointerDown={(e) => { if (tool === "eraser" && !presentation && canEdit) return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { touchMove(e); if(tool==="eraser" && gesture.current?.mode==="erase") return; if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerDown={(e) => { touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
+          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -5782,18 +5754,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onPointerUp={(e) => {
             touchEnd(e);
             if (e.pointerId === gesture.current?.pointer) {
-              if(gesture.current?.mode==="erase") {
-                const point=world(local(e.clientX,e.clientY));
-                const last=gesture.current.path[gesture.current.path.length-1];
-                const before=itemsRef.current;
-                const changed=eraseInk(before,[last,point],eraserSize/2/gesture.current.view.zoom);
-                if(changed!==before)display(changed);
-              } else move(e);
+              move(e);
               end();
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => end(gesture.current?.mode !== "erase")}
+          onLostPointerCapture={() => end(true)}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
