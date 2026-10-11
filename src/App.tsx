@@ -2994,8 +2994,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     } else if (g.mode === "erase") {
       const point = world(p), last = g.path[g.path.length - 1];
       if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 2) return;
-      g.path.push(point);
-      display(eraseInk(g.before, g.path, eraserSize / 2 / view.zoom));
+      // Erase the newest pointer segment from the *current* ink state.
+      // Rebuilding every stroke from the original snapshot on every move
+      // grows quadratically with a long gesture and delays visible updates.
+      const segment = [last, point];
+      g.path = segment;
+      display(eraseInk(itemsRef.current, segment, eraserSize / 2 / g.view.zoom));
     } else {
       const point = world(p),
         last = g.path[g.path.length - 1];
