@@ -7975,3 +7975,37 @@ option{background:#fff;color:#343741}
 .board.eraser-live .viewer-ink-canvas {
   visibility: hidden !important;
 }
+
+/* Last saved revisions are visible when the user reopens a board. Keep the
+   panel compact and independently scrollable on phones and dense workspaces. */
+.board-recent-changes {
+  position: fixed;
+  top: calc(76px + env(safe-area-inset-top, 0px));
+  right: 16px;
+  z-index: 1150;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(450px, 65vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--ui-line, #e4e5ee);
+  border-radius: 15px;
+  background: var(--ui-panel, #ffffff);
+  color: var(--ui-text, #252839);
+  box-shadow: 0 12px 40px rgba(24, 25, 50, .17);
+}
+.board-recent-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.board-recent-head>div { display:grid; gap:3px; }
+.board-recent-head strong { font-size:14px; }
+.board-recent-head small { color:#74798b; font-size:11px; }
+.board-recent-head button { border:0; background:transparent; color:inherit; cursor:pointer; font-size:22px; line-height:1; }
+.board-recent-list { display:grid; gap:8px; overflow-y:auto; margin:12px 0; padding-right:3px; }
+.board-recent-row { display:grid; gap:3px; padding:9px 10px; background:rgba(120,122,156,.065); border-radius:10px; font-size:12px; }
+.board-recent-row strong { font-size:12px; }
+.board-recent-row span { color:#6b7082; font-size:11px; }
+.board-recent-row small { font-size:11px; }
+.board-recent-full { cursor:pointer; background:transparent; border:1px solid var(--ui-line, #e4e5ee); border-radius:10px; color:inherit; padding:8px 10px; font-size:12px; }
+@media (max-width: 700px) {
+  .board-recent-changes { top: calc(66px + env(safe-area-inset-top, 0px)); right:8px; max-height:50vh; padding:10px; }
+}
