@@ -241,7 +241,7 @@ function loadInitial(storageKey: string) {
     };
   }
 }
-function Ink({ item }: { item: Item }) {
+const Ink = memo(function Ink({ item }: { item: Item }) {
   return (
     <svg
       width={item.width}
@@ -269,7 +269,7 @@ function Ink({ item }: { item: Item }) {
       </g>
     </svg>
   );
-}
+}, (previous, next) => previous.item === next.item);
 
 function liveStroke(id: string, kind: "pen" | "marker", path: Point[], colorValue: string, weight: number): Item {
   /*
