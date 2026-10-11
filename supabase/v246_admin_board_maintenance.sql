@@ -1,5 +1,5 @@
 -- Admin maintenance editing. Apply in Supabase SQL Editor before enabling UI.
--- Admin identity is checked against the server-owned profiles.is_admin flag,
+-- Admin identity is checked through the existing get_my_account_access RPC,
 -- never against a client supplied user id or email.
 begin;
 create table if not exists public.admin_board_edit_log(
@@ -21,8 +21,8 @@ declare
  v_row public.board_documents%rowtype;
  v_admin boolean;
 begin
- select coalesce(p.is_admin,false) into v_admin
- from public.profiles p where p.id = auth.uid();
+ select coalesce((to_jsonb(public.get_my_account_access())->>'is_admin')::boolean,false)
+ into v_admin;
  if not coalesce(v_admin,false) then
    raise exception 'Administrator privileges required' using errcode='42501';
  end if;
@@ -47,12 +47,11 @@ revoke all on function public.admin_save_board_document(uuid,jsonb,bigint) from 
 grant execute on function public.admin_save_board_document(uuid,jsonb,bigint) to authenticated;
 
 -- Admins must also be allowed to fetch and upload board attachments.
--- This checks the same server-owned role, not a client-side flag.
+-- This checks the same server-side role as the application's account access RPC.
 create or replace function public.admin_can_maintain_boards()
 returns boolean language sql stable security definer set search_path=public,pg_temp
 as $$
- select exists(select 1 from public.profiles
-   where id=auth.uid() and coalesce(is_admin,false)=true);
+ select coalesce((to_jsonb(public.get_my_account_access())->>'is_admin')::boolean,false);
 $$;
 revoke all on function public.admin_can_maintain_boards() from public,anon;
 grant execute on function public.admin_can_maintain_boards() to authenticated;
