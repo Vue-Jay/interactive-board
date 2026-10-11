@@ -325,62 +325,33 @@ function erasedByPath(p: Point, path: Point[], radius: number) {
 }
 
 export function eraseInk(items: Item[], path: Point[], radius: number): Item[] {
-  if (!path.length || radius <= 0) return items;
+  if (!path.length) return items;
   const out: Item[] = [];
   for (const item of items) {
-    if ((item.kind !== "pen" && item.kind !== "marker") || !item.points?.length || item.locked) {
+    if ((item.kind !== "pen" && item.kind !== "marker") || !item.points) {
       out.push(item);
       continue;
     }
+    const world = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
     const effectiveRadius = radius + (item.weight ?? 1) / 2;
-    const pathBox = {
-      left: Math.min(...path.map(p => p.x)) - effectiveRadius,
-      right: Math.max(...path.map(p => p.x)) + effectiveRadius,
-      top: Math.min(...path.map(p => p.y)) - effectiveRadius,
-      bottom: Math.max(...path.map(p => p.y)) + effectiveRadius,
-    };
-    if (item.x > pathBox.right || item.y > pathBox.bottom ||
-        item.x + item.width < pathBox.left || item.y + item.height < pathBox.top) {
-      out.push(item);
-      continue;
-    }
-    const points = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
-    // A tap is a circle, while a drag sweeps a capsule along every path segment.
-    // Test stroke *segments*, not just vertices, so sparse/straight strokes erase too.
-    const touches = (p: Point) => erasedByPath(p, path, effectiveRadius);
     const runs: Point[][] = [];
     let run: Point[] = [];
-    let erased = false;
-    const append = (p: Point) => {
-      if (touches(p)) {
-        erased = true;
+    for (let i = 0; i < world.length; i++) {
+      const p = world[i];
+      const pointErased = erasedByPath(p, path, effectiveRadius);
+      let segmentErased = false;
+      if (i > 0) {
+        for (let j = 1; j < path.length && !segmentErased; j++) {
+          const a = world[i - 1], b = world[i], c = path[j - 1], d = path[j];
+          segmentErased = distanceToSegment(c, a, b) <= effectiveRadius || distanceToSegment(d, a, b) <= effectiveRadius || distanceToSegment(a, c, d) <= effectiveRadius || distanceToSegment(b, c, d) <= effectiveRadius;
+        }
+      }
+      if (pointErased || segmentErased) {
         if (run.length) { runs.push(run); run = []; }
-      } else {
-        run.push(p);
-      }
-    };
-    append(points[0]);
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i-1], b = points[i];
-      const length = Math.hypot(b.x-a.x,b.y-a.y);
-      // A small, bounded sampling step also avoids leaving a gap bridged by a
-      // long surviving line segment after an eraser pass.
-      const inSweep = Math.max(a.x,b.x) >= pathBox.left &&
-        Math.min(a.x,b.x) <= pathBox.right &&
-        Math.max(a.y,b.y) >= pathBox.top &&
-        Math.min(a.y,b.y) <= pathBox.bottom;
-      if (!inSweep) { run.push(b); continue; }
-      const steps = Math.max(1,Math.ceil(length/Math.max(2,Math.min(5,effectiveRadius/3))));
-      for(let k=1;k<=steps;k++) {
-        const t=k/steps;
-        append({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
-      }
+      } else run.push(p);
     }
     if (run.length) runs.push(run);
-    if (!erased) { out.push(item); continue; }
-    for (const segment of runs) {
-      if (segment.length) out.push(stroke(crypto.randomUUID(),item.kind,segment,item.color ?? "#000000",item.weight ?? 3));
-    }
+    for (const segment of runs) if (segment.length) out.push(stroke(crypto.randomUUID(), item.kind, segment, item.color ?? "#000000", item.weight ?? 3));
   }
   return out;
 }
