@@ -67,6 +67,7 @@ import { eraseInkAlongPath } from "./inkEraser";
 import { inkIdsInLasso } from "./inkLasso";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
+import { changesSinceLastVisit } from "./boardHistoryUtils";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
 import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
@@ -1311,6 +1312,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [historyRows,setHistoryRows]=useState<BoardHistoryEntry[]>([]);
   const [historyBusy,setHistoryBusy]=useState(false);
   const [historyError,setHistoryError]=useState("");
+  const [recentChanges,setRecentChanges]=useState<BoardHistoryEntry[]>([]);
+  const [recentChangesOpen,setRecentChangesOpen]=useState(false);
+  const [leavingBoard,setLeavingBoard]=useState(false);
+  const historyVisitKey = "onlinerepetitor.history-seen." + authUser.id + "." + boardSummary.id;
   const [discussionOpen,setDiscussionOpen]=useState(false);
   const [chatOpen,setChatOpen]=useState(false);
   const [chatUnread,setChatUnread]=useState(0);
@@ -1577,6 +1582,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const lastBoardTouchTitle = useRef(title);
   const remoteVersion = useRef<number | null>(initialRemoteVersion);
   const remoteSaveInFlight = useRef(false);
+  const remoteSavePromise = useRef<Promise<void> | null>(null);
   const queuedRemoteSnapshot = useRef<DocumentData | null>(null);
   const remoteSaveFailures = useRef(0);
   const remoteRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
