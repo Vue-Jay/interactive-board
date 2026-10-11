@@ -2548,16 +2548,21 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         g.path.length < 3
           ? []
           : itemsRef.current.filter((item) =>
-              !item.hidden && inside(
+              !item.hidden && !isInkItem(item) && inside(
                 { x: item.x + item.width / 2, y: item.y + item.height / 2 },
                 g.path,
               ),
             );
       const hitGroups = new Set(directHits.map((item) => item.groupId).filter(Boolean));
       const hits = itemsRef.current
-        .filter((item) => !item.hidden && (directHits.some((hit) => hit.id === item.id) || (item.groupId && hitGroups.has(item.groupId))))
+        .filter((item) => !item.hidden && !isInkItem(item) &&
+          (directHits.some((hit) => hit.id === item.id) || (item.groupId && hitGroups.has(item.groupId))))
         .map((item) => item.id);
       setSelected(g.additive ? [...new Set([...g.ids, ...hits])] : hits);
+      if (canEdit && g.path.length >= 3) {
+        const erased = inkIdsInLasso(itemsRef.current, g.path);
+        if (erased.size) commit(itemsRef.current.filter(item => !erased.has(item.id)));
+      }
     }
     setPath([]);
     setPreview(null);
@@ -2615,16 +2620,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         return;
       }
     }
-    let id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
-    // Canvas has no DOM object for each pen stroke. Resolve individual ink
-    // hits only on pointer-down; keep ordinary DOM handles and controls first.
-    if ((tool === "select" || tool === "hand") && !space &&
-        !target.closest("[data-transform-handle],[data-group-transform-handle],[data-connector-endpoint]")) {
-      const domIndex = id ? itemsRef.current.findIndex(item => item.id === id) : -1;
-      const ink = hitTestInk(itemsRef.current, p, 9 / Math.max(0.1, view.zoom), domIndex, new Set(selected));
-      if (ink) id = ink.id;
-    }
-    const hit = itemsRef.current.find((i) => i.id === id);
+    const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
+    const hit = itemsRef.current.find((i) => i.id === id && !isInkItem(i));
     // Formula touch manipulation has its own direct drag path. Text spans and
     // nested fraction glyphs must not defer to browser text-selection gestures.
     if (hit?.kind === "formula" && (e.pointerType === "touch" || e.pointerType === "pen") &&
@@ -4492,6 +4489,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
+  const visibleObjects = useMemo(() => visibleItems.filter(item => !isInkItem(item)), [visibleItems]);
+  const objectCount = useMemo(() => items.filter(item => !isInkItem(item)).length, [items]);
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
   // Rasterize unselected, unlocked pen/marker runs in every role. Selected
   // ink remains a real DOM object for handles, moving and rotating. The
@@ -4505,20 +4504,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     let run: Item[] = [];
     const flush = () => {
       if (!run.length) return;
-      if (run.length >= 8) {
-        const bounds = boundsOf(run);
-        if (bounds) layers.push({ kind: "ink", key: "ink-" + run[0].id, strokes: run, bounds });
-        else for (const item of run) layers.push({ kind: "item", key: item.id, item });
-      } else for (const item of run) layers.push({ kind: "item", key: item.id, item });
+      const bounds = boundsOf(run);
+      if (bounds) layers.push({ kind: "ink", key: "ink-" + run[0].id, strokes: run, bounds });
       run = [];
     };
     for (const item of visibleItems) {
-      if ((item.kind === "pen" || item.kind === "marker") && !item.locked &&
-          !selectedIds.has(item.id) && item.points?.length) run.push(item);
-      else {
-        flush();
-        layers.push({ kind: "item", key: item.id, item });
-      }
+      if (isInkItem(item) && item.points?.length) run.push(item);
+      else { flush(); layers.push({ kind: "item", key: item.id, item }); }
     }
     flush();
     return layers;
@@ -4558,7 +4550,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const miniH = Math.max(1, miniBottom - miniY);
   // Retain minimap React elements between camera frames. Their geometry
   // depends on content/bounds and selection, not on every pointer movement.
-  const minimapMarkers = useMemo(() => visibleItems.slice(0, 400).map(item => (
+  const minimapMarkers = useMemo(() => visibleObjects.slice(0, 400).map(item => (
     <span
       key={item.id}
       className={`minimap-item ${selectedIds.has(item.id) ? "selected" : ""}`}
@@ -4569,12 +4561,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         height: `${Math.max(1.2, (item.height / miniH) * 100)}%`,
       }}
     />
-  )), [visibleItems, selectedIds, miniX, miniY, miniW, miniH]);
+  )), [visibleObjects, selectedIds, miniX, miniY, miniW, miniH]);
   const layerRows = useMemo(() => {
     const seenGroups = new Set<string>();
     const rows: Item[] = [];
     for (let indexValue = items.length - 1; indexValue >= 0; indexValue--) {
       const item = items[indexValue];
+      if (isInkItem(item)) continue;
       if (item.groupId) {
         if (seenGroups.has(item.groupId)) continue;
         seenGroups.add(item.groupId);
@@ -5415,7 +5408,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             <div className="layers-panel-header">
               <div>
                 <strong>Слои</strong>
-                <span>{visibleItems.length} видно · {items.length} всего</span>
+                <span>{visibleObjects.length} видно · {objectCount} всего</span>
               </div>
               <button onClick={() => setLayersOpen(false)} aria-label="Закрыть слои"><Icon name="close" size={17} /></button>
             </div>
@@ -5955,11 +5948,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             e.preventDefault();
             finishEdit();
             const point = local(e.clientX, e.clientY);
-            let id = (e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
-            const domIndex = id ? itemsRef.current.findIndex(item => item.id === id) : -1;
-            const ink = hitTestInk(itemsRef.current, world(point), 9 / Math.max(0.1, view.zoom), domIndex, new Set(selected));
-            if (ink) id = ink.id;
-            const hit = itemsRef.current.find((item) => item.id === id);
+            const id = (e.target as HTMLElement).closest<HTMLElement>("[data-object]")?.dataset.object;
+            const hit = itemsRef.current.find((item) => item.id === id && !isInkItem(item));
             if (hit) {
               const family = familyIdsFor(hit);
               if (!family.every((member) => selected.includes(member))) setSelected(family);
@@ -6675,7 +6665,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           <div className="minimap">
             <div className="minimap-header">
               <span>Навигация</span>
-              <span>{visibleItems.length} видно · {items.length} всего</span>
+              <span>{visibleObjects.length} видно · {objectCount} всего</span>
             </div>
             <div
               className="minimap-world"
