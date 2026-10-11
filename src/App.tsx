@@ -48,7 +48,6 @@ import { documentFingerprint, isOwnRemoteRevision, remoteUpdateDecision } from "
 import {
   parseDocument,
   stroke,
-  eraseInk,
   type ShapeType,
   type ConnectorStyle,
   type ConnectorRouting,
@@ -58,6 +57,7 @@ import {
   type Item,
   type DocumentData,
 } from "./boardModel";
+import { eraseInk } from "./inkEraser";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -2428,28 +2428,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     finishEdit();
     const start = local(e.clientX, e.clientY);
     const p = world(start);
-    // Erasing has priority over resize handles, selected objects, and formula
-    // touch-drag. It always targets ink, regardless of the DOM element tapped.
-    if (tool === "eraser" && canEdit && e.button === 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      finishEdit();
-      setSelected([]);
-      const before = itemsRef.current;
-      gesture.current = {
-        pointer:e.pointerId,
-        mode:"erase",
-        start,
-        view,
-        before,
-        ids:[],
-        path:[p],
-        additive:false,
-      };
-      display(eraseInk(before,[p],eraserSize/2/view.zoom));
-      board.current?.setPointerCapture(e.pointerId);
-      return;
-    }
     if (contextMenu && !target.closest("[data-context-menu]")) setContextMenu(null);
     const connectorEndpointEl = target.closest<HTMLElement>("[data-connector-endpoint]");
     const connectorEndpoint = connectorEndpointEl?.dataset.connectorEndpoint;
@@ -2991,15 +2969,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       g.connectorEndBinding = magnetic?.binding;
       g.path = [g.path[0], point];
       scheduleGesturePaint();
-    } else if (g.mode === "erase") {
-      const point = world(p), last = g.path[g.path.length - 1];
-      if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 2) return;
-      // Erase the newest pointer segment from the *current* ink state.
-      // Rebuilding every stroke from the original snapshot on every move
-      // grows quadratically with a long gesture and delays visible updates.
-      const segment = [last, point];
-      g.path = segment;
-      display(eraseInk(itemsRef.current, segment, eraserSize / 2 / g.view.zoom));
     } else {
       const point = world(p),
         last = g.path[g.path.length - 1];
@@ -5737,15 +5706,36 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onPointerDownCapture={(e) => {
             if (tool === "eraser" && !canEdit && e.button === 0) { setNotice("Доска открыта в режиме просмотра: стирание недоступно. Проверьте права доступа к доске."); return; }
             if (tool !== "eraser" || presentation || !canEdit || e.button !== 0) return;
-            // Capture-phase handling runs before nested objects and editor overlays
-            // can stop bubbling. This makes erasing work on top of existing ink.
+            // Eraser owns its own pointer lifecycle, entirely separate from
+            // dragging/transforming objects. Handle it before child event handlers.
             touchStart(e);
             if (touchPoints.current.size >= 2) return;
-            down(e);
+            if (gesture.current) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (editing) finishEdit();
+            const cursor = local(e.clientX,e.clientY);
+            const point = world(cursor);
+            const before = itemsRef.current;
+            setSelected([]);
+            gesture.current={pointer:e.pointerId,mode:"erase",start:cursor,view:{...view},before,ids:[],path:[point],additive:false};
+            const changed = eraseInk(before,[point],eraserSize/2/view.zoom);
+            if(changed!==before)display(changed);
+            board.current?.setPointerCapture(e.pointerId);
           }}
           onPointerMoveCapture={(e) => {
             if (tool !== "eraser" || gesture.current?.mode !== "erase" || pinchState.current) return;
-            move(e);
+            const g=gesture.current;
+            if(!g || g.mode!=="erase" || g.pointer!==e.pointerId)return;
+            e.preventDefault();
+            const point=world(local(e.clientX,e.clientY));
+            const last=g.path[g.path.length-1];
+            if(Math.hypot(point.x-last.x,point.y-last.y)*g.view.zoom < 1.5)return;
+            const before=itemsRef.current;
+            const changed=eraseInk(before,[last,point],eraserSize/2/g.view.zoom);
+            g.path=[point];
+            if(changed!==before)display(changed);
+            setEraserCursor(local(e.clientX,e.clientY));
           }}
           onPointerDown={(e) => { if (tool === "eraser" && !presentation && canEdit) return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
           onPointerMove={(e) => { touchMove(e); if(tool==="eraser" && gesture.current?.mode==="erase") return; if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
@@ -5792,7 +5782,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onPointerUp={(e) => {
             touchEnd(e);
             if (e.pointerId === gesture.current?.pointer) {
-              move(e);
+              if(gesture.current?.mode==="erase") {
+                const point=world(local(e.clientX,e.clientY));
+                const last=gesture.current.path[gesture.current.path.length-1];
+                const before=itemsRef.current;
+                const changed=eraseInk(before,[last,point],eraserSize/2/gesture.current.view.zoom);
+                if(changed!==before)display(changed);
+              } else move(e);
               end();
             }
           }}
