@@ -5397,7 +5397,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 <span>{formulaDraft.text.length} / 10000</span>
                 <div>
                   <button className="secondary" onClick={() => void pasteFormulaSource()}>Вставить из буфера</button><button className="secondary" onClick={() => void copyFormulaSource()}><Icon name="copy" size={15}/> Копировать запись</button>
-                  <button className="secondary" onClick={closeFormulaEditor}>Отмена</button>
+                  <button className="secondary" onClick={() => closeFormulaEditor()}>Отмена</button>
                   <button className="primary" onClick={saveFormulaEditor}><Icon name="check" size={15}/> Сохранить</button>
                 </div>
               </div>
