@@ -325,33 +325,46 @@ function erasedByPath(p: Point, path: Point[], radius: number) {
 }
 
 export function eraseInk(items: Item[], path: Point[], radius: number): Item[] {
-  if (!path.length) return items;
+  if (!path.length || radius <= 0) return items;
   const out: Item[] = [];
   for (const item of items) {
-    if ((item.kind !== "pen" && item.kind !== "marker") || !item.points) {
+    if ((item.kind !== "pen" && item.kind !== "marker") || !item.points?.length || item.locked) {
       out.push(item);
       continue;
     }
-    const world = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
+    const points = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
     const effectiveRadius = radius + (item.weight ?? 1) / 2;
+    // A tap is a circle, while a drag sweeps a capsule along every path segment.
+    // Test stroke *segments*, not just vertices, so sparse/straight strokes erase too.
+    const touches = (p: Point) => erasedByPath(p, path, effectiveRadius);
     const runs: Point[][] = [];
     let run: Point[] = [];
-    for (let i = 0; i < world.length; i++) {
-      const p = world[i];
-      const pointErased = erasedByPath(p, path, effectiveRadius);
-      let segmentErased = false;
-      if (i > 0) {
-        for (let j = 1; j < path.length && !segmentErased; j++) {
-          const a = world[i - 1], b = world[i], c = path[j - 1], d = path[j];
-          segmentErased = distanceToSegment(c, a, b) <= effectiveRadius || distanceToSegment(d, a, b) <= effectiveRadius || distanceToSegment(a, c, d) <= effectiveRadius || distanceToSegment(b, c, d) <= effectiveRadius;
-        }
-      }
-      if (pointErased || segmentErased) {
+    let erased = false;
+    const append = (p: Point) => {
+      if (touches(p)) {
+        erased = true;
         if (run.length) { runs.push(run); run = []; }
-      } else run.push(p);
+      } else {
+        run.push(p);
+      }
+    };
+    append(points[0]);
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i-1], b = points[i];
+      const length = Math.hypot(b.x-a.x,b.y-a.y);
+      // A small, bounded sampling step also avoids leaving a gap bridged by a
+      // long surviving line segment after an eraser pass.
+      const steps = Math.max(1,Math.ceil(length/Math.max(2,Math.min(8,effectiveRadius/2))));
+      for(let k=1;k<=steps;k++) {
+        const t=k/steps;
+        append({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
+      }
     }
     if (run.length) runs.push(run);
-    for (const segment of runs) if (segment.length) out.push(stroke(crypto.randomUUID(), item.kind, segment, item.color ?? "#000000", item.weight ?? 3));
+    if (!erased) { out.push(item); continue; }
+    for (const segment of runs) {
+      if (segment.length) out.push(stroke(crypto.randomUUID(),item.kind,segment,item.color ?? "#000000",item.weight ?? 3));
+    }
   }
   return out;
 }
