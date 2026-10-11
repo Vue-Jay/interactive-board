@@ -735,20 +735,20 @@ const Media = memo(function Media({ item, boardId }: { item: Item; boardId: stri
 
   useEffect(() => {
     const node = hostRef.current;
-    if (!node || nearViewport) return;
+    if (!node) return;
     if (!("IntersectionObserver" in window)) {
       setNearViewport(true);
       return;
     }
+    // PDF iframes create full browser PDF renderers. Unmount them when out
+    // of view so a board with a few documents does not keep all pages alive.
     const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        setNearViewport(true);
-        observer.disconnect();
-      }
-    }, { root: null, rootMargin: "650px" });
+      const visible = entries.some((entry) => entry.isIntersecting);
+      setNearViewport(current => current === visible ? current : visible);
+    }, { root: null, rootMargin: item.kind === "pdf" ? "120px" : "400px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [nearViewport]);
+  }, [item.kind]);
 
   useEffect(() => {
     let url = "";
