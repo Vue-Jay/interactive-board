@@ -5095,13 +5095,12 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             className="back-to-boards board-home-button"
             type="button"
             onClick={() => {
-              finishEdit();
-              flushSave();
-              onBackToBoards();
+              void saveBeforeLeaving(false);
             }}
+            disabled={leavingBoard}
             title="Вернуться к списку досок"
           >
-            ← Доски
+            {leavingBoard?"Сохраняем…":"← Доски"}
           </button>
           <input
             aria-label="Название доски"
@@ -5201,7 +5200,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 <button onClick={()=>void exportBoard()}><Icon name="download" size={16}/><span>Скачать копию</span></button>
               </div>
               <div className="topbar-menu-section">
-                <button className="topbar-menu-danger" onClick={()=>{finishEdit();flushSave();onLogout()}}><Icon name="close" size={16}/><span>Выйти из аккаунта</span></button>
+                <button className="topbar-menu-danger" disabled={leavingBoard} onClick={()=>void saveBeforeLeaving(true)}><Icon name="close" size={16}/><span>Выйти из аккаунта</span></button>
               </div>
             </div>
           </details>
