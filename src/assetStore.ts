@@ -81,39 +81,44 @@ const assetPath = (boardId: string, id: string) => {
 };
 
 
-// Downsample oversized photographs before upload. This reduces both transfer size and
-// decoded texture memory on mobile. Preserve PNG/GIF/SVG and small images unchanged.
+// Compress raster photos before they enter IndexedDB or remote storage.
+// Preserve GIF/SVG (animations/vectors), and never enlarge a small image.
+// Keep alpha when converting PNG to WebP. Original uploads are not modified on disk.
 async function optimizeImage(blob: Blob): Promise<Blob> {
-  if (!["image/jpeg", "image/webp"].includes(blob.type) || blob.size < 350_000 ||
-      typeof createImageBitmap !== "function") return blob;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(blob.type) ||
+      blob.size < 250_000 || typeof createImageBitmap !== "function") return blob;
   let bitmap: ImageBitmap | undefined;
   try {
     bitmap = await createImageBitmap(blob);
     const longest = Math.max(bitmap.width, bitmap.height);
-    if (longest <= 2560) return blob;
-    const ratio = 2560 / longest;
-    const width = Math.max(1, Math.round(bitmap.width * ratio));
-    const height = Math.max(1, Math.round(bitmap.height * ratio));
+    // Compression is worthwhile for either high resolution OR high byte size.
+    if (longest <= 1600 && blob.size <= 500_000) return blob;
+    const scale = Math.min(1, 2048 / Math.max(1, longest));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
     let optimized: Blob | null = null;
     if (typeof OffscreenCanvas !== "undefined") {
       const canvas = new OffscreenCanvas(width, height);
-      const context = canvas.getContext("2d");
+      const context = canvas.getContext("2d", { alpha: true });
       if (!context) return blob;
       context.drawImage(bitmap, 0, 0, width, height);
-      optimized = await canvas.convertToBlob({ type: "image/webp", quality: 0.85 });
+      optimized = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
     } else if (typeof document !== "undefined") {
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const context = canvas.getContext("2d");
+      const context = canvas.getContext("2d", { alpha: true });
       if (!context) return blob;
       context.drawImage(bitmap, 0, 0, width, height);
       optimized = await new Promise<Blob | null>(resolve =>
-        canvas.toBlob(resolve, "image/webp", 0.85));
+        canvas.toBlob(resolve, "image/webp", 0.82));
       canvas.width = 0;
       canvas.height = 0;
     }
-    return optimized && optimized.size < blob.size * 0.9 ? optimized : blob;
+    // Some browsers silently ignore WebP and produce PNG; never upload a
+    // larger or incompatible output just because transcoding was attempted.
+    return optimized && optimized.type === "image/webp" &&
+      optimized.size < blob.size * 0.88 ? optimized : blob;
   } catch {
     return blob;
   } finally {
@@ -211,8 +216,8 @@ export function getDisplayAsset(id: string, boardId: string): Promise<Blob | nul
       // Existing high-resolution attachments get a smaller display-only copy.
       bitmap = await createImageBitmap(blob);
       const longest = Math.max(bitmap.width, bitmap.height);
-      if (longest <= 2048) return blob;
-      const scale = 2048 / longest;
+      if (longest <= 1400) return blob;
+      const scale = 1400 / longest;
       const width = Math.max(1, Math.round(bitmap.width * scale));
       const height = Math.max(1, Math.round(bitmap.height * scale));
       let preview: Blob | null = null;
@@ -221,7 +226,7 @@ export function getDisplayAsset(id: string, boardId: string): Promise<Blob | nul
         const ctx = canvas.getContext("2d");
         if (!ctx) return blob;
         ctx.drawImage(bitmap, 0, 0, width, height);
-        preview = await canvas.convertToBlob({ type: "image/webp", quality: 0.86 });
+        preview = await canvas.convertToBlob({ type: "image/webp", quality: 0.78 });
       } else if (typeof document !== "undefined") {
         const canvas = document.createElement("canvas");
         canvas.width = width;
@@ -229,7 +234,7 @@ export function getDisplayAsset(id: string, boardId: string): Promise<Blob | nul
         const ctx = canvas.getContext("2d");
         if (!ctx) return blob;
         ctx.drawImage(bitmap, 0, 0, width, height);
-        preview = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", 0.86));
+        preview = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", 0.78));
         canvas.width = 0;
         canvas.height = 0;
       }
