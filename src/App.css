@@ -7868,3 +7868,22 @@ option{background:#fff;color:#343741}
 .geometry-instrument-actions span {font-size:12px;padding:0 8px;color:#20394d}
 .geometry-instrument-actions button {height:28px;min-width:28px;border:0;border-radius:6px;background:#e7eef6;color:#1c394d;font-size:17px;cursor:pointer}
 @media(max-width:900px),(pointer:coarse) {.geometry-picker{left:8px;bottom:calc(64px + env(safe-area-inset-bottom,0px))}.geometry-picker button{padding:6px 8px}}
+
+/* Geometry instruments live in the toolbars, not over the middle of the board. */
+.geometry-tools {position:relative;inset:auto;z-index:130;display:inline-flex;pointer-events:auto;}
+.geometry-trigger {width:36px;height:36px;border:0;border-radius:9px;display:grid;place-items:center;background:transparent;color:inherit;cursor:pointer;}
+.geometry-trigger.active,.geometry-trigger:hover {background:#d7e8fa;color:#174e8a;}
+.geometry-picker {position:absolute;bottom:auto;top:0;left:calc(100% + 7px);display:flex;flex-direction:row;gap:5px;background:#fff;padding:6px;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 6px 24px #0002;width:max-content;max-width:none;}
+.geometry-picker button {width:40px;height:40px;padding:7px;display:grid;place-items:center;color:#23425a;}
+.geometry-picker svg {width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
+.geometry-instrument {position:fixed;z-index:10000;touch-action:none;pointer-events:auto;}
+.geometry-rotation-handle {background:#cce6f9!important;color:#175782!important;touch-action:none;cursor:grab!important;font-size:23px!important;font-weight:bold;}
+.geometry-instrument-actions button {touch-action:none;}
+.mobile-tool-with-geometry {display:flex;align-items:center;}
+@media (max-width:900px),(pointer:coarse) {
+  .geometry-tools {position:relative;inset:auto;left:auto;bottom:auto;}
+  .geometry-picker {position:absolute;top:auto;bottom:calc(100% + 10px);left:-44px;flex-direction:row;max-width:none;}
+  .geometry-trigger {width:35px;height:35px;}
+}
+/* On tablets, the formula's nested fractions/subscripts must never start native touch gestures. */
+.board-object.object-formula,.board-object.object-formula * {touch-action:none!important;user-select:none;-webkit-user-select:none;}
