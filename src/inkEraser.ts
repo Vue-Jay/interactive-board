@@ -12,8 +12,8 @@ const push=(points:Point[],p:Point)=>{if(!points.length||!equal(points[points.le
 function cutInterval(a:Point,b:Point,c:Point,d:Point,r:number):[number,number]|null {
   const within=(t:number)=>distance2(at(a,b,t),c,d)<=r*r;
   let lo=0,hi=1;
-  // Distance to a line segment is convex along another segment.
-  for(let n=0;n<25;n++){
+  // Convex minimum: 12 iterations are sufficient at board pixel precision.
+  for(let n=0;n<12;n++){
     const l=(2*lo+hi)/3,u=(lo+2*hi)/3;
     if(distance2(at(a,b,l),c,d)<distance2(at(a,b,u),c,d))hi=u;else lo=l;
   }
@@ -22,12 +22,12 @@ function cutInterval(a:Point,b:Point,c:Point,d:Point,r:number):[number,number]|n
   let from=0,to=1;
   if(!within(0)){
     let l=0,u=mid;
-    for(let n=0;n<23;n++){const m=(l+u)/2;if(within(m))u=m;else l=m}
+    for(let n=0;n<15;n++){const m=(l+u)/2;if(within(m))u=m;else l=m}
     from=u;
   }
   if(!within(1)){
     let l=mid,u=1;
-    for(let n=0;n<23;n++){const m=(l+u)/2;if(within(m))l=m;else u=m}
+    for(let n=0;n<15;n++){const m=(l+u)/2;if(within(m))l=m;else u=m}
     to=l;
   }
   return [from,to];
@@ -52,21 +52,27 @@ export function eraseInkAt(items:Item[],from:Point,to:Point,radius:number):Item[
     const minX=Math.min(from.x,to.x)-r,maxX=Math.max(from.x,to.x)+r;
     const minY=Math.min(from.y,to.y)-r,maxY=Math.max(from.y,to.y)+r;
     if(item.x>maxX||item.x+item.width<minX||item.y>maxY||item.y+item.height<minY){output.push(item);continue;}
-    const points=item.points.map(p=>({x:p.x+item.x,y:p.y+item.y}));
+    // Avoid creating a second copy of every point on each pointer frame.
+    // Dense teacher boards can contain tens of thousands of points.
+    const points=item.points;
+    const ox=item.x,oy=item.y;
+    const localFrom={x:from.x-ox,y:from.y-oy};
+    const localTo={x:to.x-ox,y:to.y-oy};
+    const localMinX=minX-ox,localMaxX=maxX-ox,localMinY=minY-oy,localMaxY=maxY-oy;
     if(points.length===1){
-      if(distance2(points[0],from,to)<=r*r){changed=true;continue;}
+      if(distance2(points[0],localFrom,localTo)<=r*r){changed=true;continue;}
       output.push(item);continue;
     }
     const runs:Point[][]=[];
     let run:Point[]=[];
-    if(distance2(points[0],from,to)>r*r)run=[points[0]];
+    if(distance2(points[0],localFrom,localTo)>r*r)run=[points[0]];
     let hit=false;
     for(let i=1;i<points.length;i++){
       const a=points[i-1],b=points[i];
-      if(Math.max(a.x,b.x)<minX||Math.min(a.x,b.x)>maxX||Math.max(a.y,b.y)<minY||Math.min(a.y,b.y)>maxY){
+      if(Math.max(a.x,b.x)<localMinX||Math.min(a.x,b.x)>localMaxX||Math.max(a.y,b.y)<localMinY||Math.min(a.y,b.y)>localMaxY){
         push(run,b);continue;
       }
-      const interval=cutInterval(a,b,from,to,r);
+      const interval=cutInterval(a,b,localFrom,localTo,r);
       if(!interval){push(run,b);continue;}
       hit=true;
       const [entry,exit]=interval;
@@ -77,7 +83,7 @@ export function eraseInkAt(items:Item[],from:Point,to:Point,radius:number):Item[
     if(run.length)runs.push(run);
     if(!hit){output.push(item);continue;}
     changed=true;
-    for(const r of runs)if(r.length)output.push(piece(item,r));
+    for(const r of runs)if(r.length)output.push(piece(item,r.map(p=>({x:p.x+ox,y:p.y+oy}))));
   }
   return changed?output:items;
 }
