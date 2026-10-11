@@ -15,6 +15,7 @@ const load = (file, requireModule = () => { throw Error("Unexpected runtime impo
   return exported;
 };
 const model = load("boardModel.ts");
+const sync = load("boardSync.ts");
 const lasso = load("inkLasso.ts", id => {
   assert.equal(id, "./boardModel");
   return model;
@@ -44,5 +45,7 @@ assert.ok(!erased.has("t"), "lasso never erases ordinary objects");
 assert.ok(!lasso.inkIdsInLasso([{...pen,locked:true}],polygon).size,"locked ink survives");
 const afterErase = model.packDocumentInk({...packed,items:model.expandDocumentInk(packed).filter(i=>!erased.has(i.id)),ink:undefined});
 assert.deepEqual(Array.from(afterErase.ink,i=>i.stroke.id),["m"]);
+assert.notEqual(sync.documentFingerprint(packed), sync.documentFingerprint(afterErase), "ink erasure must sync remotely");
+assert.equal(sync.documentFingerprint(packed), sync.documentFingerprint({...packed,view:{x:10,y:20,zoom:2}}), "local viewport movement must not sync");
 assert.deepEqual(Array.from(packed.ink,i=>i.stroke.id),["p","m"],"old undo snapshot retains ink");
 console.log("Drawing layer migration, storage roundtrip, z-order, lasso and undo tests passed.");
