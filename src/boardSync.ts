@@ -50,7 +50,7 @@ const stableJsonHash = (value: unknown): string => {
 export function documentFingerprint(document: DocumentData): string {
   // Viewport is personal UI state. Panning/zooming must never create a collaborative
   // revision or a false conflict between participants.
-  return stableJsonHash({ version: document.version, title: document.title, items: document.items });
+  return stableJsonHash({ version: document.version, title: document.title, items: document.items, ink: document.ink ?? [] });
 }
 
 export function remoteUpdateDecision(currentVersion: number | null, nextVersion: number,
