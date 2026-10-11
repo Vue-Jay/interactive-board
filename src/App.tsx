@@ -1434,7 +1434,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [weight, setWeight] = useState(3);
   const [markerWeight, setMarkerWeight] = useState(22);
   const [eraserSize, setEraserSize] = useState(32);
-  const [eraserCursor, setEraserCursor] = useState<Point | null>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [guides, setGuides] = useState<GuideState>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -1473,6 +1472,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if(!el)return;
     el.style.left=x+"px";
     el.style.top=y+"px";
+    el.style.visibility="visible";
   };
   const displayFrame = useRef<number | null>(null);
   const pendingDisplayItems = useRef<Item[] | null>(null);
@@ -2860,7 +2860,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const move = (e: PE<HTMLElement>) => {
-    if (tool === "eraser") setEraserCursor(local(e.clientX, e.clientY));
     const g = gesture.current;
     if (!g || e.pointerId !== g.pointer) return;
     const p = local(e.clientX, e.clientY);
@@ -5786,7 +5785,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerDown={(e) => { if(tool==="eraser")return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { if(eraserSession.current)return; touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerMove={(e) => { if(tool==="eraser"){if(!eraserSession.current){const p=local(e.clientX,e.clientY);setLiveEraserCursor(p.x,p.y);}return;} if(eraserSession.current)return; touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
@@ -5825,8 +5824,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               setNotice(error instanceof Error ? error.message : "Не удалось добавить файл");
             }
           }}
-          onPointerEnter={(e) => { if (tool === "eraser") setEraserCursor(local(e.clientX, e.clientY)); }}
-          onPointerLeave={() => { if (!gesture.current) setEraserCursor(null); }}
+          onPointerEnter={(e) => { if (tool === "eraser") { const p=local(e.clientX,e.clientY);setLiveEraserCursor(p.x,p.y); } }}
+          onPointerLeave={() => { if(!eraserSession.current && eraserCursorElement.current)eraserCursorElement.current.style.visibility="hidden"; }}
           onPointerUp={(e) => {
             touchEnd(e);
             if (e.pointerId === gesture.current?.pointer) {
@@ -6429,8 +6428,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               )}
             </div>
           )}
-          {tool === "eraser" && eraserCursor && (
-            <div ref={eraserCursorElement} className="eraser-cursor" aria-hidden="true" style={{ left: eraserCursor.x, top: eraserCursor.y, width: eraserSize, height: eraserSize }} />
+          {tool === "eraser" && (
+            <div ref={eraserCursorElement} className="eraser-cursor" aria-hidden="true" style={{ left:-1000, top:-1000, width:eraserSize, height:eraserSize, visibility:"hidden" }} />
           )}
           {path.length > 0 && (
             <svg className="lasso-overlay">
