@@ -5002,7 +5002,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         </div>
       </header>
       <main className="workspace">
-        <GeometryInstruments />
         <div className="mobile-undo-redo" aria-label="История изменений">
           <button type="button" disabled={index.current === 0} onClick={() => undo(-1)} aria-label="Отменить"><Icon name="undo" size={19}/></button>
           <button type="button" disabled={index.current === history.current.length - 1} onClick={() => undo(1)} aria-label="Повторить"><Icon name="redo" size={19}/></button>
@@ -5607,7 +5606,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile />}</div>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
@@ -5629,7 +5628,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
                   <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
-                </button>{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+                </button>{t.id==="eraser"&&<GeometryInstruments />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
             })}
           </div>
