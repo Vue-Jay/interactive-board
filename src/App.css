@@ -3010,9 +3010,28 @@ button {
 .formula-syntax-status.issue { color:#b65a69; }
 .formula-syntax-status span { color:#a0a5ae; }
 .formula-preview-card { overflow:hidden;border:1px solid #e3e5ea;border-radius:12px;background:#fff; }
-.formula-preview-head { min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px 6px 12px;border-bottom:1px solid #eef0f3;color:#737985;font-size:9px;font-weight:700; }
-.formula-color-palette { display:flex;align-items:center;gap:4px; }
-.formula-color-palette button { width:18px;height:18px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #d8dbe2;cursor:pointer; }
+.formula-preview-head { min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px 6px 12px;border-bottom:1px solid #eef0f3;color:#737985;font-size:9px;font-weight:700;box-sizing:border-box; }
+.formula-color-palette { display:flex;align-items:center;gap:6px;flex:0 0 auto;flex-wrap:nowrap; }
+.formula-color-palette button {
+  width:20px!important;
+  min-width:20px!important;
+  max-width:20px!important;
+  height:20px!important;
+  min-height:20px!important;
+  max-height:20px!important;
+  flex:0 0 20px!important;
+  aspect-ratio:1/1;
+  box-sizing:border-box;
+  padding:0!important;
+  margin:0;
+  border:2px solid #fff;
+  border-radius:50%!important;
+  box-shadow:0 0 0 1px #d8dbe2;
+  line-height:0;
+  appearance:none;
+  -webkit-appearance:none;
+  cursor:pointer;
+}
 .formula-color-palette button.active { box-shadow:0 0 0 2px #7779d6; }
 .formula-preview-surface {
   min-height:150px;
