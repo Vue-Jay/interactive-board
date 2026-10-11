@@ -16,4 +16,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:eraser
+      - run: node scripts/test-ink-hit.mjs
       - run: npm run build
