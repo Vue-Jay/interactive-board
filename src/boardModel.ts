@@ -100,15 +100,12 @@ export function expandDocumentInk(data: DocumentData): Item[] {
   return output;
 }
 
+// Keep each stroke as a real board object for lasso, selection, deletion,
+// movement and undo. The renderer batches non-selected strokes on Canvas,
+// so logical objects do not imply thousands of SVG/DOM nodes.
 export function packDocumentInk(data: DocumentData): DocumentData {
   const all = expandDocumentInk(data);
-  const items: Item[] = [];
-  const ink: InkEntry[] = [];
-  for (const item of all) {
-    if (isInkItem(item)) ink.push({ after: items.length, stroke: item });
-    else items.push(item);
-  }
-  return { version: 1, title: data.title, view: data.view, items, ...(ink.length ? { ink } : {}) };
+  return { version: 1, title: data.title, view: data.view, items: all };
 }
 export const STORAGE_KEY = "lesson-board.document.v1";
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e9;
