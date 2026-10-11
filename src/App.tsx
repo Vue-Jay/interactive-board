@@ -1,5 +1,6 @@
 import {
   lazy,
+  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -724,14 +725,20 @@ function AttachmentRequestPreview({request,boardId}:{request:AttachmentApprovalR
  return <div className="teacher-media-request-preview">{request.kind==="image"?<img src={url} alt={request.name} loading="lazy" decoding="async"/>:<iframe src={`${url}#page=1&toolbar=0`} title={request.name}/>}</div>;
 }
 
-function Media({ item, boardId }: { item: Item; boardId: string }) {
+const Media = memo(function Media({ item, boardId }: { item: Item; boardId: string }) {
   const [src, setSrc] = useState("");
   useEffect(() => { let url=""; let alive=true; setSrc(""); if(!item.assetId)return; getAsset(item.assetId, boardId).then(blob=>{if(blob&&alive){url=URL.createObjectURL(blob);setSrc(url)}}).catch(()=>{}); return()=>{alive=false;if(url)URL.revokeObjectURL(url)} },[item.assetId, boardId]);
   if(!src) return <div className="media-missing">Файл недоступен</div>;
   if (item.kind === "image") return <img className="media-image" src={src} alt={item.name??"Изображение"} loading="lazy" decoding="async"/>;
   const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
   return <object key={`${item.assetId}-${item.pdfPage ?? 1}`} className="media-pdf" data={pdfSrc} type="application/pdf"><div className="media-missing">PDF: {item.name}</div></object>;
-}
+}, (previous, next) =>
+  previous.boardId === next.boardId &&
+  previous.item.assetId === next.item.assetId &&
+  previous.item.kind === next.item.kind &&
+  previous.item.name === next.item.name &&
+  previous.item.pdfPage === next.item.pdfPage
+);
 type CropRect = { x: number; y: number; width: number; height: number };
 type CropHandle = "move" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 
@@ -2986,7 +2993,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         e.preventDefault();
         setSearchOpen(true);
         setSearchQuery("");
-        window.setTimeout(() => document.querySelector<HTMLInputElement>(".board-search-input")?.focus(), 0);
+        
         return;
       }
       if (mod && e.code === "KeyA") {
@@ -5066,7 +5073,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           const execute = (run: () => void) => { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); run(); };
           return <div className="command-palette-backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); } }}>
             <section className="command-palette" role="dialog" aria-modal="true" aria-label="Быстрые команды">
-              <div className="command-palette-search"><Icon name="search" size={18}/><input autoFocus value={commandPaletteQuery} onChange={(e) => { setCommandPaletteQuery(e.target.value); setCommandPaletteIndex(0); }} placeholder="Найти инструмент или действие…" onKeyDown={(e) => {
+              <div className="command-palette-search"><Icon name="search" size={18}/><input value={commandPaletteQuery} onChange={(e) => { setCommandPaletteQuery(e.target.value); setCommandPaletteIndex(0); }} placeholder="Найти инструмент или действие…" onKeyDown={(e) => {
                 if (e.key === "Escape") { e.preventDefault(); setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); return; }
                 if (e.key === "ArrowDown" && filtered.length) { e.preventDefault(); setCommandPaletteIndex((value) => (value + 1) % filtered.length); return; }
                 if (e.key === "ArrowUp" && filtered.length) { e.preventDefault(); setCommandPaletteIndex((value) => (value - 1 + filtered.length) % filtered.length); return; }
@@ -5160,7 +5167,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => { if (e.code === "Escape") { e.stopPropagation(); setSearchOpen(false); } }}
               placeholder="Найти на доске…"
-              autoFocus
+             
             />
             <div className="search-results">
               {searchQuery.trim() && searchResults.map((item) => (
@@ -6689,7 +6696,7 @@ export default function App() {
           ? <TemplatesScreen user={authUser} onBack={()=>{window.history.pushState({}, "", "/");window.dispatchEvent(new PopStateEvent("popstate"))}} onOpenBoard={(board)=>navigate(`/board/${board.id}`)} />
           : <BoardsScreen user={authUser} accountRole={accountRole} isAppAdmin={isAppAdmin} onOpenBoard={(board) => navigate(`/board/${board.id}`)} onLogout={logout} />})()}
         </Suspense>
-        {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" autoFocus value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
+        {sharePasswordRequired && route.kind==="join" && <div className="board-server-overlay"><form className="board-server-card share-password-card" onSubmit={e=>{e.preventDefault();if(!sharePassword.trim())return;setSharePasswordRequired(false);setRoute({...route});}}><strong>Ссылка защищена паролем</strong><span>Введите пароль, который сообщил владелец доски.</span><input type="password" value={sharePassword} onChange={e=>setSharePassword(e.target.value)} placeholder="Пароль ссылки" autoComplete="off"/><div className="share-password-actions"><button className="primary" type="submit" disabled={!sharePassword.trim()}>Открыть доску</button><button type="button" onClick={()=>{setSharePassword("");clearPendingShare();navigate("/",true)}}>Отмена</button></div></form></div>}
         {boardLoading && <div className="board-server-overlay"><div className="board-server-card"><strong>Загружаем доску…</strong><span>Получаем последнюю версию с сервера.</span></div></div>}
         {boardLoadError && <div className="board-server-overlay"><div className="board-server-card"><strong>Не удалось открыть доску</strong><span>{boardLoadError}</span><button className="primary" onClick={() => setRoute({ ...route })}>Повторить</button><button onClick={() => { clearPendingShare(); navigate("/", true); }}>К моим доскам</button></div></div>}
       </>

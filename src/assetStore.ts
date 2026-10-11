@@ -80,7 +80,10 @@ export async function getAsset(id: string, boardId: string): Promise<Blob | null
   const pending = (async () => {
     try {
       const blob = await remoteAssetRequest(path);
-      if (blob) await putLocalAsset(path, blob).catch(() => {});
+      if (blob) {
+        synchronized.add(path);
+        await putLocalAsset(path, blob).catch(() => {});
+      }
       return blob;
     } catch {
       // v19 attachments may still exist only in this browser.
@@ -94,13 +97,18 @@ export async function getAsset(id: string, boardId: string): Promise<Blob | null
 // Upload legacy local attachments before publishing a document referencing them.
 export async function ensureBoardAssets(boardId: string, document: DocumentData) {
   if (!isRemoteBackendEnabled()) return;
-  const ids = new Set(document.items.filter(item => item.kind === "image" || item.kind === "pdf").map(item => item.assetId));
-  for (const id of ids) {
-    if (!id) continue;
+  const ids = [...new Set(
+    document.items
+      .filter(item => item.kind === "image" || item.kind === "pdf")
+      .map(item => item.assetId)
+      .filter((id): id is string => Boolean(id))
+  )];
+  await Promise.all(ids.map(async (id) => {
     const path = assetPath(boardId, id);
-    if (synchronized.has(path)) continue;
+    if (synchronized.has(path)) return;
     try {
-      // Verify server presence before migrating v19 data; never overwrite it.
+      // Independent assets are checked in parallel. Sequential verification made
+      // boards with several images/PDFs pause during their first autosave.
       const blob = await remoteAssetRequest(path);
       if (blob) await putLocalAsset(path, blob).catch(() => {});
       synchronized.add(path);
@@ -111,5 +119,5 @@ export async function ensureBoardAssets(boardId: string, document: DocumentData)
       const mime = item?.kind === "pdf" ? "application/pdf" : legacy.type || item?.mime;
       await putAsset(id, mime && mime !== legacy.type ? legacy.slice(0, legacy.size, mime) : legacy, boardId);
     }
-  }
+  }));
 }
