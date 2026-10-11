@@ -328,7 +328,7 @@ type Gesture = {
 const tools: { id: Tool; icon: IconName; label: string; dividerAfter?: boolean }[] = [
   { id: "select", icon: "select", label: "Выделение · V / М" },
   { id: "hand", icon: "hand", label: "Рука · H / Р", dividerAfter: true },
-  { id: "lasso", icon: "lasso", label: "Петля · Q / Й" },
+  { id: "lasso", icon: "lasso", label: "Петля: выделить объекты и стереть рисунок · Q / Й" },
   { id: "pen", icon: "pen", label: "Карандаш · P / З" },
   { id: "marker", icon: "marker", label: "Маркер · M / Ь" },
   { id: "eraser", icon: "eraser", label: "Ластик · E / У", dividerAfter: true },
