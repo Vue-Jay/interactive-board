@@ -97,7 +97,7 @@ begin
    and (b.owner_id=p_user_id or exists(
      select 1 from public.board_members m where m.board_id=b.id and m.user_id=p_user_id))
  order by b.updated_at desc;
-end; $$
+end; $;
 revoke all on function public.admin_list_user_workspace(uuid) from public,anon;
 grant execute on function public.admin_list_user_workspace(uuid) to authenticated;
 
