@@ -1,5 +1,5 @@
 import type { Item, Point } from "./boardModel";
-import { isInkItem } from "./boardModel";
+import { isInkItem, simplifyStrokePath } from "./boardModel";
 
 const inside = (p: Point, polygon: readonly Point[]): boolean => {
   let result = false;
@@ -25,11 +25,15 @@ const intersect = (a: Point, b: Point, c: Point, d: Point): boolean => {
 
 // Geometric lasso selection of individual pen/marker objects. The lasso
 // never mutates a stroke. Locked ink is selectable for inspection/unlocking.
-export function inkIdsInLasso(items: readonly Item[], polygon: readonly Point[]): Set<string> {
+export function inkIdsInLasso(items: readonly Item[], polygon: readonly Point[], zoom = 1): Set<string> {
   const hits = new Set<string>();
   if (polygon.length < 3) return hits;
+  // Reduce lasso samples once instead of comparing thousands of ink segments
+  // against every pointer event in a dense freehand outline.
+  const outline = polygon.length > 24 ? simplifyStrokePath(polygon, zoom) : polygon;
+  if (outline.length < 3) return hits;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of polygon) {
+  for (const p of outline) {
     minX = Math.min(minX,p.x); minY = Math.min(minY,p.y);
     maxX = Math.max(maxX,p.x); maxY = Math.max(maxY,p.y);
   }
@@ -47,14 +51,14 @@ export function inkIdsInLasso(items: readonly Item[], polygon: readonly Point[])
       return { x: cx + dx*cos - dy*sin, y: cy + dx*sin + dy*cos };
     };
     let prior = toWorld(item.points[0]);
-    if (inside(prior,polygon)) { hits.add(item.id); continue; }
+    if (inside(prior,outline)) { hits.add(item.id); continue; }
     for (let k=1; k<item.points.length; k++) {
       const next = toWorld(item.points[k]);
-      if (inside(next,polygon)) { hits.add(item.id); break; }
+      if (inside(next,outline)) { hits.add(item.id); break; }
       if (!(Math.max(prior.x,next.x)<minX || Math.min(prior.x,next.x)>maxX ||
           Math.max(prior.y,next.y)<minY || Math.min(prior.y,next.y)>maxY)) {
-        for (let j=0;j<polygon.length;j++) {
-          if (intersect(prior,next,polygon[j],polygon[(j+1)%polygon.length])) {
+        for (let j=0;j<outline.length;j++) {
+          if (intersect(prior,next,outline[j],outline[(j+1)%outline.length])) {
             hits.add(item.id); break;
           }
         }
