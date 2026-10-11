@@ -1886,6 +1886,44 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     finally{setDiscussionBusy(false)}
   };
 
+  const saveBeforeLeaving=async (logout=false)=>{
+    if(leavingBoard)return;
+    setLeavingBoard(true);
+    try{
+      finishEdit();
+      // Read the synchronous object model, not the last scheduled React frame.
+      const latest=currentDocument();
+      snapshot.current=latest;
+      flushSave();
+      const expected=documentFingerprint(latest);
+      if(canEdit&&isRemoteBackendEnabled()&&expected!==acknowledgedDocument.current){
+        const until=Date.now()+8000;
+        while(boardMounted.current&&Date.now()<until&&
+              acknowledgedDocument.current!==expected){
+          const running=remoteSavePromise.current;
+          if(running){
+            await Promise.race([
+              running.catch(()=>{}),
+              new Promise<void>(resolve=>window.setTimeout(resolve,220)),
+            ]);
+          }else{
+            await new Promise<void>(resolve=>window.setTimeout(resolve,140));
+          }
+        }
+        if(acknowledgedDocument.current!==expected){
+          const confirmed=window.confirm(
+            "Сервер ещё не подтвердил последнее сохранение. Локальная копия сохранена. "+
+            "Выйти всё равно? Для сохранения истории на сервере лучше дождаться соединения."
+          );
+          if(!confirmed)return;
+        }
+      }
+      if(logout)onLogout();else onBackToBoards();
+    }finally{
+      if(boardMounted.current)setLeavingBoard(false);
+    }
+  };
+
   const openHistory=async()=>{
     if(!isRemoteBackendEnabled()){setNotice("История версий доступна при серверной синхронизации");return}
     setHistoryOpen(true);setHistoryBusy(true);setHistoryError("");
