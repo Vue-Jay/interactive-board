@@ -61,6 +61,7 @@ import {
 } from "./boardModel";
 
 import { eraseInkAlongPath } from "./inkEraser";
+import { hitTestInk } from "./inkHitTest";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -2610,7 +2611,15 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         return;
       }
     }
-    const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
+    let id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
+    // Canvas has no DOM object for each pen stroke. Resolve individual ink
+    // hits only on pointer-down; keep ordinary DOM handles and controls first.
+    if ((tool === "select" || tool === "hand") && !space &&
+        !target.closest("[data-transform-handle],[data-group-transform-handle],[data-connector-endpoint]")) {
+      const domIndex = id ? itemsRef.current.findIndex(item => item.id === id) : -1;
+      const ink = hitTestInk(itemsRef.current, p, 9 / Math.max(0.1, view.zoom), domIndex, new Set(selected));
+      if (ink) id = ink.id;
+    }
     const hit = itemsRef.current.find((i) => i.id === id);
     // Formula touch manipulation has its own direct drag path. Text spans and
     // nested fraction glyphs must not defer to browser text-selection gestures.
@@ -4480,27 +4489,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
 
   const visibleItems = useMemo(() => items.filter((item) => !item.hidden), [items]);
   const allBounds = useMemo(() => boundsOf(visibleItems), [visibleItems]);
-  const renderedItems = useMemo(() => {
-    // Read-only mode renders through viewerLayers instead; avoid doing
-    // an otherwise wasted scan through every stroke at every camera frame.
-    if (!canEdit) return [] as Item[];
-    if (!boardViewportSize.width || !boardViewportSize.height || visibleItems.length < 30) return visibleItems;
-    // The previous 420px overscan kept too many images, PDFs and ink objects
-    // mounted even when far outside the viewport. Keep a modest buffer for
-    // smooth panning while avoiding expensive DOM/iframe work.
-    const margin = 160 / Math.max(.1, view.zoom);
-    const left = -view.x / view.zoom - margin;
-    const top = -view.y / view.zoom - margin;
-    const right = (boardViewportSize.width - view.x) / view.zoom + margin;
-    const bottom = (boardViewportSize.height - view.y) / view.zoom + margin;
-    const keep = selectedIds;
-    return visibleItems.filter((item) => item.id === editing || keep.has(item.id) || (item.x + item.width >= left && item.x <= right && item.y + item.height >= top && item.y <= bottom));
-  }, [canEdit, visibleItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selectedIds, editing]);
-  // Group consecutive ink strokes into raster layers on read-only boards.
-  // Splitting groups at every non-ink object preserves the exact stacking order
-  // relative to images, PDFs, shapes and text; board data is never modified.
-  const viewerLayers = useMemo(() => {
-    if (canEdit) return null;
+  // Rasterize unselected, unlocked pen/marker runs in every role. Selected
+  // ink remains a real DOM object for handles, moving and rotating. The
+  // separate geometric hit test resolves clicks on canvas strokes.
+  // Runs are separated by ordinary objects, preserving their z-order.
+  const inkLayers = useMemo(() => {
     type Layer =
       | { kind: "ink"; key: string; strokes: Item[]; bounds: Bounds }
       | { kind: "item"; key: string; item: Item };
@@ -4516,7 +4509,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       run = [];
     };
     for (const item of visibleItems) {
-      if ((item.kind === "pen" || item.kind === "marker") && !selectedIds.has(item.id)) run.push(item);
+      if ((item.kind === "pen" || item.kind === "marker") && !item.locked &&
+          !selectedIds.has(item.id) && item.points?.length) run.push(item);
       else {
         flush();
         layers.push({ kind: "item", key: item.id, item });
@@ -4524,27 +4518,28 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }
     flush();
     return layers;
-  }, [canEdit, visibleItems, selectedIds]);
+  }, [visibleItems, selectedIds]);
   const renderEntries = useMemo(() => {
-    if (!viewerLayers) return renderedItems.map(item => ({ kind: "item" as const, key: item.id, item }));
-    if (!boardViewportSize.width || !boardViewportSize.height) return viewerLayers;
-    const margin = 220 / Math.max(0.1, view.zoom);
+    if (!boardViewportSize.width || !boardViewportSize.height) return inkLayers;
+    const margin = 180 / Math.max(0.1, view.zoom);
     const left = -view.x / view.zoom - margin, top = -view.y / view.zoom - margin;
     const right = (boardViewportSize.width - view.x) / view.zoom + margin;
     const bottom = (boardViewportSize.height - view.y) / view.zoom + margin;
-    return viewerLayers.filter(layer => {
+    return inkLayers.filter(layer => {
+      if (layer.kind === "item" && (selectedIds.has(layer.item.id) || layer.item.id === editing)) return true;
       const bounds = layer.kind === "ink" ? layer.bounds : layer.item;
       return bounds.x + bounds.width >= left && bounds.x <= right &&
         bounds.y + bounds.height >= top && bounds.y <= bottom;
     });
-  }, [viewerLayers, renderedItems, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom]);
+  }, [inkLayers, boardViewportSize.width, boardViewportSize.height, view.x, view.y, view.zoom, selectedIds, editing]);
   const minimapBounds = allBounds ?? { x: -400, y: -300, width: 800, height: 600 };
-  const boardRect = board.current?.getBoundingClientRect();
-  const visibleWorld = boardRect ? {
+  // ResizeObserver already maintains these dimensions. Measuring layout in
+  // every pan render forced costly synchronous reflows on heavy boards.
+  const visibleWorld = boardViewportSize.width && boardViewportSize.height ? {
     x: -view.x / view.zoom,
     y: -view.y / view.zoom,
-    width: boardRect.width / view.zoom,
-    height: boardRect.height / view.zoom,
+    width: boardViewportSize.width / view.zoom,
+    height: boardViewportSize.height / view.zoom,
   } : null;
   const miniPad = 30;
   // Stable content coordinates: panning should move only the viewport outline,
