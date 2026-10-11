@@ -52,6 +52,27 @@ async function getLocalAsset(id: string): Promise<Blob | null> {
 
 const synchronized = new Set<string>();
 const downloads = new Map<string, Promise<Blob | null>>();
+
+const MEMORY_CACHE_LIMIT = 64 * 1024 * 1024;
+const MEMORY_ITEM_LIMIT = 16 * 1024 * 1024;
+const memoryAssets = new Map<string, Blob>();
+let memoryAssetBytes = 0;
+const rememberAsset = (key: string, blob: Blob) => {
+  if (blob.size > MEMORY_ITEM_LIMIT) return blob;
+  const previous = memoryAssets.get(key);
+  if (previous) memoryAssetBytes -= previous.size;
+  memoryAssets.delete(key);
+  memoryAssets.set(key, blob);
+  memoryAssetBytes += blob.size;
+  while (memoryAssetBytes > MEMORY_CACHE_LIMIT && memoryAssets.size > 1) {
+    const oldestKey = memoryAssets.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    const oldest = memoryAssets.get(oldestKey);
+    memoryAssets.delete(oldestKey);
+    if (oldest) memoryAssetBytes -= oldest.size;
+  }
+  return blob;
+};
 const assetPath = (boardId: string, id: string) => {
   if (![boardId, id].every(value => /^[a-zA-Z0-9_-]+$/.test(value))) {
     throw new Error("Некорректный идентификатор вложения");
@@ -67,27 +88,38 @@ export async function putAsset(id: string, blob: Blob, boardId: string) {
   const path = assetPath(boardId, id);
   await remoteAssetRequest(path, blob);
   synchronized.add(path);
+  rememberAsset(path, blob);
   // A full browser cache must not turn a successful upload into an error.
   await putLocalAsset(path, blob).catch(() => {});
 }
 
 export async function getAsset(id: string, boardId: string): Promise<Blob | null> {
-  if (!isRemoteBackendEnabled()) return (await getLocalAsset(`${boardId}/${id}`)) ?? getLocalAsset(id);
   const path = assetPath(boardId, id);
+  const inMemory = memoryAssets.get(path) ?? memoryAssets.get(id);
+  if (inMemory) {
+    rememberAsset(path, inMemory);
+    return inMemory;
+  }
+  if (!isRemoteBackendEnabled()) {
+    const local = (await getLocalAsset(path)) ?? await getLocalAsset(id);
+    return local ? rememberAsset(path, local) : null;
+  }
   const cached = await getLocalAsset(path).catch(() => null);
-  if (cached) return cached;
+  if (cached) return rememberAsset(path, cached);
   if (downloads.has(path)) return downloads.get(path)!;
   const pending = (async () => {
     try {
       const blob = await remoteAssetRequest(path);
       if (blob) {
         synchronized.add(path);
+        rememberAsset(path, blob);
         await putLocalAsset(path, blob).catch(() => {});
       }
       return blob;
     } catch {
       // v19 attachments may still exist only in this browser.
-      return getLocalAsset(id).catch(() => null);
+      const legacy = await getLocalAsset(id).catch(() => null);
+      return legacy ? rememberAsset(path, legacy) : null;
     }
   })();
   downloads.set(path, pending);

@@ -726,12 +726,57 @@ function AttachmentRequestPreview({request,boardId}:{request:AttachmentApprovalR
 }
 
 const Media = memo(function Media({ item, boardId }: { item: Item; boardId: string }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
   const [src, setSrc] = useState("");
-  useEffect(() => { let url=""; let alive=true; setSrc(""); if(!item.assetId)return; getAsset(item.assetId, boardId).then(blob=>{if(blob&&alive){url=URL.createObjectURL(blob);setSrc(url)}}).catch(()=>{}); return()=>{alive=false;if(url)URL.revokeObjectURL(url)} },[item.assetId, boardId]);
-  if(!src) return <div className="media-missing">Файл недоступен</div>;
-  if (item.kind === "image") return <img className="media-image" src={src} alt={item.name??"Изображение"} loading="lazy" decoding="async"/>;
-  const pdfSrc = `${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`;
-  return <object key={`${item.assetId}-${item.pdfPage ?? 1}`} className="media-pdf" data={pdfSrc} type="application/pdf"><div className="media-missing">PDF: {item.name}</div></object>;
+
+  useEffect(() => {
+    const node = hostRef.current;
+    if (!node || nearViewport) return;
+    if (!("IntersectionObserver" in window)) {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    }, { root: null, rootMargin: "650px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+
+  useEffect(() => {
+    let url = "";
+    let alive = true;
+    if (!nearViewport || !item.assetId) return;
+    void getAsset(item.assetId, boardId).then((blob) => {
+      if (!blob || !alive) return;
+      url = URL.createObjectURL(blob);
+      setSrc(url);
+    }).catch(() => {});
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [nearViewport, item.assetId, boardId]);
+
+  return <div ref={hostRef} className="media-host">
+    {!nearViewport
+      ? <div className="media-missing">Вложение</div>
+      : !src
+        ? <div className="media-missing">Загрузка…</div>
+        : item.kind === "image"
+          ? <img className="media-image" src={src} alt={item.name??"Изображение"} loading="lazy" decoding="async"/>
+          : <iframe
+              key={`${item.assetId}-${item.pdfPage ?? 1}`}
+              className="media-pdf"
+              src={`${src}#page=${Math.max(1, item.pdfPage ?? 1)}&view=FitH&toolbar=0&navpanes=0&scrollbar=0`}
+              title={item.name ?? "PDF"}
+              loading="lazy"
+            />}
+  </div>;
 }, (previous, next) =>
   previous.boardId === next.boardId &&
   previous.item.assetId === next.item.assetId &&
