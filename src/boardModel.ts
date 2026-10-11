@@ -332,8 +332,19 @@ export function eraseInk(items: Item[], path: Point[], radius: number): Item[] {
       out.push(item);
       continue;
     }
-    const points = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
     const effectiveRadius = radius + (item.weight ?? 1) / 2;
+    const pathBox = {
+      left: Math.min(...path.map(p => p.x)) - effectiveRadius,
+      right: Math.max(...path.map(p => p.x)) + effectiveRadius,
+      top: Math.min(...path.map(p => p.y)) - effectiveRadius,
+      bottom: Math.max(...path.map(p => p.y)) + effectiveRadius,
+    };
+    if (item.x > pathBox.right || item.y > pathBox.bottom ||
+        item.x + item.width < pathBox.left || item.y + item.height < pathBox.top) {
+      out.push(item);
+      continue;
+    }
+    const points = item.points.map(p => ({ x: p.x + item.x, y: p.y + item.y }));
     // A tap is a circle, while a drag sweeps a capsule along every path segment.
     // Test stroke *segments*, not just vertices, so sparse/straight strokes erase too.
     const touches = (p: Point) => erasedByPath(p, path, effectiveRadius);
@@ -354,7 +365,12 @@ export function eraseInk(items: Item[], path: Point[], radius: number): Item[] {
       const length = Math.hypot(b.x-a.x,b.y-a.y);
       // A small, bounded sampling step also avoids leaving a gap bridged by a
       // long surviving line segment after an eraser pass.
-      const steps = Math.max(1,Math.ceil(length/Math.max(2,Math.min(8,effectiveRadius/2))));
+      const inSweep = Math.max(a.x,b.x) >= pathBox.left &&
+        Math.min(a.x,b.x) <= pathBox.right &&
+        Math.max(a.y,b.y) >= pathBox.top &&
+        Math.min(a.y,b.y) <= pathBox.bottom;
+      if (!inSweep) { run.push(b); continue; }
+      const steps = Math.max(1,Math.ceil(length/Math.max(2,Math.min(5,effectiveRadius/3))));
       for(let k=1;k<=steps;k++) {
         const t=k/steps;
         append({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
