@@ -7887,3 +7887,17 @@ option{background:#fff;color:#343741}
 }
 /* On tablets, the formula's nested fractions/subscripts must never start native touch gestures. */
 .board-object.object-formula,.board-object.object-formula * {touch-action:none!important;user-select:none;-webkit-user-select:none;}
+
+/* Popup is portaled to document.body so scrollable toolbars cannot clip it. */
+.geometry-picker.geometry-picker-portal {
+  position:fixed!important;
+  z-index:10020!important;
+  bottom:auto!important;
+  right:auto!important;
+  transform:none!important;
+  display:flex!important;
+  flex-direction:row!important;
+  width:max-content!important;
+  max-width:calc(100vw - 16px)!important;
+  pointer-events:auto!important;
+}
