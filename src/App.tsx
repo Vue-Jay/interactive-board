@@ -1325,7 +1325,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const remoteCursorFrame = useRef<number | null>(null);
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
   const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
-  const [followTeacher, setFollowTeacher] = useState(false);
+  const [followTeacher] = useState(false);
   const followTeacherRef = useRef(false);
   const [guidedFollow, setGuidedFollow] = useState(false);
   const guidedFollowRef = useRef(false);
@@ -4614,17 +4614,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         });
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
-      (teacherView) => {
-        return; // Continuous view following intentionally disabled; only explicit "Ко мне" works.
-        const rect = board.current?.getBoundingClientRect();
-        if (!rect) return;
-
-        setView({
-          x: rect.width / 2 - teacherView.centerX * teacherView.zoom,
-          y: rect.height / 2 - teacherView.centerY * teacherView.zoom,
-          zoom: teacherView.zoom,
-        });
-      },
+      (_teacherView) => { /* Continuous following removed; one-time focus remains supported. */ },
       (guided) => {
         guidedFollowRef.current = guided.enabled;
         setGuidedFollow(guided.enabled);
@@ -5295,7 +5285,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         {formulaEditorId && formulaDraft && (
           <div
             className="formula-editor-backdrop"
-            onPointerDown={closeFormulaEditor}
+            onPointerDown={() => closeFormulaEditor()}
             onKeyDown={(e) => {
               if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeFormulaEditor(); }
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveFormulaEditor(); }
@@ -5307,7 +5297,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   <strong>Редактор формулы</strong>
                   <span>Дроби, корни, индексы, греческие буквы и математические символы</span>
                 </div>
-                <button onClick={closeFormulaEditor} aria-label="Закрыть"><Icon name="close" size={17}/></button>
+                <button onClick={() => closeFormulaEditor()} aria-label="Закрыть"><Icon name="close" size={17}/></button>
               </div>
 
               <div className="formula-editor-main">
