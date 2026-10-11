@@ -23,9 +23,8 @@ const intersect = (a: Point, b: Point, c: Point, d: Point): boolean => {
     (ca === 0 && onSegment(c,d,a)) || (cb === 0 && onSegment(c,d,b));
 };
 
-// The lasso is destructive only to ink. Other board objects keep normal
-// selection behavior. A stroke touching the enclosed region is removed as one
-// undoable drawing operation. Existing locked/hidden ink is protected.
+// Geometric lasso selection of individual pen/marker objects. The lasso
+// never mutates a stroke. Locked ink is selectable for inspection/unlocking.
 export function inkIdsInLasso(items: readonly Item[], polygon: readonly Point[]): Set<string> {
   const hits = new Set<string>();
   if (polygon.length < 3) return hits;
@@ -35,7 +34,7 @@ export function inkIdsInLasso(items: readonly Item[], polygon: readonly Point[])
     maxX = Math.max(maxX,p.x); maxY = Math.max(maxY,p.y);
   }
   for (const item of items) {
-    if (!isInkItem(item) || item.hidden || item.locked || !item.points?.length) continue;
+    if (!isInkItem(item) || item.hidden || !item.points?.length) continue;
     const cx = item.x + item.width / 2, cy = item.y + item.height / 2;
     // A conservative rotated AABB avoids testing distant strokes.
     const pad = Math.hypot(item.width,item.height) / 2 + (item.weight ?? 3);
