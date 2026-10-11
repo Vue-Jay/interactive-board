@@ -1464,7 +1464,14 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const lastViewSerialized = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
-  const eraserSession = useRef<{pointer:number;last:Point;zoom:number}|null>(null);
+  const eraserSession = useRef<{pointer:number;last:Point;zoom:number;dirty:boolean}|null>(null);
+  const eraserCursorElement = useRef<HTMLDivElement>(null);
+  const setLiveEraserCursor=(x:number,y:number)=>{
+    const el=eraserCursorElement.current;
+    if(!el)return;
+    el.style.left=x+"px";
+    el.style.top=y+"px";
+  };
   const displayFrame = useRef<number | null>(null);
   const pendingDisplayItems = useRef<Item[] | null>(null);
   const gesturePaintFrame = useRef<number | null>(null);
@@ -1895,6 +1902,19 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       const pending = pendingDisplayItems.current;
       pendingDisplayItems.current = null;
       if (pending) setItems(pending);
+    });
+  };
+  // The eraser only changes ink. Running connector reconciliation on every
+  // pointermove is prohibitively expensive on large teacher-owned boards.
+  const displayErasedInk = (next: Item[]) => {
+    itemsRef.current=next;
+    pendingDisplayItems.current=next;
+    if(displayFrame.current!==null)return;
+    displayFrame.current=requestAnimationFrame(()=>{
+      displayFrame.current=null;
+      const pending=pendingDisplayItems.current;
+      pendingDisplayItems.current=null;
+      if(pending)setItems(pending);
     });
   };
   const currentDocument = (): DocumentData => ({
@@ -5708,10 +5728,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             if(gesture.current)end();
             const p=world(local(e.clientX,e.clientY));
             const before=itemsRef.current;
-            eraserSession.current={pointer:e.pointerId,last:p,zoom:view.zoom};
+            eraserSession.current={pointer:e.pointerId,last:p,zoom:view.zoom,dirty:false};
             setSelected([]);
             const next=eraseInkAt(before,p,p,eraserSize/2/view.zoom);
-            if(next!==before)display(next);
+            if(next!==before){ if(eraserSession.current)eraserSession.current.dirty=true; displayErasedInk(next); }
             board.current?.setPointerCapture(e.pointerId);
           }}
           onPointerMoveCapture={(e) => {
@@ -5723,7 +5743,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
             g.last=p;
             if(next!==before)display(next);
-            setEraserCursor(local(e.clientX,e.clientY));
+            const cursor=local(e.clientX,e.clientY);
+            setLiveEraserCursor(cursor.x,cursor.y);
           }}
           onPointerUpCapture={(e) => {
             const g=eraserSession.current;
@@ -5733,14 +5754,16 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             const before=itemsRef.current;
             const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
             if(next!==before)display(next);
+            const dirty=g.dirty;
             eraserSession.current=null;
-            commit(itemsRef.current);
+            if(dirty)commit(itemsRef.current);
             if(board.current?.hasPointerCapture(e.pointerId))board.current.releasePointerCapture(e.pointerId);
           }}
           onPointerCancelCapture={(e) => {
             if(eraserSession.current?.pointer===e.pointerId){
+              const dirty=eraserSession.current.dirty;
               eraserSession.current=null;
-              commit(itemsRef.current);
+              if(dirty)commit(itemsRef.current);
             }
           }}
           onPointerDown={(e) => { if(tool==="eraser")return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
@@ -5793,7 +5816,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => { if(eraserSession.current){eraserSession.current=null;commit(itemsRef.current);}else end(true); }}
+          onLostPointerCapture={() => { if(eraserSession.current){const dirty=eraserSession.current.dirty;eraserSession.current=null;if(dirty)commit(itemsRef.current);}else end(true); }}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
@@ -6388,7 +6411,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             </div>
           )}
           {tool === "eraser" && eraserCursor && (
-            <div className="eraser-cursor" aria-hidden="true" style={{ left: eraserCursor.x, top: eraserCursor.y, width: eraserSize, height: eraserSize }} />
+            <div ref={eraserCursorElement} className="eraser-cursor" aria-hidden="true" style={{ left: eraserCursor.x, top: eraserCursor.y, width: eraserSize, height: eraserSize }} />
           )}
           {path.length > 0 && (
             <svg className="lasso-overlay">
