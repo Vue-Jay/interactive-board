@@ -2973,10 +2973,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         if (frameNotesEditorId) { setFrameNotesEditorId(null); setFrameNotesDraft(""); return; }
         if (imageCropEditorId) { setImageCropEditorId(null); return; }
         if (formulaEditorId) { closeFormulaEditor(); return; }
-        if (checklistEditorId) { setChecklistEditorId(null); setChecklistDraft(null); return; }
-        if (quizEditorId) { setQuizEditorId(null); setQuizDraft(null); return; }
-        if (flashcardEditorId) { setFlashcardEditorId(null); setFlashcardDraft(null); return; }
-        if (tableEditorId) { setTableEditorId(null); setTableDraft(null); return; }
+        if (checklistEditorId) { saveChecklistEditor(); return; }
+        if (quizEditorId) { saveQuizEditor(); return; }
+        if (flashcardEditorId) { saveFlashcardEditor(); return; }
+        if (tableEditorId) { saveTableEditor(); return; }
         if (commandPaletteOpen) { setCommandPaletteOpen(false); setCommandPaletteQuery(""); setCommandPaletteIndex(0); return; }
         if (shortcutsOpen) { setShortcutsOpen(false); return; }
         if (templatesOpen) { setTemplatesOpen(false); return; }
@@ -3776,7 +3776,15 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     setFormulaPaletteTab("basic");
   };
 
-  const closeFormulaEditor = () => {
+  const closeFormulaEditor = (save = true) => {
+    if (save && formulaEditorId && formulaDraft) {
+      commit(itemsRef.current.map((item) => item.id === formulaEditorId ? {
+        ...item,
+        text: formulaDraft.text.slice(0, 10000),
+        fontSize: Math.max(12, Math.min(96, Math.round(formulaDraft.fontSize))),
+        color: formulaDraft.color,
+      } : item));
+    }
     setFormulaEditorId(null);
     setFormulaDraft(null);
   };
@@ -3792,7 +3800,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       fontSize,
       color: formulaDraft.color,
     } : item));
-    closeFormulaEditor();
+    closeFormulaEditor(false);
     setNotice("Формула сохранена");
   };
 
@@ -4607,7 +4615,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
       (teacherView) => {
-        if (!(followTeacherRef.current || guidedFollowRef.current)) return;
+        return; // Continuous view following intentionally disabled; only explicit "Ко мне" works.
         const rect = board.current?.getBoundingClientRect();
         if (!rect) return;
 
@@ -4767,7 +4775,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         <div className="lesson-control-student"><span className="presence-avatar">{liveLesson.studentName.charAt(0).toUpperCase()}</span><div><strong>{liveLesson.studentName}</strong><small>{liveLesson.topic||"Тема не указана"}</small></div></div>
         <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span><span><b>{guidedFollow?"Включено":"Выключено"}</b>ведение экрана</span></div><div className="lesson-control-grid">
           <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
-          <button className={guidedFollow?"active":""} onClick={()=>{const next=!guidedFollow;guidedFollowRef.current=next;setGuidedFollow(next);viewControlChannel.current?.sendGuidedFollow(next);if(next){const rect=board.current?.getBoundingClientRect();if(rect){const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom)}}}}>↝<span>{guidedFollow?"Ведение включено":"Вести экран"}</span></button>
+
           <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
           <button onClick={()=>{window.history.pushState({},"","/?section=assignments");window.dispatchEvent(new PopStateEvent("popstate"))}}>✓<span>Задания</span></button>
           <button className={presentationTimerRunning?"active-tool":""} onClick={()=>{setPresentationTimerMode("elapsed");setPresentationTimerRunning(v=>!v)}}>◷<span>{presentationTimerRunning?"Пауза таймера":"Таймер"}</span></button>
@@ -4898,30 +4906,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           {remoteEditingCount > 0 && <span className="collab-editing-status" title="Сейчас другие участники редактируют объекты">
             ✎ {remoteEditingCount}
           </span>}
-          {boardSummary.role !== "owner" && isRemoteBackendEnabled() && <button
-            type="button"
-            className={`lesson-button follow-teacher-button ${followTeacher || guidedFollow ? "active" : ""}`}
-            title={guidedFollow ? "Преподаватель включил общий режим следования" : followTeacher ? "Перестать автоматически следовать за экраном преподавателя" : "Автоматически следовать за экраном преподавателя"}
-            disabled={guidedFollow}
-            onClick={() => {
-              if (guidedFollow) return;
-              setFollowTeacher((current) => {
-                const next = !current;
-                followTeacherRef.current = next;
-                setNotice(next ? "Следование за преподавателем включено" : "Следование за преподавателем выключено");
-                return next;
-              });
-            }}
-            aria-label={guidedFollow ? "Преподаватель включил следование" : followTeacher ? "Следование за преподавателем включено" : "Следовать за преподавателем"}
-          >
-            <svg className="follow-teacher-icon follow-teacher-icon-v191" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="8.25" cy="8" r="2.35"/>
-              <path d="M4.25 17.25c.45-2.85 1.8-4.35 4-4.35s3.55 1.5 4 4.35"/>
-              <path className="follow-arrow" d="M13.8 9.25h5.15"/>
-              <path className="follow-arrow" d="m17.15 6.95 2.35 2.3-2.35 2.3"/>
-            </svg>
-            {(followTeacher || guidedFollow) && <span className="follow-teacher-live-dot" aria-hidden="true"/>}
-          </button>}
           {boardSummary.role === "owner" && (liveLesson ? <div className="live-lesson-chip"><span className="live-lesson-dot"/><button className="live-lesson-main" onClick={()=>setLessonPanelOpen(true)} title="Открыть панель урока"><span><b>{liveLesson.studentName}</b><small>{liveLesson.topic||"Урок"} · {lessonTime}</small></span></button><button onClick={()=>setLessonFinishOpen(true)}>Завершить</button></div> : <button className="lesson-button start-live-lesson compact-top-action" aria-label="Начать урок" title="Начать урок" onClick={()=>{setLessonStudentId(lessonStudents[0]?.userId||"");setLessonOpen(true)}}><svg className="top-action-svg play-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5 18 12 8 18.5Z"/></svg></button>)}
           {boardSummary.role === "owner" && <button className="lesson-button board-invite-button compact-top-action" aria-label="Добавить участника" title="Добавить участника" onClick={() => setSharing(true)}><svg className="top-action-svg add-person-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 18c.5-3.2 2.5-5 5.5-5s5 1.8 5.5 5"/><path d="M18 7v6M15 10h6"/></svg></button>}
           {isRemoteBackendEnabled() && <button type="button" className={`lesson-button board-chat-button ${chatOpen ? "active" : ""}`} onClick={()=>void openDiscussions()} title="Чат этой доски" aria-label={`Чат этой доски${chatUnread?` · новых сообщений ${chatUnread}`:""}`}><Icon name="comments" size={16}/><span>Чат</span>{chatUnread>0&&<b className="top-badge">{chatUnread>99?"99+":chatUnread}</b>}</button>}
@@ -5054,6 +5038,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         </div>
       </header>
       <main className="workspace">
+        <div className="mobile-undo-redo" aria-label="История изменений">
+          <button type="button" disabled={index.current === 0} onClick={() => undo(-1)} aria-label="Отменить"><Icon name="undo" size={19}/></button>
+          <button type="button" disabled={index.current === history.current.length - 1} onClick={() => undo(1)} aria-label="Повторить"><Icon name="redo" size={19}/></button>
+        </div>
         {presentation && (
           <div className="presentation-controls" onPointerDown={(e) => e.stopPropagation()}>
             <button disabled={!presentationFrames.length} onClick={() => stepPresentation(-1)} title="Предыдущий фрейм · ← / PageUp"><Icon name="chevron-left" size={18} /></button>
