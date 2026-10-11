@@ -7901,3 +7901,63 @@ option{background:#fff;color:#343741}
   max-width:calc(100vw - 16px)!important;
   pointer-events:auto!important;
 }
+
+
+/* Center-pivot school instruments: control bar never rotates with the drawing. */
+.geometry-instrument.geometry-instrument-centered {
+  position:fixed!important;
+  width:0!important;
+  height:0!important;
+  padding:0!important;
+  transform:none!important;
+  transform-origin:center center!important;
+  overflow:visible!important;
+  filter:none!important;
+  pointer-events:none!important;
+  z-index:10000!important;
+}
+.geometry-instrument-centered .geometry-instrument-body {
+  position:absolute;
+  left:0;
+  top:0;
+  cursor:grab;
+  touch-action:none;
+  pointer-events:auto;
+  filter:drop-shadow(0 4px 6px #172a3d32);
+}
+.geometry-instrument-centered .geometry-instrument-body:active {cursor:grabbing}
+.geometry-instrument-centered .geometry-instrument-actions {
+  position:absolute;
+  top:-70px;
+  left:0;
+  transform:translateX(-50%);
+  margin:0;
+  display:flex;
+  align-items:center;
+  white-space:nowrap;
+  border:1px solid #b9cadb;
+  border-radius:12px;
+  padding:5px;
+  box-shadow:0 4px 16px #10274428;
+  background:#fff;
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.geometry-instrument-centered .geometry-instrument-actions span:first-child {font-size:12px;font-weight:600;color:#27415d;}
+.geometry-instrument-centered .geometry-angle-readout {min-width:36px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:#244e7b;}
+.geometry-instrument-centered .geometry-instrument-actions button {min-width:32px;height:34px;padding:0 5px;border-radius:8px;}
+.geometry-instrument-centered .geometry-pivot {
+  position:absolute;
+  left:0;top:0;
+  width:9px;height:9px;
+  box-sizing:border-box;
+  transform:translate(-50%,-50%);
+  border:1.5px solid #285d98;
+  border-radius:50%;
+  background:#fff9;
+  pointer-events:none;
+}
+@media(max-width:900px),(pointer:coarse) {
+  .geometry-instrument-centered .geometry-instrument-actions {top:-64px;}
+  .geometry-instrument-centered .geometry-instrument-actions button {min-width:38px;height:38px;}
+}
