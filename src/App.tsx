@@ -5514,11 +5514,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
         )}
         {tableEditorId && tableDraft && (
-          <div className="table-editor-backdrop" onPointerDown={() => { setTableEditorId(null); setTableDraft(null); }}>
+          <div className="table-editor-backdrop" onPointerDown={() => { saveTableEditor(); }}>
             <div className="table-editor-modal" role="dialog" aria-modal="true" aria-label="Редактирование таблицы" onPointerDown={(e) => e.stopPropagation()}>
               <div className="table-editor-header">
                 <div><strong>Таблица</strong><span>{tableDraft.rows} строк × {tableDraft.cols} столбцов</span></div>
-                <button onClick={() => { setTableEditorId(null); setTableDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button>
+                <button onClick={() => { saveTableEditor(); }} aria-label="Закрыть"><Icon name="close" size={17}/></button>
               </div>
               <div className="table-editor-controls">
                 <span>Строки</span><button onClick={() => resizeTableDraft(-1,0)} disabled={tableDraft.rows <= 1}><Icon name="minus" size={14}/></button><strong>{tableDraft.rows}</strong><button onClick={() => resizeTableDraft(1,0)} disabled={tableDraft.rows >= 20}><Icon name="plus" size={14}/></button>
