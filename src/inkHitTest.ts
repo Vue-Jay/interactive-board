@@ -16,7 +16,7 @@ export function hitTestInk(
   for (let index = items.length - 1; index > lowerIndex; index--) {
     const item = items[index];
     if ((item.kind !== "pen" && item.kind !== "marker") ||
-        item.hidden || item.locked || excluded.has(item.id) || !item.points?.length) continue;
+        item.hidden || excluded.has(item.id) || !item.points?.length) continue;
 
     // Rotated strokes can extend past their axis-aligned element bounds.
     const halfDiagonal = Math.hypot(item.width, item.height) / 2;
