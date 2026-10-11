@@ -1465,6 +1465,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [items, setItems] = useState<Item[]>(initial.data.items);
   const itemsRef = useRef(items);
   const eraserSession = useRef<{pointer:number;last:Point;zoom:number;dirty:boolean}|null>(null);
+  const eraserFrame=useRef<number|null>(null);
+  const eraserPendingPoint=useRef<Point|null>(null);
   const eraserCursorElement = useRef<HTMLDivElement>(null);
   const setLiveEraserCursor=(x:number,y:number)=>{
     const el=eraserCursorElement.current;
@@ -1916,6 +1918,20 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       pendingDisplayItems.current=null;
       if(pending)setItems(pending);
     });
+  };
+  const advanceEraser=(point:Point)=>{
+    const g=eraserSession.current;
+    if(!g)return;
+    const before=itemsRef.current;
+    const next=eraseInkAt(before,g.last,point,eraserSize/2/g.zoom);
+    g.last=point;
+    if(next!==before){g.dirty=true;displayErasedInk(next);}
+  };
+  const flushEraserFrame=()=>{
+    if(eraserFrame.current!==null){cancelAnimationFrame(eraserFrame.current);eraserFrame.current=null;}
+    const point=eraserPendingPoint.current;
+    eraserPendingPoint.current=null;
+    if(point)advanceEraser(point);
   };
   const currentDocument = (): DocumentData => ({
     version: 1,
@@ -5738,11 +5754,15 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             const g=eraserSession.current;
             if(!g||g.pointer!==e.pointerId)return;
             e.preventDefault();e.stopPropagation();
-            const p=world(local(e.clientX,e.clientY));
-            const before=itemsRef.current;
-            const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
-            g.last=p;
-            if(next!==before)display(next);
+            eraserPendingPoint.current=world(local(e.clientX,e.clientY));
+            if(eraserFrame.current===null){
+              eraserFrame.current=requestAnimationFrame(()=>{
+                eraserFrame.current=null;
+                const p=eraserPendingPoint.current;
+                eraserPendingPoint.current=null;
+                if(p)advanceEraser(p);
+              });
+            }
             const cursor=local(e.clientX,e.clientY);
             setLiveEraserCursor(cursor.x,cursor.y);
           }}
@@ -5750,10 +5770,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             const g=eraserSession.current;
             if(!g||g.pointer!==e.pointerId)return;
             e.preventDefault();e.stopPropagation();
-            const p=world(local(e.clientX,e.clientY));
-            const before=itemsRef.current;
-            const next=eraseInkAt(before,g.last,p,eraserSize/2/g.zoom);
-            if(next!==before)display(next);
+            flushEraserFrame();
+            advanceEraser(world(local(e.clientX,e.clientY)));
             const dirty=g.dirty;
             eraserSession.current=null;
             if(dirty)commit(itemsRef.current);
@@ -5761,7 +5779,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           }}
           onPointerCancelCapture={(e) => {
             if(eraserSession.current?.pointer===e.pointerId){
-              const dirty=eraserSession.current.dirty;
+              flushEraserFrame();
+              const dirty=eraserSession.current?.dirty;
               eraserSession.current=null;
               if(dirty)commit(itemsRef.current);
             }
@@ -5816,7 +5835,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             }
           }}
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => { if(eraserSession.current){const dirty=eraserSession.current.dirty;eraserSession.current=null;if(dirty)commit(itemsRef.current);}else end(true); }}
+          onLostPointerCapture={() => { if(eraserSession.current){flushEraserFrame();const dirty=eraserSession.current?.dirty;eraserSession.current=null;if(dirty)commit(itemsRef.current);}else end(true); }}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
             {Object.values(remoteCursors).map((cursor) => <div
