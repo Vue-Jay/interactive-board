@@ -67,7 +67,7 @@ import { eraseInkAlongPath } from "./inkEraser";
 import { inkIdsInLasso } from "./inkLasso";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
-import { changesSinceLastVisit } from "./boardHistoryUtils";
+import { changesSinceLastVisit, recentBoardHistory } from "./boardHistoryUtils";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
 import { subscribeBoardComments } from "./commentRealtime";
 import { LinkMediaPlayer, resolveLinkMedia } from "./linkMedia";
@@ -1313,6 +1313,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [historyBusy,setHistoryBusy]=useState(false);
   const [historyError,setHistoryError]=useState("");
   const [recentChanges,setRecentChanges]=useState<BoardHistoryEntry[]>([]);
+  const [recentNewCount,setRecentNewCount]=useState(0);
   const [recentChangesOpen,setRecentChangesOpen]=useState(false);
   const [leavingBoard,setLeavingBoard]=useState(false);
   const historyVisitKey = "onlinerepetitor.history-seen." + authUser.id + "." + boardSummary.id;
@@ -1621,8 +1622,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }catch{/* local history marker is optional */}
     void listBoardHistory(boardSummary.id,20).then(rows=>{
       if(!active)return;
-      const recent=changesSinceLastVisit(rows,previousVersion,5);
+      const recent=recentBoardHistory(rows,5);
       setRecentChanges(recent);
+      setRecentNewCount(previousVersion===null?0:changesSinceLastVisit(rows,previousVersion,20).length);
       setRecentChangesOpen(recent.length>0);
     }).catch(()=>{/* The full history remains available manually. */});
     return()=>{active=false};
@@ -5089,7 +5091,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       {recentChangesOpen&&recentChanges.length>0&&!publicPresentation&&
          <aside className="board-recent-changes" aria-label="Последние изменения доски">
            <div className="board-recent-head">
-             <div><strong>Последние изменения</strong><small>С прошлого посещения · до 5 сохранений</small></div>
+             <div><strong>Последние изменения</strong><small>{recentNewCount>0 ? "Новых с прошлого посещения: "+recentNewCount : "Последние сохранённые версии"}</small></div>
              <button type="button" aria-label="Скрыть последние изменения" onClick={()=>setRecentChangesOpen(false)}>×</button>
            </div>
            <div className="board-recent-list">
