@@ -5730,8 +5730,20 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
-          onPointerDown={(e) => { touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
-          onPointerMove={(e) => { touchMove(e); if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
+          onPointerDownCapture={(e) => {
+            if (tool !== "eraser" || presentation || !canEdit || space || e.button !== 0) return;
+            // Capture-phase handling runs before nested objects and editor overlays
+            // can stop bubbling. This makes erasing work on top of existing ink.
+            touchStart(e);
+            if (touchPoints.current.size >= 2) return;
+            down(e);
+          }}
+          onPointerMoveCapture={(e) => {
+            if (tool !== "eraser" || gesture.current?.mode !== "erase" || pinchState.current) return;
+            move(e);
+          }}
+          onPointerDown={(e) => { if (tool === "eraser" && !presentation && canEdit && !space) return; touchStart(e); if(touchPoints.current.size>=2)return; if (presentation) { const point = local(e.clientX, e.clientY); if (presentationLaser) setPresentationLaserPos(point); if (presentationSpotlight) setPresentationSpotlightPos(point); return; } down(e); }}
+          onPointerMove={(e) => { touchMove(e); if(tool==="eraser" && gesture.current?.mode==="erase") return; if(pinchState.current)return; const localPoint = local(e.clientX, e.clientY); const worldPoint = world(localPoint); if(!adminHidden) cursorChannel.current?.sendCursor(worldPoint.x, worldPoint.y); if (presentation) { if (presentationLaser) setPresentationLaserPos(localPoint); if (presentationSpotlight) setPresentationSpotlightPos(localPoint); } move(e); }}
           onContextMenu={(e) => {
             e.preventDefault();
             finishEdit();
