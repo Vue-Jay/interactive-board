@@ -5403,9 +5403,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
         )}
         {checklistEditorId && checklistDraft && (
-          <div className="checklist-editor-backdrop" onPointerDown={() => { setChecklistEditorId(null); setChecklistDraft(null); }}>
-            <div className="checklist-editor-modal" role="dialog" aria-modal="true" aria-label="Редактор чек-листа" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setChecklistEditorId(null); setChecklistDraft(null); } if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveChecklistEditor(); } }}>
-              <div className="checklist-editor-header"><div className="checklist-editor-header-main"><strong>Чек-лист / задание</strong><span>{checklistDraft.done.filter(Boolean).length} из {checklistDraft.items.length} выполнено</span></div><button onClick={() => { setChecklistEditorId(null); setChecklistDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
+          <div className="checklist-editor-backdrop" onPointerDown={() => { saveChecklistEditor(); }}>
+            <div className="checklist-editor-modal" role="dialog" aria-modal="true" aria-label="Редактор чек-листа" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); saveChecklistEditor(); } if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveChecklistEditor(); } }}>
+              <div className="checklist-editor-header"><div className="checklist-editor-header-main"><strong>Чек-лист / задание</strong><span>{checklistDraft.done.filter(Boolean).length} из {checklistDraft.items.length} выполнено</span></div><button onClick={() => { saveChecklistEditor(); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
               <div className="checklist-editor-settings">
                 <label className="checklist-title-input"><span>Название</span><input value={checklistDraft.title} maxLength={200} onChange={(e) => setChecklistDraft({ ...checklistDraft, title: e.target.value })}/></label>
                 <div className="checklist-editor-style-row">
@@ -5423,17 +5423,17 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 ))}
                 <button className="checklist-add-row" disabled={checklistDraft.items.length >= 40} onClick={addChecklistRow}><Icon name="plus" size={15}/> Добавить пункт</button>
               </div>
-              <div className="checklist-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div className="checklist-editor-bulk"><button className="secondary" onClick={() => setChecklistDraft((current) => current ? { ...current, done: current.done.map(() => false) } : current)}>Сбросить отметки</button><button className="secondary" onClick={() => setChecklistDraft((current) => current ? { ...current, done: current.done.map(() => true) } : current)}>Отметить всё</button><button className="secondary" onClick={() => { setChecklistEditorId(null); setChecklistDraft(null); }}>Отмена</button><button className="primary" onClick={saveChecklistEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
+              <div className="checklist-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div className="checklist-editor-bulk"><button className="secondary" onClick={() => setChecklistDraft((current) => current ? { ...current, done: current.done.map(() => false) } : current)}>Сбросить отметки</button><button className="secondary" onClick={() => setChecklistDraft((current) => current ? { ...current, done: current.done.map(() => true) } : current)}>Отметить всё</button><button className="secondary" onClick={() => { saveChecklistEditor(); }}>Отмена</button><button className="primary" onClick={saveChecklistEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
             </div>
           </div>
         )}
         {flashcardEditorId && flashcardDraft && (
-          <div className="flashcard-editor-backdrop" onPointerDown={() => { setFlashcardEditorId(null); setFlashcardDraft(null); }}>
+          <div className="flashcard-editor-backdrop" onPointerDown={() => { saveFlashcardEditor(); }}>
             <div className="flashcard-editor-modal" role="dialog" aria-modal="true" aria-label="Редактор карточки вопрос–ответ" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => {
-              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setFlashcardEditorId(null); setFlashcardDraft(null); }
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); saveFlashcardEditor(); }
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveFlashcardEditor(); }
             }}>
-              <div className="flashcard-editor-header"><div><strong>Карточка вопрос–ответ</strong><span>Лицевая и обратная стороны одной учебной карточки</span></div><button onClick={() => { setFlashcardEditorId(null); setFlashcardDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
+              <div className="flashcard-editor-header"><div><strong>Карточка вопрос–ответ</strong><span>Лицевая и обратная стороны одной учебной карточки</span></div><button onClick={() => { saveFlashcardEditor(); }} aria-label="Закрыть"><Icon name="close" size={17}/></button></div>
               <div className="flashcard-editor-body">
                 <section className="flashcard-editor-compose">
                   <label><span>Вопрос / лицевая сторона</span><textarea value={flashcardDraft.front} maxLength={5000} onChange={(e) => setFlashcardDraft({ ...flashcardDraft, front: e.target.value })} placeholder="Что нужно вспомнить?"/></label>
@@ -5451,19 +5451,19 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   </div>
                 </aside>
               </div>
-              <div className="flashcard-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div><button className="secondary" onClick={() => { setFlashcardEditorId(null); setFlashcardDraft(null); }}>Отмена</button><button className="primary" onClick={saveFlashcardEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
+              <div className="flashcard-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div><button className="secondary" onClick={() => { saveFlashcardEditor(); }}>Отмена</button><button className="primary" onClick={saveFlashcardEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
             </div>
           </div>
         )}
         {quizEditorId && quizDraft && (
-          <div className="quiz-editor-backdrop" onPointerDown={() => { setQuizEditorId(null); setQuizDraft(null); }}>
+          <div className="quiz-editor-backdrop" onPointerDown={() => { saveQuizEditor(); }}>
             <div className="quiz-editor-modal" role="dialog" aria-modal="true" aria-label="Редактор мини-теста" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => {
-              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setQuizEditorId(null); setQuizDraft(null); }
+              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); saveQuizEditor(); }
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); saveQuizEditor(); }
             }}>
               <div className="quiz-editor-header">
                 <div><strong>Вопрос / мини-тест</strong><span>Выберите правильный вариант и при необходимости добавьте пояснение</span></div>
-                <button onClick={() => { setQuizEditorId(null); setQuizDraft(null); }} aria-label="Закрыть"><Icon name="close" size={17}/></button>
+                <button onClick={() => { saveQuizEditor(); }} aria-label="Закрыть"><Icon name="close" size={17}/></button>
               </div>
               <div className="quiz-editor-body">
                 <section className="quiz-editor-compose">
@@ -5499,7 +5499,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   </div>
                 </aside>
               </div>
-              <div className="quiz-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div><button className="secondary" onClick={() => { setQuizEditorId(null); setQuizDraft(null); }}>Отмена</button><button className="primary" onClick={saveQuizEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
+              <div className="quiz-editor-footer"><span>Ctrl+Enter — сохранить · Esc — закрыть</span><div><button className="secondary" onClick={() => { saveQuizEditor(); }}>Отмена</button><button className="primary" onClick={saveQuizEditor}><Icon name="check" size={15}/> Сохранить</button></div></div>
             </div>
           </div>
         )}
