@@ -1741,7 +1741,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
 
   // A gesture is saved only when completed; in-progress text is saved too.
   useEffect(() => {
-    if (saveBlocked || gesture.current) return;
+    if (saveBlocked || gesture.current || eraserSession.current) return;
     const data: DocumentData = {
       version: 1,
       title,
