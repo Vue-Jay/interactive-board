@@ -1,7 +1,7 @@
 import { useEffect,useMemo,useState } from "react";
 import type { AuthUser } from "./authStore";
 import { adminSetSubscription,listAdminUsers,listTeacherRequests,reviewTeacherRequest,type AdminUser,type SubscriptionPlan,type TeacherRequest } from "./accountRoleStore";
-import { listAdminBoards,type AdminBoardSummary,type BoardSummary } from "./boardStore";
+import { listAdminBoards,listAdminUserWorkspace,type AdminBoardSummary,type BoardSummary } from "./boardStore";
 
 type Props={user:AuthUser;onBack:()=>void;onOpenBoard:(board:BoardSummary)=>void;invisible:boolean;onInvisibleChange:(value:boolean)=>void};
 const fmt=(x:string|null,withTime=false)=>x?new Intl.DateTimeFormat("ru-RU",withTime?{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}:{day:"2-digit",month:"long",year:"numeric"}).format(new Date(x)):"—";
@@ -13,12 +13,15 @@ export default function AdminScreen({user,onBack,onOpenBoard,invisible,onInvisib
  const [users,setUsers]=useState<AdminUser[]>([]),[requests,setRequests]=useState<TeacherRequest[]>([]),[boards,setBoards]=useState<AdminBoardSummary[]>([]);
  const [busy,setBusy]=useState(""),[notice,setNotice]=useState(""),[query,setQuery]=useState("");
  const [previewUserId,setPreviewUserId]=useState<string|null>(null);
+ const [workspaceBoards,setWorkspaceBoards]=useState<AdminBoardSummary[]>([]);
+ const [workspaceLoading,setWorkspaceLoading]=useState(false);
  const [drafts,setDrafts]=useState<Record<string,{plan:SubscriptionPlan;until:string}>>({});
  const load=async()=>{try{const [u,r,b]=await Promise.all([listAdminUsers(),listTeacherRequests(),listAdminBoards()]);setUsers(u);setRequests(r);setBoards(b);setDrafts(current=>{const next={...current};for(const x of u)if(!next[x.userId])next[x.userId]={plan:x.subscriptionPlan,until:x.subscriptionUntil?.slice(0,10)??isoDate(30)};return next})}catch(e){setNotice(e instanceof Error?e.message:"Не удалось загрузить данные администратора")}};
  useEffect(()=>{void load()},[]);
  const filtered=useMemo(()=>{const q=query.trim().toLocaleLowerCase("ru");return !q?users:users.filter(x=>`${x.name} ${x.email}`.toLocaleLowerCase("ru").includes(q))},[users,query]);
  const previewUser=users.find(x=>x.userId===previewUserId);
- const previewBoards=useMemo(()=>boards.filter(x=>x.ownerId===previewUserId),[boards,previewUserId]);
+ const previewBoards=workspaceBoards;
+ const openWorkspace=async(userId:string)=>{setPreviewUserId(userId);setWorkspaceBoards([]);setWorkspaceLoading(true);try{setWorkspaceBoards(await listAdminUserWorkspace(userId))}catch(e){setNotice(e instanceof Error?e.message:"Не удалось получить рабочее пространство")}finally{setWorkspaceLoading(false)}};
  const filteredBoards=useMemo(()=>{const q=query.trim().toLocaleLowerCase("ru");return !q?boards:boards.filter(x=>`${x.title} ${x.ownerName} ${x.ownerEmail}`.toLocaleLowerCase("ru").includes(q))},[boards,query]);
  const review=async(id:string,approve:boolean)=>{setBusy(id);try{await reviewTeacherRequest(id,approve);setNotice(approve?"Преподаватель одобрен":"Доступ преподавателя отозван");await load()}catch(e){setNotice(e instanceof Error?e.message:"Не удалось изменить доступ")}finally{setBusy("")}};
  const grant=async(x:AdminUser)=>{const draft=drafts[x.userId]??{plan:x.subscriptionPlan,until:isoDate(30)};setBusy(x.userId);try{await adminSetSubscription(x.userId,draft.plan,draft.plan==="free"?null:new Date(`${draft.until}T23:59:59`).toISOString());setNotice(draft.plan==="free"?`Тариф ${x.name} сброшен на бесплатный`:`${PLAN_LABEL[draft.plan]} выдан пользователю ${x.name}`);await load()}catch(e){setNotice(e instanceof Error?e.message:"Не удалось изменить тариф")}finally{setBusy("")}};
@@ -32,14 +35,14 @@ export default function AdminScreen({user,onBack,onOpenBoard,invisible,onInvisib
     <div className="admin-users-toolbar"><div><h2>Пользователи</h2><span>Тариф можно выдать вручную. Для диагностики доступно административное редактирование реальных досок пользователя. Пароли пользователей не отображаются.</span></div><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Поиск по имени или email"/></div>
     <div className="admin-users-list">{filtered.map(x=>{const draft=drafts[x.userId]??{plan:x.subscriptionPlan,until:x.subscriptionUntil?.slice(0,10)??isoDate(30)};const active=x.subscriptionPlan!=="free"&&(!x.subscriptionUntil||new Date(x.subscriptionUntil)>new Date());return <article className="admin-user-card" key={x.userId}>
       <div className="admin-user-main"><div className="admin-user-avatar">{(x.name||x.email||"?").slice(0,1).toUpperCase()}</div><div><strong>{x.name}</strong><span>{x.email}</span><small>{x.isAdmin?"Администратор":x.role==="teacher"?"Преподаватель":"Ученик"}{x.createdAt?` · с ${fmt(x.createdAt)}`:""}</small></div></div>
-      <div className="admin-user-current"><span>Тестирование</span><button type="button" className="boards-secondary" disabled={busy===x.userId||x.isAdmin} onClick={()=>setPreviewUserId(x.userId)}>Рабочее пространство</button><small>Администратор · редактирование с журналом изменений</small></div>
+      <div className="admin-user-current"><span>Тестирование</span><button type="button" className="boards-secondary" disabled={busy===x.userId||x.isAdmin} onClick={()=>void openWorkspace(x.userId)}>Рабочее пространство</button><small>Администратор · редактирование с журналом изменений</small></div>
       <div className="admin-user-current"><span>Текущий тариф</span><strong className={`admin-plan admin-plan-${x.subscriptionPlan}`}>{PLAN_LABEL[x.subscriptionPlan]}</strong><small>{x.subscriptionPlan==="free"?"Без подписки":active?`до ${fmt(x.subscriptionUntil)}`:`истёк ${fmt(x.subscriptionUntil)}`}</small></div>
       <div className="admin-user-grant"><label>Выдать тариф<select value={draft.plan} onChange={e=>setDrafts(v=>({...v,[x.userId]:{...draft,plan:e.target.value as SubscriptionPlan}}))}><option value="free">Бесплатный</option><option value="teacher">Teacher</option><option value="pro">PRO</option></select></label><label>До даты<input type="date" disabled={draft.plan==="free"} value={draft.until} min={new Date().toISOString().slice(0,10)} onChange={e=>setDrafts(v=>({...v,[x.userId]:{...draft,until:e.target.value}}))}/></label><div className="admin-duration-buttons"><button type="button" disabled={draft.plan==="free"} onClick={()=>setDrafts(v=>({...v,[x.userId]:{...draft,until:isoDate(30)}}))}>30 дн.</button><button type="button" disabled={draft.plan==="free"} onClick={()=>setDrafts(v=>({...v,[x.userId]:{...draft,until:isoDate(90)}}))}>90 дн.</button><button type="button" disabled={draft.plan==="free"} onClick={()=>setDrafts(v=>({...v,[x.userId]:{...draft,until:isoDate(365)}}))}>Год</button></div><button className="students-primary admin-grant-button" disabled={busy===x.userId||(!draft.until&&draft.plan!=="free")} onClick={()=>void grant(x)}>{busy===x.userId?"Сохраняем…":draft.plan==="free"?"Сбросить тариф":"Выдать"}</button></div>
     </article>})}</div>
     {previewUser&&<section className="admin-board-list" aria-label="Тестовый просмотр аккаунта" style={{padding:"16px",border:"1px solid var(--border, #c6cad3)",borderRadius:12,marginTop:14}}>
       <div className="admin-approval-head"><h2>Рабочее пространство: {previewUser.name}</h2><button type="button" className="boards-secondary" onClick={()=>setPreviewUserId(null)}>Закрыть</button></div>
       <p>Доски открываются с правами администратора, без входа под паролем пользователя. Изменения сохраняются от вашего имени и записываются в журнал. Перед редактированием примените серверную миграцию v246.</p>
-      {previewBoards.length===0?<div className="boards-empty">Собственных досок нет. Доски, куда пользователь приглашён, здесь не показаны.</div>:
+      {workspaceLoading?<div className="boards-empty">Загрузка досок…</div>:previewBoards.length===0?<div className="boards-empty">Доступных досок нет.</div>:
         previewBoards.map(board=><article className="admin-board-card" key={board.id}><div className="admin-board-main"><div className="admin-board-icon">▣</div><div><strong>{board.title}</strong><span>Владелец: {previewUser.name}</span><small>Обновлена {fmt(board.updatedAt,true)}</small></div></div><button type="button" className="students-primary" onClick={()=>onOpenBoard(board)}>Открыть редактор</button></article>)}
      </section>}
         {filtered.length===0&&<div className="boards-empty"><strong>Пользователи не найдены</strong><span>Измени строку поиска.</span></div>}
