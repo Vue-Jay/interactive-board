@@ -11,7 +11,6 @@ import {
 } from "react";
 import "./App.css";
 import AuthScreen from "./AuthScreen";
-import GeometryInstruments from "./GeometryInstruments";
 import BoardsScreen from "./BoardsScreen";
 const StudentsScreen = lazy(() => import("./StudentsScreen"));
 const AssignmentsScreen = lazy(() => import("./AssignmentsScreen"));
@@ -58,7 +57,6 @@ import {
   type Item,
   type DocumentData,
 } from "./boardModel";
-
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
 import { getBoardHistoryVersion, listBoardHistory, type BoardHistoryEntry } from "./historyStore";
 import { createBoardComment, listBoardComments, listBoardCommentParticipants, setBoardCommentResolved, type BoardCommentParticipant, type BoardCommentThread } from "./commentThreadsStore";
@@ -1329,6 +1327,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const viewControlChannel = useRef<BoardViewControlChannel | null>(null);
   const [followTeacher] = useState(false);
   const followTeacherRef = useRef(false);
+  const [guidedFollow, setGuidedFollow] = useState(false);
+  const guidedFollowRef = useRef(false);
   const teacherViewBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [remoteWork, setRemoteWork] = useState<Record<string, RemoteWorkState>>({});
   const workChannel = useRef<BoardWorkChannel | null>(null);
@@ -2472,36 +2472,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     }
     const id = target.closest<HTMLElement>("[data-object]")?.dataset.object;
     const hit = itemsRef.current.find((i) => i.id === id);
-    // Formula touch manipulation has its own direct drag path. Text spans and
-    // nested fraction glyphs must not defer to browser text-selection gestures.
-    if (hit?.kind === "formula" && (e.pointerType === "touch" || e.pointerType === "pen") &&
-        (tool === "select" || tool === "hand") && !space && canEdit &&
-        !hit.locked && !structurallyLockedForStudent(hit) &&
-        !target.closest("[data-transform-handle]")) {
-      const family = familyIdsFor(hit);
-      const movableIds = family.filter((member) => {
-        const candidate = itemsRef.current.find((item) => item.id === member);
-        return !!candidate && !candidate.locked && !structurallyLockedForStudent(candidate);
-      });
-      if (movableIds.length) {
-        e.preventDefault();
-        e.stopPropagation();
-        setSelected(family);
-        gesture.current = {
-          pointer: e.pointerId,
-          mode: "drag",
-          start,
-          view,
-          before: itemsRef.current.map(deepItem),
-          ids: movableIds,
-          path: [p],
-          additive: false,
-          dragging: true,
-        };
-        board.current?.setPointerCapture(e.pointerId);
-        return;
-      }
-    }
     if (e.pointerType === "touch" && hit?.kind === "image" && (tool === "select" || tool === "hand") && !space && !hit.locked) {
       const now = performance.now();
       const previousTap = imageTapRef.current;
@@ -2805,8 +2775,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if (mode === "erase") display(eraseInk(gesture.current.before, gesture.current.path, eraserSize / 2 / view.zoom));
     // Desktop mouse drag keeps double-click semantics. Touch must be captured immediately,
     // otherwise Android may retarget/cancel the pointer before selection drag starts.
-    if (e.pointerType === "touch" || e.pointerType === "pen") { e.preventDefault(); e.stopPropagation(); }
-    if (mode !== "drag" || e.pointerType === "touch" || e.pointerType === "pen") board.current!.setPointerCapture(e.pointerId);
+    if (mode !== "drag" || e.pointerType === "touch") board.current!.setPointerCapture(e.pointerId);
   };
   const scheduleGesturePaint = () => {
     if (gesturePaintFrame.current != null) return;
@@ -2972,9 +2941,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       scheduleGesturePaint();
     } else if (g.mode === "erase") {
       const point = world(p), last = g.path[g.path.length - 1];
-      if (Math.hypot(point.x-last.x,point.y-last.y)*view.zoom < 2) return;
+      if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 2) return;
       g.path.push(point);
-      display(eraseInk(g.before,g.path,eraserSize/2/view.zoom));
+      display(eraseInk(g.before, g.path, eraserSize / 2 / view.zoom));
     } else {
       const point = world(p),
         last = g.path[g.path.length - 1];
@@ -3798,7 +3767,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const saveGraphEditor=()=>{if(!graphEditorId||!graphDraft){closeGraphEditor();return} const d={...graphDraft,xMin:Math.min(graphDraft.xMin,graphDraft.xMax-1),xMax:Math.max(graphDraft.xMax,graphDraft.xMin+1),yMin:Math.min(graphDraft.yMin,graphDraft.yMax-1),yMax:Math.max(graphDraft.yMax,graphDraft.yMin+1)}; commit(itemsRef.current.map(item=>item.id===graphEditorId?{...item,graphType:d.type,graphExpression:d.expression,graphConnectPoints:d.connectPoints,graphA:d.a,graphB:d.b,graphC:d.c,graphXMin:d.xMin,graphXMax:d.xMax,graphYMin:d.yMin,graphYMax:d.yMax,graphGrid:d.grid,graphPoints:d.points,graphShowLabels:d.showLabels,graphSnap:d.snap,graphAxisLabels:d.axisLabels,graphGridStep:d.gridStep,graphShowCurve:d.showCurve,graphProjections:d.projections,graphSegments:d.segments,graphAngles:d.angles,graphCircles:d.circles,graphPolygons:d.polygons,graphMidpoints:d.midpoints}:item)); closeGraphEditor(); setNotice("График сохранён")};
 
   const openFormulaEditor = (item: Item) => {
-    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "formula" || item.locked) return;
     if (editing) finishEdit();
     setSelected([item.id]);
@@ -3948,7 +3916,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const openChecklistEditor = (item: Item) => {
-    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "checklist" || item.locked) return;
     const entries = item.checklistItems?.length ? [...item.checklistItems] : ["Новый пункт"];
     const done = entries.map((_, index) => item.checklistDone?.[index] === true);
@@ -3981,7 +3948,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   });
 
   const openQuizEditor = (item: Item) => {
-    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "quiz" || item.locked) return;
     const options = item.quizOptions?.length ? [...item.quizOptions] : ["Вариант 1", "Вариант 2"];
     setSelected([item.id]);
@@ -4037,7 +4003,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   };
 
   const openFlashcardEditor = (item: Item) => {
-    if (!canEdit || structurallyLockedForStudent(item)) return;
     if (item.kind !== "flashcard" || item.locked) return;
     setSelected([item.id]);
     setFlashcardEditorId(item.id);
@@ -4650,7 +4615,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         setNotice(`${command.senderName} переместил вас к своей области доски`);
       },
       (_teacherView) => { /* Continuous following removed; one-time focus remains supported. */ },
-      (_guided) => { /* Deprecated follow broadcasts are ignored. */ },
+      (guided) => {
+        guidedFollowRef.current = guided.enabled;
+        setGuidedFollow(guided.enabled);
+        setNotice(guided.enabled
+          ? `${guided.senderName} включил режим общего следования`
+          : `${guided.senderName} выключил режим общего следования`);
+      },
     );
 
     viewControlChannel.current = channel;
@@ -4792,7 +4763,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       {lessonPanelOpen && liveLesson && <aside className="lesson-control-panel">
         <div className="lesson-control-head"><div><span className="live-lesson-dot"/><div><b>Идёт урок</b><small>{lessonTime}</small></div></div><button onClick={()=>setLessonPanelOpen(false)}>×</button></div>
         <div className="lesson-control-student"><span className="presence-avatar">{liveLesson.studentName.charAt(0).toUpperCase()}</span><div><strong>{liveLesson.studentName}</strong><small>{liveLesson.topic||"Тема не указана"}</small></div></div>
-        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span></div><div className="lesson-control-grid">
+        <div className="lesson-control-status"><span><b>{lessonTime}</b>время урока</span><span><b>{visiblePresenceUsers.length}</b>на доске</span><span><b>{guidedFollow?"Включено":"Выключено"}</b>ведение экрана</span></div><div className="lesson-control-grid">
           <button onClick={()=>{const rect=board.current?.getBoundingClientRect();if(!rect)return;const center=world({x:rect.width/2,y:rect.height/2});viewControlChannel.current?.sendFocus(liveLesson.studentId,center.x,center.y,view.zoom);setNotice("Экран ученика перемещён к вам")}}>◎<span>Ко мне</span></button>
 
           <button onClick={()=>{setPresentation(true);setPresentationFrameIndex(0);setPresentationSlidesOpen(false);setLessonPanelOpen(false)}}>▶<span>Презентация</span></button>
@@ -4848,6 +4819,30 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             <div className="presence-popover">
               <div className="presence-popover-head">
                 <strong>Сейчас на доске</strong>
+                {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
+                  type="button"
+                  className={`presence-gather-button ${guidedFollow ? "active" : ""}`}
+                  title={guidedFollow ? "Отключить обязательное следование участников" : "Включить следование всех участников за преподавателем"}
+                  onClick={() => {
+                    const next = !guidedFollow;
+                    guidedFollowRef.current = next;
+                    setGuidedFollow(next);
+                    viewControlChannel.current?.sendGuidedFollow(next);
+
+                    const rect = board.current?.getBoundingClientRect();
+                    if (next && rect) {
+                      const center = world({ x: rect.width / 2, y: rect.height / 2 });
+                      const targets = visiblePresenceUsers.filter((user) => user.userId !== authUser.id);
+                      for (const user of targets) {
+                        viewControlChannel.current?.sendFocus(user.userId, center.x, center.y, view.zoom);
+                      }
+                    }
+
+                    setNotice(next ? "Все участники следуют за вами" : "Общее следование отключено");
+                  }}
+                >
+                  {guidedFollow ? "Все следуют" : "Вести всех"}
+                </button>}
                 {boardSummary.role === "owner" && visiblePresenceUsers.some((user) => user.userId !== authUser.id) && <button
                   type="button"
                   className="presence-gather-button"
@@ -5286,7 +5281,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
         )}
         
-        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={()=>saveGraphEditor()}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={()=>saveGraphEditor()}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} aria-label="Цвет точки" onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)} onRemovePoint={(index)=>setGraphDraft(current=>current?{...current,points:current.points.filter((_,i)=>i!==index)}:current)}/><span className="graph-preview-hint">Двойное нажатие: пустое место — добавить точку, точка — удалить</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
+        {graphEditorId && graphDraft && (<div className="graph-editor-backdrop" onPointerDown={closeGraphEditor}><div className="graph-editor-modal compact-editor" role="dialog" aria-modal="true" onPointerDown={e=>e.stopPropagation()}><div className="graph-editor-header"><div><strong>График и координатная плоскость</strong><span>Пустое поле функции = только система координат</span></div><button onClick={closeGraphEditor}><Icon name="close" size={17}/></button></div><div className="graph-editor-body"><div className="graph-editor-form"><label><span>Функция</span><input value={graphDraft.expression} onChange={e=>setGraphDraft({...graphDraft,expression:e.target.value})} placeholder="Например: x^2 - 4*x + 3"/></label><small>Поддерживаются + − × ÷ ^, скобки, sin, cos, tan, sqrt, abs, exp, ln, log.</small><div className="graph-ranges"><label>X min<input type="number" value={graphDraft.xMin} onChange={e=>setGraphDraft({...graphDraft,xMin:Number(e.target.value)})}/></label><label>X max<input type="number" value={graphDraft.xMax} onChange={e=>setGraphDraft({...graphDraft,xMax:Number(e.target.value)})}/></label><label>Y min<input type="number" value={graphDraft.yMin} onChange={e=>setGraphDraft({...graphDraft,yMin:Number(e.target.value)})}/></label><label>Y max<input type="number" value={graphDraft.yMax} onChange={e=>setGraphDraft({...graphDraft,yMax:Number(e.target.value)})}/></label></div><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.grid} onChange={e=>setGraphDraft({...graphDraft,grid:e.target.checked})}/> Сетка</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.axisLabels} onChange={e=>setGraphDraft({...graphDraft,axisLabels:e.target.checked})}/> Числа на осях</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.snap} onChange={e=>setGraphDraft({...graphDraft,snap:e.target.checked})}/> Привязка точек к сетке</label><label className="graph-grid-toggle"><input type="checkbox" checked={graphDraft.connectPoints} onChange={e=>setGraphDraft({...graphDraft,connectPoints:e.target.checked})}/> Соединять точки линией</label><label><span>Шаг сетки</span><select value={graphDraft.gridStep} onChange={e=>setGraphDraft({...graphDraft,gridStep:Number(e.target.value)})}><option value={0.5}>0,5</option><option value={1}>1</option><option value={2}>2</option><option value={5}>5</option></select></label><div className="graph-points-head"><strong>Точки</strong><button type="button" onClick={()=>setGraphDraft({...graphDraft,points:[...graphDraft.points,{x:0,y:0,label:"",color:"#111111"}]})}>+ Точка</button></div>{graphDraft.points.map((p,i)=><div className="graph-point-editor" key={i}><input type="number" step="0.5" value={p.x} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,x:Number(e.target.value)}:q)})}/><input type="number" step="0.5" value={p.y} onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,y:Number(e.target.value)}:q)})}/><input className="graph-point-color" type="color" value={p.color??"#111111"} aria-label="Цвет точки" onChange={e=>setGraphDraft({...graphDraft,points:graphDraft.points.map((q,j)=>j===i?{...q,color:e.target.value}:q)})}/><button onClick={()=>setGraphDraft({...graphDraft,points:graphDraft.points.filter((_,j)=>j!==i)})}>×</button></div>)}</div><div className="graph-editor-preview"><GraphView item={{id:"preview",kind:"graph",x:0,y:0,width:600,height:360,text:"",graphExpression:graphDraft.expression,graphConnectPoints:graphDraft.connectPoints,graphXMin:graphDraft.xMin,graphXMax:graphDraft.xMax,graphYMin:graphDraft.yMin,graphYMax:graphDraft.yMax,graphGrid:graphDraft.grid,graphPoints:graphDraft.points,graphShowLabels:graphDraft.showLabels,graphSnap:graphDraft.snap,graphAxisLabels:graphDraft.axisLabels,graphGridStep:graphDraft.gridStep}} onPointMove={(i,x,y)=>setGraphDraft(current=>current?{...current,points:current.points.map((p,j)=>j===i?{...p,x,y}:p)}:current)} onAddPoint={(x,y)=>setGraphDraft(current=>current?{...current,points:[...current.points,{x,y,label:"",color:"#111111"}]}:current)} onRemovePoint={(index)=>setGraphDraft(current=>current?{...current,points:current.points.filter((_,i)=>i!==index)}:current)}/><span className="graph-preview-hint">Двойное нажатие: пустое место — добавить точку, точка — удалить</span></div></div><div className="graph-editor-footer"><span>{graphDraft.expression.trim()?"Функция будет построена":"Будет сохранена пустая система координат"}</span><div><button className="secondary" onClick={closeGraphEditor}>Отмена</button><button className="primary" onClick={saveGraphEditor}>Сохранить</button></div></div></div></div>)}
         {formulaEditorId && formulaDraft && (
           <div
             className="formula-editor-backdrop"
@@ -5400,7 +5395,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                 <span>{formulaDraft.text.length} / 10000</span>
                 <div>
                   <button className="secondary" onClick={() => void pasteFormulaSource()}>Вставить из буфера</button><button className="secondary" onClick={() => void copyFormulaSource()}><Icon name="copy" size={15}/> Копировать запись</button>
-                  <button className="secondary" onClick={() => closeFormulaEditor()}>Отмена</button>
+                  <button className="secondary" onClick={closeFormulaEditor}>Отмена</button>
                   <button className="primary" onClick={saveFormulaEditor}><Icon name="check" size={15}/> Сохранить</button>
                 </div>
               </div>
@@ -5561,7 +5556,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               className="edit-selected"
               onClick={() => {
                 const item = itemsRef.current.find((i) => i.id === selected[0]);
-                if (!item || !canEdit || structurallyLockedForStudent(item)) return;
+                if (!item) return;
                 if (item.kind === "table") openTableEditor(item); else if (item.kind === "formula") openFormulaEditor(item); else if (item.kind === "checklist") openChecklistEditor(item); else if (item.kind === "quiz") openQuizEditor(item); else if (item.kind === "flashcard") openFlashcardEditor(item); else startEdit(item);
               }}
             >
@@ -5633,11 +5628,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         )}
 <nav className="mobile-board-tools" aria-label="Основные инструменты">
           <div className="mobile-tool-cluster mobile-tool-cluster-navigation" aria-label="Навигация">
-            {mobileDockTools.slice(0,3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
+            {mobileDockTools.slice(0,3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} />}</div>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
@@ -5645,21 +5640,21 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         {mobileToolsOpen&&<section className="mobile-tools-sheet" aria-label="Все инструменты">
           <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions">{!isStudent&&<button type="button" onClick={()=>{setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}} aria-label="AI-помощник" title="AI-помощник"><Icon name="robot" size={18}/></button>}<button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
-            {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
+            {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
           </div>
         </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
           <div className="toolbar-pinned" aria-label="Навигация: выбор, рука, петля">
-            {(["select","hand","lasso"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
+            {(["select","hand","lasso"] as Tool[]).map((id)=>{const t=tools.find(x=>x.id===id)!;return <button key={id} aria-label={t.label} title={t.label} className={`tool-button ${tool===id?"active":""}`} onClick={()=>{finishEdit();setTool(id);setMobileToolsOpen(false)}}><span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[id]}</span></button>})}
           </div>
           <span className="toolbar-section-line" aria-hidden="true"/>
           <div className="toolbar-list">
             {tools.filter((t)=>t.id!=="select"&&t.id!=="hand"&&t.id!=="lasso"&&toolAllowedForRole(t.id)).map((t)=>{
               const secondary=!primaryDesktopTools.has(t.id);
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
-                <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();if(t.id==="eraser")setSpace(false);setTool(t.id);setMobileToolsOpen(false)}}>
+                <button aria-label={t.label} title={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();setTool(t.id);setMobileToolsOpen(false)}}>
                   <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
-                </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+                </button>{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
             })}
           </div>
@@ -5826,7 +5821,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                         : "#fff",
                 }}
                 onDoubleClick={() => {
-                  if (!canEdit || structurallyLockedForStudent(item)) return;
                   const remoteEditor = remoteEditorFor(item.id);
                   if (remoteEditor) {
                     setNotice(`${remoteEditor.name} уже редактирует этот объект`);

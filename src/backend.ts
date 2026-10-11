@@ -121,7 +121,7 @@ const normalizeSession = (data: any): BackendSession => ({
 });
 
 export const signUpRemote = async (email: string, password: string, name: string) => {
-  const response = await fetchWithTimeout(`${url}/auth/v1/signup?redirect_to=${encodeURIComponent(`${window.location.origin}/?email_confirmation=1`)}`, {
+  const response = await fetchWithTimeout(`${url}/auth/v1/signup?redirect_to=${encodeURIComponent(`${window.location.origin}/auth/confirmed`)}`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ email, password, data: { display_name: name } }),
