@@ -36,7 +36,7 @@ if (!root) {
   throw new Error("Не найден корневой элемент #root");
 }
 
-const isConfirmationPage = window.location.pathname === "/auth/confirmed";
+const isConfirmationPage = window.location.pathname === "/auth/confirmed" || new URLSearchParams(window.location.search).get("email_confirmation") === "1";
 const confirmParams = new URLSearchParams(window.location.search);
 const confirmHash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 const confirmationError = confirmParams.get("error_description") || confirmHash.get("error_description");
