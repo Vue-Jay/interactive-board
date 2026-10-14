@@ -6142,6 +6142,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else end(true); }}
         >
           <div className="remote-cursors-layer" aria-hidden="true">
+            <svg className="remote-live-ink-layer" width="100%" height="100%" style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+              {Object.values(remoteInk).filter(ink => !items.some(item => item.id === ink.id)).map(ink => (
+                ink.points.length === 1
+                  ? <circle key={ink.userId} cx={ink.points[0].x*view.zoom+view.x} cy={ink.points[0].y*view.zoom+view.y} r={Math.max(0.5,ink.weight*view.zoom/2)} fill={ink.color} opacity={ink.kind==="marker"?0.32:1}/>
+                  : <polyline key={ink.userId} points={ink.points.map(point => `${point.x*view.zoom+view.x},${point.y*view.zoom+view.y}`).join(" ")} fill="none" stroke={ink.color} strokeWidth={ink.weight*view.zoom} strokeLinecap="round" strokeLinejoin="round" opacity={ink.kind==="marker"?0.32:1}/>
+              ))}
+            </svg>
             {Object.values(remoteCursors).map((cursor) => <div
               className="remote-cursor"
               key={cursor.userId}
@@ -6317,11 +6324,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               </div>
               );
             })}
-            {Object.values(remoteInk).filter(ink => !items.some(item => item.id === ink.id)).map(ink => (
-              <div key={ink.userId} className={`gesture-preview preview-${ink.kind}`} style={{left:0,top:0,width:1,height:1,pointerEvents:"none"}}>
-                <Ink item={liveStroke(ink.id,ink.kind,ink.points,ink.color,ink.weight)}/>
-              </div>
-            ))}
             {preview && (
               <div
                 className={`gesture-preview preview-${preview.kind}`}
