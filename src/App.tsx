@@ -3092,7 +3092,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       if (!active) return;
       if (active.mode === "draw" && active.ink) {
         setPreview(liveStroke(active.ink.id, active.ink.kind, active.path, active.ink.color, active.ink.weight));
-        cursorChannel.current?.sendInk({id:active.ink.id,kind:active.ink.kind,color:active.ink.color,weight:active.ink.weight,points:active.path.slice(-500),finished:false});
+        // Network ink is sent directly in pointer-move, not as a side effect of painting.
       } else if (active.mode === "lasso") {
         setPath([...active.path]);
       } else if (active.mode === "connector") {
@@ -3252,6 +3252,14 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       if (Math.hypot(point.x - last.x, point.y - last.y) * view.zoom < 3)
         return;
       g.path.push(point);
+      // Publish directly from the pointer stream, independently of cursor visibility
+      // and React preview paint scheduling (including invisible admin sessions).
+      if (g.mode === "draw" && g.ink) {
+        cursorChannel.current?.sendInk({
+          id: g.ink.id, kind: g.ink.kind, color: g.ink.color,
+          weight: g.ink.weight, points: g.path.slice(-500), finished: false,
+        });
+      }
       scheduleGesturePaint();
     }
   };
