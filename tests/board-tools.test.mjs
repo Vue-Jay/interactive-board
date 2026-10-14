@@ -70,17 +70,19 @@ test("eraser has dedicated capture listeners and keeps tool registry",()=>{
  assert.ok(app.includes('onPointerDownCapture='));
  assert.ok(app.includes('onPointerMoveCapture='));
  assert.ok(app.includes('onPointerUpCapture='));
- assert.ok(app.includes('eraseInkAt(before,g.last,p'));
+ assert.ok(app.includes('beginEraserPreview();'));
+ assert.ok(app.includes('previewEraserSegment(previous,screen)'));
 });
 
-test("eraser movement uses frame batching instead of global connector updates",()=>{
+test("eraser draws a lightweight canvas preview and commits once at gesture end",()=>{
  const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
- assert.ok(app.includes("const advanceEraser=(point:Point)=>"));
- assert.ok(app.includes("if(next!==before){g.dirty=true;displayErasedInk(next);}"));
- assert.ok(app.includes("eraserPendingPoint.current=world(local(e.clientX,e.clientY))"));
- assert.ok(app.includes("requestAnimationFrame(()=>"));
- assert.ok(app.includes("if(dirty)commit(itemsRef.current)"));
- assert.ok(app.includes("setLiveEraserCursor(cursor.x,cursor.y)"));
+ assert.ok(app.includes("const beginEraserPreview=()=>"));
+ assert.ok(app.includes("const previewEraserSegment=(from:Point,to:Point)=>"));
+ assert.ok(app.includes("const recordEraserPoint=(point:Point)=>"));
+ assert.ok(app.includes("const finishEraser=(point:Point|null)=>"));
+ assert.ok(app.includes("const next=eraseInkAlongPath(before,g.path,eraserSize/2/g.zoom)"));
+ assert.ok(app.includes("commit(next);"));
+ assert.ok(app.includes("stopEraserPreview();"));
 });
 
 test("eraser hover does not render the entire board or broadcast cursor each mouse event",()=>{
@@ -95,6 +97,8 @@ test("eraser hover does not render the entire board or broadcast cursor each mou
 test("autosave waits until eraser stroke ends and only commits once",()=>{
  const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
  assert.ok(app.includes("if (saveBlocked || gesture.current || eraserSession.current) return;"));
- assert.ok(app.includes("if(dirty)commit(itemsRef.current)"));
+ assert.ok(app.includes("const next=eraseInkAlongPath(before,g.path,eraserSize/2/g.zoom)"));
+ assert.ok(app.includes("commit(next);"));
+ assert.ok(app.includes("stopEraserPreview();"));
  assert.ok(app.includes("eraserSession.current=null;"));
 });
