@@ -1338,17 +1338,6 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visiblePresenceUsers = useMemo(() => adminHidden ? presenceUsers.filter((user) => user.userId !== authUser.id) : presenceUsers, [presenceUsers, adminHidden, authUser.id]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const [remoteInk, setRemoteInk] = useState<Record<string, LiveInkMessage>>({});
-  useEffect(() => {
-    // Remove an overlay only after its permanent item has appeared, avoiding flicker.
-    const persistedIds = new Set(items.map(item => item.id));
-    setRemoteInk(current => {
-      const stale = Object.keys(current).filter(id => persistedIds.has(id));
-      if (!stale.length) return current;
-      const next = {...current};
-      for (const id of stale) delete next[id];
-      return next;
-    });
-  }, [items]);
   const [inkDiagnostics, setInkDiagnostics] = useState("подключается");
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
@@ -1505,6 +1494,18 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const viewSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewSerialized = useRef<string | null>(null);
   const [items, setItems] = useState<Item[]>(() => expandDocumentInk(initial.data));
+  useEffect(() => {
+    // Remove an overlay only after its permanent item has appeared, avoiding flicker.
+    const persistedIds = new Set(items.map(item => item.id));
+    setRemoteInk(current => {
+      const stale = Object.keys(current).filter(id => persistedIds.has(id));
+      if (!stale.length) return current;
+      const next = {...current};
+      for (const id of stale) delete next[id];
+      return next;
+    });
+  }, [items]);
+
   const itemsRef = useRef(items);
   const eraserSession = useRef<{pointer:number;last:Point;zoom:number;path:Point[]}|null>(null);
   const eraserPreviewCanvas=useRef<HTMLCanvasElement>(null);
