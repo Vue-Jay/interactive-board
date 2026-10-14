@@ -1626,7 +1626,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       const recent=recentBoardHistory(rows,5);
       setRecentChanges(recent);
       setRecentNewCount(previousVersion===null?0:changesSinceLastVisit(rows,previousVersion,20).length);
-      setRecentChangesOpen(recent.length>0);
+      setRecentChangesOpen(false);
     }).catch(()=>{/* The full history remains available manually. */});
     return()=>{active=false};
   },[boardSummary.id,historyVisitKey]);
@@ -1824,7 +1824,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     // The debounced flush performs both operations once after editing settles.
     setSaveStatus("Сохранение…");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 550);
+    saveTimer.current = setTimeout(flushSave, 220);
   }, [
     items,
     title,
