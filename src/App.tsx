@@ -4985,6 +4985,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         }), 15000);
       },
       setInkDiagnostics,
+      true, // Drawings remain collaborative even when the admin hides their presence.
     );
     cursorChannel.current = channel;
     return () => {
