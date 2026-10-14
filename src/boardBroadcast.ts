@@ -27,6 +27,7 @@ export function connectBoardCursorChannel(
   onCursor: (cursor: RemoteCursor) => void,
   publishSelf = true,
   onInk?: (ink: LiveInkMessage) => void,
+  onDiagnostics?: (status: string) => void,
 ): BoardCursorChannel {
   if (!isRemoteBackendEnabled()) {
     return { sendCursor: () => {}, sendInk: () => {}, close: () => {} };
@@ -50,6 +51,9 @@ export function connectBoardCursorChannel(
   let lastSentAt = 0;
 
   const topic = `realtime:board-cursors:${boardId}`;
+  let sentInkCount = 0;
+  let receivedInkCount = 0;
+  const report = (status: string) => onDiagnostics?.(`${status} · отправлено ${sentInkCount} · получено ${receivedInkCount}`);
   const minInterval = 45;
   let lastInkSent = 0;
   let pendingInk: Omit<LiveInkMessage, "userId"> | null = null;
@@ -58,7 +62,7 @@ export function connectBoardCursorChannel(
     clearTimeout(inkTimer); inkTimer = undefined;
     if (!ready || !pendingInk) return;
     const ink = pendingInk; pendingInk = null;
-    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}})) lastInkSent = Date.now();
+    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}})) { lastInkSent = Date.now(); sentInkCount++; if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
     else pendingInk = ink;
   };
 
@@ -126,6 +130,7 @@ export function connectBoardCursorChannel(
     flushTimer = undefined;
     pendingHeartbeat = null;
     ready = false;
+    report("отключено");
 
     if (socket) {
       socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
@@ -151,6 +156,7 @@ export function connectBoardCursorChannel(
     if (stopped) return;
 
     const current = ++generation;
+    report("подключается");
 
     try {
       const session = await getRemoteSession();
@@ -277,6 +283,7 @@ export function connectBoardCursorChannel(
             message.event === "phx_close" ||
             (message.event === "phx_reply" && message.payload?.status === "error")
           ) {
+            report("ошибка канала");
             reconnect();
             return;
           }
@@ -289,6 +296,7 @@ export function connectBoardCursorChannel(
             clearTimeout(deadline);
             attempt = 0;
             ready = true;
+            report("подключено");
 
             if (latest) flush();
             if (pendingInk) sendInkNow();
@@ -301,6 +309,8 @@ export function connectBoardCursorChannel(
                 typeof p.id !== "string" || !["pen","marker"].includes(p.kind) ||
                 !Array.isArray(p.points) || p.points.length > 500 ||
                 p.points.some((pt: {x:number;y:number}) => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.y))) return;
+            receivedInkCount++;
+            if(receivedInkCount===1 || receivedInkCount%25===0) report("подключено");
             onInk?.({userId:p.userId,id:p.id,kind:p.kind,color:typeof p.color === "string" ? p.color : "#222222",weight:Number.isFinite(p.weight)?p.weight:3,points:p.points,finished:p.finished === true});
             return;
           }
