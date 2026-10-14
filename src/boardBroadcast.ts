@@ -60,11 +60,13 @@ export function connectBoardCursorChannel(
 
   const topic = `realtime:board-cursors:${boardId}`;
   let sentInkCount = 0;
+  let attemptedInkCount = 0;
+  let blockedInkCount = 0;
   let receivedInkCount = 0;
   let echoInkCount = 0;
   let acknowledged = 0;
   const pendingAcks = new Set<string>();
-  const report = (status: string) => onDiagnostics?.(`${status} · отправлено ${sentInkCount} · сервер ${acknowledged} · эхо ${echoInkCount} · получено ${receivedInkCount}`);
+  const report = (status: string) => onDiagnostics?.(`${status} · вызов ${attemptedInkCount} · блок ${blockedInkCount} · отправлено ${sentInkCount} · сервер ${acknowledged} · эхо ${echoInkCount} · получено ${receivedInkCount}`);
   const minInterval = 45;
   let lastInkSent = 0;
   let pendingInk: Omit<LiveInkMessage, "userId" | "clientId"> | null = null;
@@ -399,7 +401,10 @@ export function connectBoardCursorChannel(
   };
 
   const sendInk = (ink: Omit<LiveInkMessage, "userId" | "clientId">) => {
-    if (stopped || !publishInkSelf) return;
+    attemptedInkCount++;
+    if (stopped || !publishInkSelf) { blockedInkCount++; report(stopped ? "канал закрыт" : "отправка запрещена"); return; }
+    if (!ready) { blockedInkCount++; report("ожидание подписки"); }
+    if (attemptedInkCount === 1 || attemptedInkCount % 25 === 0) report(ready ? "подключено" : "ожидание подписки");
     pendingInk = {...ink,points:ink.points.slice(-500)};
     if (ink.finished || Date.now()-lastInkSent >= 45) sendInkNow();
     else if (!inkTimer) inkTimer = setTimeout(sendInkNow,45-(Date.now()-lastInkSent));
