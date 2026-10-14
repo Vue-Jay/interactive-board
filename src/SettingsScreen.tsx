@@ -3,6 +3,7 @@ import type {AuthUser} from "./authStore";
 import {applyProfileAppearance,getProfileSettings,saveProfileSettings,type ProfileSettings} from "./profileStore";
 import {getAccountAccess,requestTeacherAccess,setStudentRole,type AccountAccess} from "./accountRoleStore";
 import {getPlan} from "./billingStore";
+import {readDeveloperPreferences,writeDeveloperPreferences} from "./developerPreferences";
 
 type Props={user:AuthUser;onBack:()=>void;onLogout:()=>void;installAvailable:boolean;isInstalled:boolean;onInstall:()=>void;onBilling:()=>void};
 
@@ -11,6 +12,8 @@ export default function SettingsScreen({user,onBack,onLogout,installAvailable,is
  const [s,setS]=useState(defaults),[initial,setInitial]=useState(defaults),[notice,setNotice]=useState("");
  const [access,setAccess]=useState<AccountAccess>({role:"student",teacherStatus:"none",isAdmin:false,requestedAt:null,reviewedAt:null,subscriptionPlan:"free",subscriptionUntil:null}),[roleBusy,setRoleBusy]=useState(false);
  const plan=getPlan(access.subscriptionPlan);
+ const [developerPrefs,setDeveloperPrefs]=useState(readDeveloperPreferences);
+ const updateDeveloperPref=(key:keyof typeof developerPrefs,checked:boolean)=>{const next={...developerPrefs,[key]:checked};setDeveloperPrefs(next);writeDeveloperPreferences(next)};
  useEffect(()=>{void getProfileSettings(user).then(x=>{setS(x);setInitial(x);applyProfileAppearance(x)});const sync=()=>void getAccountAccess().then(setAccess);sync();window.addEventListener("onlinerepetitor:account-access",sync);window.addEventListener("focus",sync);return()=>{window.removeEventListener("onlinerepetitor:account-access",sync);window.removeEventListener("focus",sync)}},[user.id]);
  const dirty=useMemo(()=>JSON.stringify(s)!==JSON.stringify(initial),[s,initial]);
  const patch=<K extends keyof ProfileSettings>(k:K,v:ProfileSettings[K])=>{const next={...s,[k]:v};setS(next);applyProfileAppearance(next)};
@@ -25,6 +28,11 @@ export default function SettingsScreen({user,onBack,onLogout,installAvailable,is
     <section className="settings-row-card settings-plan-row"><div><b>Тариф · {plan.name}</b><small>{access.subscriptionUntil&&access.subscriptionPlan!=="free"?`${plan.description} · до ${new Date(access.subscriptionUntil).toLocaleDateString("ru-RU")}`:plan.description}</small></div><button onClick={onBilling}>Тарифы</button></section><section className="settings-row-card"><div><b>AI-студия</b><small>Задания, тесты и карточки</small></div><button onClick={()=>{window.history.pushState({},"","/?section=ai");window.dispatchEvent(new PopStateEvent("popstate"))}}>Открыть</button></section>
     <section className="settings-row-card settings-role-row"><div><b>Роль</b><small>{access.isAdmin?"Администратор":access.role==="teacher"?"Преподаватель":access.teacherStatus==="pending"?"Заявка преподавателя рассматривается":"Ученик"}</small></div>{!access.isAdmin&&access.role!=="teacher"&&access.teacherStatus!=="pending"?<button disabled={roleBusy} onClick={async()=>{setRoleBusy(true);try{setAccess(await requestTeacherAccess());window.dispatchEvent(new Event("onlinerepetitor:account-access"))}finally{setRoleBusy(false)}}}>Стать преподавателем</button>:access.role==="teacher"&&!access.isAdmin?<button disabled={roleBusy} onClick={async()=>{if(!confirm("Перейти в роль ученика?"))return;setRoleBusy(true);try{setAccess(await setStudentRole());window.dispatchEvent(new Event("onlinerepetitor:account-access"))}finally{setRoleBusy(false)}}}>Роль ученика</button>:null}</section>
     <section className="settings-row-card"><div><b>Приложение</b><small>{isInstalled?"Установлено на этом устройстве":"Можно установить для быстрого запуска"}</small></div>{!isInstalled&&<button disabled={!installAvailable} onClick={onInstall}>Установить</button>}</section>
+    {access.isAdmin&&<section className="settings-row-card" style={{gridColumn:"1/-1",display:"grid",gap:12}}><div><b>Настройки разработчика</b><small>Доступно только администратору. Диагностика включается на этом устройстве.</small></div>
+     <label style={{display:"flex",alignItems:"center",gap:9}}><input type="checkbox" checked={developerPrefs.showInkDiagnostics} onChange={e=>updateDeveloperPref("showInkDiagnostics",e.target.checked)}/> Показывать отправку и получение штрихов</label>
+     <label style={{display:"flex",alignItems:"center",gap:9}}><input type="checkbox" checked={developerPrefs.showBoardDiagnostics} onChange={e=>updateDeveloperPref("showBoardDiagnostics",e.target.checked)}/> Показывать состояние синхронизации и доски</label>
+     <label style={{display:"flex",alignItems:"center",gap:9}}><input type="checkbox" checked={developerPrefs.showPerformanceDiagnostics} onChange={e=>updateDeveloperPref("showPerformanceDiagnostics",e.target.checked)}/> Показывать количество объектов и масштаб доски</label>
+    </section>}
    </div>
    <div className="settings-footer-actions"><button className="profile-logout-button" onClick={onLogout}>Выйти из аккаунта</button></div>
   </section>
