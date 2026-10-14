@@ -10,8 +10,11 @@ export type RemoteCursor = {
   updatedAt: number;
 };
 
+export type LiveInkMessage = { userId: string; id: string; kind: "pen" | "marker"; color: string; weight: number; points: { x: number; y: number }[]; finished: boolean };
+
 export type BoardCursorChannel = {
   sendCursor: (x: number, y: number) => void;
+  sendInk: (ink: Omit<LiveInkMessage, "userId">) => void;
   close: () => void;
 };
 
@@ -23,9 +26,10 @@ export function connectBoardCursorChannel(
   me: { userId: string; name: string; role: BoardRole },
   onCursor: (cursor: RemoteCursor) => void,
   publishSelf = true,
+  onInk?: (ink: LiveInkMessage) => void,
 ): BoardCursorChannel {
   if (!isRemoteBackendEnabled()) {
-    return { sendCursor: () => {}, close: () => {} };
+    return { sendCursor: () => {}, sendInk: () => {}, close: () => {} };
   }
 
   let stopped = false;
@@ -47,6 +51,16 @@ export function connectBoardCursorChannel(
 
   const topic = `realtime:board-cursors:${boardId}`;
   const minInterval = 45;
+  let lastInkSent = 0;
+  let pendingInk: Omit<LiveInkMessage, "userId"> | null = null;
+  let inkTimer: ReturnType<typeof setTimeout> | undefined;
+  const sendInkNow = () => {
+    clearTimeout(inkTimer); inkTimer = undefined;
+    if (!ready || !pendingInk) return;
+    const ink = pendingInk; pendingInk = null;
+    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}})) lastInkSent = Date.now();
+    else pendingInk = ink;
+  };
 
   const active = () => !stopped && socket?.readyState === WebSocket.OPEN;
 
@@ -104,6 +118,8 @@ export function connectBoardCursorChannel(
   const closeSocket = () => {
     clearTimeout(deadline);
     clearTimeout(flushTimer);
+    clearTimeout(inkTimer);
+    inkTimer = undefined;
     clearInterval(heartbeat);
     clearInterval(refresh);
 
@@ -275,9 +291,19 @@ export function connectBoardCursorChannel(
             ready = true;
 
             if (latest) flush();
+            if (pendingInk) sendInkNow();
             return;
           }
 
+          if (message.event === "broadcast" && message.payload?.event === "live_ink") {
+            const p = message.payload?.payload;
+            if (!p || typeof p.userId !== "string" || p.userId === me.userId ||
+                typeof p.id !== "string" || !["pen","marker"].includes(p.kind) ||
+                !Array.isArray(p.points) || p.points.length > 500 ||
+                p.points.some((pt: {x:number;y:number}) => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.y))) return;
+            onInk?.({userId:p.userId,id:p.id,kind:p.kind,color:typeof p.color === "string" ? p.color : "#222222",weight:Number.isFinite(p.weight)?p.weight:3,points:p.points,finished:p.finished === true});
+            return;
+          }
           if (
             message.event === "broadcast" &&
             message.payload?.event === "cursor"
@@ -338,6 +364,13 @@ export function connectBoardCursorChannel(
     }
   };
 
+  const sendInk = (ink: Omit<LiveInkMessage, "userId">) => {
+    if (stopped || !publishSelf) return;
+    pendingInk = {...ink,points:ink.points.slice(-500)};
+    if (ink.finished || Date.now()-lastInkSent >= 45) sendInkNow();
+    else if (!inkTimer) inkTimer = setTimeout(sendInkNow,45-(Date.now()-lastInkSent));
+  };
+
   const networkChanged = () => reconnect();
 
   window.addEventListener("online", networkChanged);
@@ -347,6 +380,7 @@ export function connectBoardCursorChannel(
 
   return {
     sendCursor,
+    sendInk,
     close: () => {
       stopped = true;
       generation++;
