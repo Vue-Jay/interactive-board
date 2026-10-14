@@ -8009,3 +8009,13 @@ option{background:#fff;color:#343741}
 @media (max-width: 700px) {
   .board-recent-changes { top: calc(66px + env(safe-area-inset-top, 0px)); right:8px; max-height:50vh; padding:10px; }
 }
+
+/* Keep a single tooltip for board tools and separate admin identity lines. */
+.toolbar.compact-toolbar .tool-tooltip { display:none!important; }
+.toolbar.compact-toolbar .tool-button:hover .tool-tooltip,
+.toolbar.compact-toolbar .toolbar-more:hover .tool-tooltip { display:none!important; }
+.admin-user-main .admin-user-identity { display:flex; flex:1 1 auto; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; min-width:0; }
+.admin-user-main .admin-user-identity > strong,
+.admin-user-main .admin-user-identity > span,
+.admin-user-main .admin-user-identity > small { display:block; width:100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.3; }
+.admin-user-main .boards-secondary { flex:0 0 auto; margin-left:auto; }
