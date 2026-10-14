@@ -10,7 +10,7 @@ export type RemoteCursor = {
   updatedAt: number;
 };
 
-export type LiveInkMessage = { userId: string; id: string; kind: "pen" | "marker"; color: string; weight: number; points: { x: number; y: number }[]; finished: boolean };
+export type LiveInkMessage = { clientId: string; userId: string; id: string; kind: "pen" | "marker"; color: string; weight: number; points: { x: number; y: number }[]; finished: boolean };
 
 export type BoardCursorChannel = {
   sendCursor: (x: number, y: number) => void;
@@ -33,6 +33,7 @@ export function connectBoardCursorChannel(
     return { sendCursor: () => {}, sendInk: () => {}, close: () => {} };
   }
 
+  const clientId = crypto.randomUUID();
   let stopped = false;
   let generation = 0;
   let socket: WebSocket | null = null;
@@ -66,7 +67,7 @@ export function connectBoardCursorChannel(
     if (!ready || !pendingInk) return;
     const ink = pendingInk; pendingInk = null;
     const ref = String(++sequence);
-    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}}, topic, ref)) { lastInkSent = Date.now(); sentInkCount++; pendingAcks.add(ref); if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
+    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId,clientId}}, topic, ref)) { lastInkSent = Date.now(); sentInkCount++; pendingAcks.add(ref); if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
     else pendingInk = ink;
   };
 
@@ -320,14 +321,14 @@ export function connectBoardCursorChannel(
                 typeof p.id !== "string" || !["pen","marker"].includes(p.kind) ||
                 !Array.isArray(p.points) || p.points.length > 500 ||
                 p.points.some((pt: {x:number;y:number}) => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.y))) return;
-            if (p.userId === me.userId) {
+            if (p.clientId === clientId) {
               echoInkCount++;
               if(echoInkCount===1 || echoInkCount%25===0) report("подключено");
               return;
             }
             receivedInkCount++;
             if(receivedInkCount===1 || receivedInkCount%25===0) report("подключено");
-            onInk?.({userId:p.userId,id:p.id,kind:p.kind,color:typeof p.color === "string" ? p.color : "#222222",weight:Number.isFinite(p.weight)?p.weight:3,points:p.points,finished:p.finished === true});
+            onInk?.({clientId:typeof p.clientId === "string" ? p.clientId : p.userId,userId:p.userId,id:p.id,kind:p.kind,color:typeof p.color === "string" ? p.color : "#222222",weight:Number.isFinite(p.weight)?p.weight:3,points:p.points,finished:p.finished === true});
             return;
           }
           if (
