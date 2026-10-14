@@ -122,10 +122,12 @@ type IconName =
   | "distribute-x" | "distribute-y" | "open" | "download" | "eye" | "eye-off"
   | "frame-contents" | "fit" | "grid" | "dots" | "plain" | "line" | "arrow-one" | "arrow-double" | "elbow" | "link" | "unlink" | "label" | "zoom-in" | "zoom-out" | "snap" | "chevron-left" | "chevron-right"
   | "templates" | "comments" | "check" | "plus" | "minus" | "presentation-order"
-  | "checklist" | "quiz" | "cover" | "flip" | "robot" | "fullscreen" | "timer" | "laser" | "spotlight" | "slides" | "play" | "pause" | "reset" | "keyboard";
+  | "checklist" | "quiz" | "cover" | "flip" | "robot" | "fullscreen" | "timer" | "laser" | "spotlight" | "slides" | "play" | "pause" | "reset" | "keyboard" | "settings" | "add-person";
 
 const iconBody = (name: IconName) => {
   switch (name) {
+    case "settings": return <><circle cx="12" cy="12" r="3"/><path d="M10 3h4l.6 2.2 1.7.9 2.1-.7 2 3.5-1.6 1.6v2l1.6 1.6-2 3.5-2.1-.7-1.7.9L14 21h-4l-.6-2.2-1.7-.9-2.1.7-2-3.5 1.6-1.6v-2L3.6 9.9l2-3.5 2.1.7 1.7-.9L10 3Z"/></>;
+    case "add-person": return <><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.5-3.5 2.5-5.5 5.5-5.5s5 2 5.5 5.5M18 8v8M14 12h8"/></>;
     case "select": return <><path d="M5 3.8 18.2 11l-6.1 1.7-2.6 6.1L5 3.8Z"/><path d="m12.2 12.7 4.4 4.4"/></>;
     case "hand": return <><path d="M7.5 11V7.7a1.5 1.5 0 0 1 3 0V10"/><path d="M10.5 10V6.2a1.5 1.5 0 0 1 3 0V10"/><path d="M13.5 10V7a1.5 1.5 0 0 1 3 0v5"/><path d="M7.5 10.2 6.4 9.1a1.6 1.6 0 0 0-2.3 2.2l4.5 6.1A4 4 0 0 0 11.8 19h1.7a5 5 0 0 0 5-5v-3a1.5 1.5 0 0 0-3 0v1"/></>;
     case "lasso": return <><path d="M18.7 8.8c.5 3.1-2.4 6.4-6.8 7-4.5.6-7.9-1.3-8.3-4.1-.4-3 2.8-5.9 7.1-6.4 4-.5 7.3 1 8 3.5Z"/><path d="M12.5 15.7c.5 2.1 2.2 3.8 4.3 3.4 1.7-.3 2.6-1.8 1.7-2.8-.8-.9-2.8-.3-2.8 1.1"/></>;
