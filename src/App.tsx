@@ -4974,7 +4974,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           if (Object.keys(pending).length) setRemoteCursors((current) => ({ ...current, ...pending }));
         });
       },
-      !adminHidden,
+      true, // Keep the socket active independently of invisible mode; cursor emission is guarded at pointer-move.
       (ink) => {
         // Each stroke must retain its own preview until the persisted document contains it.
         // Keying by clientId replaced the previous completed stroke as soon as a new one began.
@@ -4997,7 +4997,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       setRemoteCursors({});
       setRemoteInk({});
     };
-  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name, adminHidden]);
+  }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name]);
 
   useEffect(() => {
     const channel = connectBoardViewControl(
