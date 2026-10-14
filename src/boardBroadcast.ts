@@ -53,7 +53,10 @@ export function connectBoardCursorChannel(
   const topic = `realtime:board-cursors:${boardId}`;
   let sentInkCount = 0;
   let receivedInkCount = 0;
-  const report = (status: string) => onDiagnostics?.(`${status} · отправлено ${sentInkCount} · получено ${receivedInkCount}`);
+  let echoInkCount = 0;
+  let acknowledged = 0;
+  const pendingAcks = new Set<string>();
+  const report = (status: string) => onDiagnostics?.(`${status} · отправлено ${sentInkCount} · сервер ${acknowledged} · эхо ${echoInkCount} · получено ${receivedInkCount}`);
   const minInterval = 45;
   let lastInkSent = 0;
   let pendingInk: Omit<LiveInkMessage, "userId"> | null = null;
@@ -62,7 +65,8 @@ export function connectBoardCursorChannel(
     clearTimeout(inkTimer); inkTimer = undefined;
     if (!ready || !pendingInk) return;
     const ink = pendingInk; pendingInk = null;
-    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}})) { lastInkSent = Date.now(); sentInkCount++; if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
+    const ref = String(++sequence);
+    if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId}}, topic, ref)) { lastInkSent = Date.now(); sentInkCount++; pendingAcks.add(ref); if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
     else pendingInk = ink;
   };
 
@@ -129,6 +133,7 @@ export function connectBoardCursorChannel(
 
     flushTimer = undefined;
     pendingHeartbeat = null;
+    pendingAcks.clear();
     ready = false;
     report("отключено");
 
@@ -207,7 +212,7 @@ export function connectBoardCursorChannel(
             access_token: token,
             config: {
               private: false,
-              broadcast: { self: false, ack: false },
+              broadcast: { self: true, ack: true },
               presence: { enabled: false },
             },
           }, topic, joinRef);
@@ -277,6 +282,12 @@ export function connectBoardCursorChannel(
           }
 
           if (message.topic !== topic) return;
+          if (message.event === "phx_reply" && pendingAcks.delete(String(message.ref))) {
+            if (message.payload?.status === "ok") acknowledged++;
+            else report("broadcast отклонён сервером");
+            if(acknowledged===1 || acknowledged%25===0) report("подключено");
+            return;
+          }
 
           if (
             message.event === "phx_error" ||
@@ -305,10 +316,15 @@ export function connectBoardCursorChannel(
 
           if (message.event === "broadcast" && message.payload?.event === "live_ink") {
             const p = message.payload?.payload;
-            if (!p || typeof p.userId !== "string" || p.userId === me.userId ||
+            if (!p || typeof p.userId !== "string" ||
                 typeof p.id !== "string" || !["pen","marker"].includes(p.kind) ||
                 !Array.isArray(p.points) || p.points.length > 500 ||
                 p.points.some((pt: {x:number;y:number}) => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.y))) return;
+            if (p.userId === me.userId) {
+              echoInkCount++;
+              if(echoInkCount===1 || echoInkCount%25===0) report("подключено");
+              return;
+            }
             receivedInkCount++;
             if(receivedInkCount===1 || receivedInkCount%25===0) report("подключено");
             onInk?.({userId:p.userId,id:p.id,kind:p.kind,color:typeof p.color === "string" ? p.color : "#222222",weight:Number.isFinite(p.weight)?p.weight:3,points:p.points,finished:p.finished === true});
