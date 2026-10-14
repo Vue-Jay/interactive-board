@@ -33,7 +33,13 @@ export function connectBoardCursorChannel(
     return { sendCursor: () => {}, sendInk: () => {}, close: () => {} };
   }
 
-  const clientId = crypto.randomUUID();
+  const clientId = (() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    return Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+  })();
   let stopped = false;
   let generation = 0;
   let socket: WebSocket | null = null;
