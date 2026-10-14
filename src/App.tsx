@@ -41,6 +41,7 @@ import { BOARD_ROLE_LABELS, getCachedCurrentUser, getCurrentUser, logoutUser, ty
 import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from "./boardStore";
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, adminSaveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
+import {readDeveloperPreferences,writeDeveloperPreferences} from "./developerPreferences";
 import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
 import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor, type LiveInkMessage } from "./boardBroadcast";
 import { connectBoardViewControl, type BoardViewControlChannel } from "./boardViewSync";
@@ -1340,8 +1341,18 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [remoteInk, setRemoteInk] = useState<Record<string, LiveInkMessage>>({});
   const [inkDiagnostics, setInkDiagnostics] = useState("подключается");
   const [developerSettingsOpen, setDeveloperSettingsOpen] = useState(false);
-  const [showInkDiagnostics, setShowInkDiagnostics] = useState(false);
-  const [showBoardDiagnostics, setShowBoardDiagnostics] = useState(false);
+  const [developerPrefs, setDeveloperPrefs] = useState(readDeveloperPreferences);
+  const {showInkDiagnostics,showBoardDiagnostics,showPerformanceDiagnostics} = developerPrefs;
+  const changeDeveloperPref=(key:keyof typeof developerPrefs,value:boolean)=>{
+    const next={...developerPrefs,[key]:value};
+    setDeveloperPrefs(next);
+    writeDeveloperPreferences(next);
+  };
+  useEffect(()=>{
+    const update=()=>setDeveloperPrefs(readDeveloperPreferences());
+    window.addEventListener("onlinerepetitor:developer-preferences",update);
+    return()=>window.removeEventListener("onlinerepetitor:developer-preferences",update);
+  },[]);
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
@@ -5141,8 +5152,9 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         <section className="access-modal" style={{width:"min(480px,calc(100vw - 24px))",maxHeight:"85vh",overflowY:"auto"}}>
           <div className="access-head"><div><h2>Настройки разработчика</h2><p>Диагностика только для администратора этой доски</p></div><button type="button" aria-label="Закрыть" onClick={()=>setDeveloperSettingsOpen(false)}>×</button></div>
           <div style={{display:"grid",gap:14,padding:"16px 0"}}>
-            <label style={{display:"flex",alignItems:"center",gap:10}}><input type="checkbox" checked={showInkDiagnostics} onChange={e=>setShowInkDiagnostics(e.target.checked)}/> Показывать отправку и получение штрихов</label>
-            <label style={{display:"flex",alignItems:"center",gap:10}}><input type="checkbox" checked={showBoardDiagnostics} onChange={e=>setShowBoardDiagnostics(e.target.checked)}/> Показывать состояние доски и синхронизации</label>
+            <label style={{display:"flex",alignItems:"center",gap:10}}><input type="checkbox" checked={showInkDiagnostics} onChange={e=>changeDeveloperPref("showInkDiagnostics",e.target.checked)}/> Показывать отправку и получение штрихов</label>
+            <label style={{display:"flex",alignItems:"center",gap:10}}><input type="checkbox" checked={showBoardDiagnostics} onChange={e=>changeDeveloperPref("showBoardDiagnostics",e.target.checked)}/> Показывать состояние доски и синхронизации</label>
+            <label style={{display:"flex",alignItems:"center",gap:10}}><input type="checkbox" checked={showPerformanceDiagnostics} onChange={e=>changeDeveloperPref("showPerformanceDiagnostics",e.target.checked)}/> Показывать статистику объектов и масштаб</label>
             <div style={{fontSize:12,lineHeight:1.8,overflowWrap:"anywhere"}}><strong>Состояние Realtime:</strong> {realtimeStatus}<div><strong>Канал штрихов:</strong> {inkDiagnostics}</div><div><strong>Объектов:</strong> {items.length}</div><div><strong>Активных участников:</strong> {visiblePresenceUsers.length}</div><div><strong>Версия документа:</strong> {remoteVersion.current ?? "неизвестна"}</div></div>
             <button type="button" className="boards-secondary" onClick={()=>void navigator.clipboard.writeText([`Доска: ${boardSummary.id}`,`Realtime: ${realtimeStatus}`,`Штрихи: ${inkDiagnostics}`,`Объектов: ${items.length}`,`Участников: ${visiblePresenceUsers.length}`,`Версия: ${remoteVersion.current ?? "unknown"}`].join("\\n")).then(()=>setNotice("Диагностика скопирована")).catch(()=>setNotice("Не удалось скопировать диагностику"))}>Скопировать диагностику</button>
           </div>
@@ -6174,9 +6186,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
           onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else end(true); }}
         >
-          {isAppAdmin && (showInkDiagnostics || showBoardDiagnostics) && <div style={{position:"absolute",right:12,top:12,zIndex:2400,background:"rgba(20,23,33,.85)",color:"#fff",padding:"7px 10px",borderRadius:8,fontSize:11,pointerEvents:"none",maxWidth:"min(90vw,480px)"}}>
+          {isAppAdmin && (showInkDiagnostics || showBoardDiagnostics || showPerformanceDiagnostics) && <div style={{position:"absolute",right:12,top:12,zIndex:2400,background:"rgba(20,23,33,.85)",color:"#fff",padding:"7px 10px",borderRadius:8,fontSize:11,pointerEvents:"none",maxWidth:"min(90vw,480px)"}}>
             {showInkDiagnostics && <div>Штрихи: {inkDiagnostics}</div>}
-            {showBoardDiagnostics && <div>Соединение: {realtimeStatus} · объектов: {items.length} · курсоров: {Object.keys(remoteCursors).length} · участников: {visiblePresenceUsers.length} · версия: {remoteVersion.current ?? "нет"}</div>}
+            {showBoardDiagnostics && <div>Соединение: {realtimeStatus} · курсоров: {Object.keys(remoteCursors).length} · участников: {visiblePresenceUsers.length} · версия: {remoteVersion.current ?? "нет"}</div>}
+            {showPerformanceDiagnostics && <div>Объектов: {items.length} · штрихов: {items.filter(x=>x.kind==="pen"||x.kind==="marker").length} · масштаб: {Math.round(view.zoom*100)}%</div>}
           </div>}
           <div className="remote-cursors-layer" aria-hidden="true">
             <svg className="remote-live-ink-layer" width="100%" height="100%" style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
