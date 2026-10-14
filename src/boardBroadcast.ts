@@ -28,6 +28,7 @@ export function connectBoardCursorChannel(
   publishSelf = true,
   onInk?: (ink: LiveInkMessage) => void,
   onDiagnostics?: (status: string) => void,
+  publishInkSelf = true,
 ): BoardCursorChannel {
   if (!isRemoteBackendEnabled()) {
     return { sendCursor: () => {}, sendInk: () => {}, close: () => {} };
@@ -70,7 +71,7 @@ export function connectBoardCursorChannel(
   let inkTimer: ReturnType<typeof setTimeout> | undefined;
   const sendInkNow = () => {
     clearTimeout(inkTimer); inkTimer = undefined;
-    if (!ready || !pendingInk) return;
+    if (!ready || !pendingInk || !publishInkSelf) return;
     const ink = pendingInk; pendingInk = null;
     const ref = String(++sequence);
     if (rawSend("broadcast", {type:"broadcast",event:"live_ink",payload:{...ink,userId:me.userId,clientId}}, topic, ref)) { lastInkSent = Date.now(); sentInkCount++; pendingAcks.add(ref); if(sentInkCount===1 || sentInkCount%25===0) report("подключено"); }
@@ -398,7 +399,7 @@ export function connectBoardCursorChannel(
   };
 
   const sendInk = (ink: Omit<LiveInkMessage, "userId" | "clientId">) => {
-    if (stopped || !publishSelf) return;
+    if (stopped || !publishInkSelf) return;
     pendingInk = {...ink,points:ink.points.slice(-500)};
     if (ink.finished || Date.now()-lastInkSent >= 45) sendInkNow();
     else if (!inkTimer) inkTimer = setTimeout(sendInkNow,45-(Date.now()-lastInkSent));
