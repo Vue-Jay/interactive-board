@@ -1338,6 +1338,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visiblePresenceUsers = useMemo(() => adminHidden ? presenceUsers.filter((user) => user.userId !== authUser.id) : presenceUsers, [presenceUsers, adminHidden, authUser.id]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const [remoteInk, setRemoteInk] = useState<Record<string, LiveInkMessage>>({});
+  const [inkDiagnostics, setInkDiagnostics] = useState("подключается");
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
@@ -4935,6 +4936,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           const next = {...current}; delete next[ink.userId]; return next;
         }), 3000);
       },
+      setInkDiagnostics,
     );
     cursorChannel.current = channel;
     return () => {
@@ -6141,6 +6143,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           onPointerCancel={(e) => { touchEnd(e); end(true); }}
           onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else end(true); }}
         >
+          {import.meta.env.DEV && <div style={{position:"absolute",right:12,top:12,zIndex:2400,background:"rgba(20,23,33,.85)",color:"#fff",padding:"5px 9px",borderRadius:8,fontSize:11,pointerEvents:"none"}}>Штрихи: {inkDiagnostics}</div>}
           <div className="remote-cursors-layer" aria-hidden="true">
             <svg className="remote-live-ink-layer" width="100%" height="100%" style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
               {Object.values(remoteInk).filter(ink => !items.some(item => item.id === ink.id)).map(ink => (
