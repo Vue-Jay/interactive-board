@@ -14,7 +14,7 @@ export type LiveInkMessage = { clientId: string; userId: string; id: string; kin
 
 export type BoardCursorChannel = {
   sendCursor: (x: number, y: number) => void;
-  sendInk: (ink: Omit<LiveInkMessage, "userId">) => void;
+  sendInk: (ink: Omit<LiveInkMessage, "userId" | "clientId">) => void;
   close: () => void;
 };
 
@@ -60,7 +60,7 @@ export function connectBoardCursorChannel(
   const report = (status: string) => onDiagnostics?.(`${status} · отправлено ${sentInkCount} · сервер ${acknowledged} · эхо ${echoInkCount} · получено ${receivedInkCount}`);
   const minInterval = 45;
   let lastInkSent = 0;
-  let pendingInk: Omit<LiveInkMessage, "userId"> | null = null;
+  let pendingInk: Omit<LiveInkMessage, "userId" | "clientId"> | null = null;
   let inkTimer: ReturnType<typeof setTimeout> | undefined;
   const sendInkNow = () => {
     clearTimeout(inkTimer); inkTimer = undefined;
@@ -391,7 +391,7 @@ export function connectBoardCursorChannel(
     }
   };
 
-  const sendInk = (ink: Omit<LiveInkMessage, "userId">) => {
+  const sendInk = (ink: Omit<LiveInkMessage, "userId" | "clientId">) => {
     if (stopped || !publishSelf) return;
     pendingInk = {...ink,points:ink.points.slice(-500)};
     if (ink.finished || Date.now()-lastInkSent >= 45) sendInkNow();
