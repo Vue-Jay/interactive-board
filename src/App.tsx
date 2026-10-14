@@ -1338,6 +1338,17 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const visiblePresenceUsers = useMemo(() => adminHidden ? presenceUsers.filter((user) => user.userId !== authUser.id) : presenceUsers, [presenceUsers, adminHidden, authUser.id]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const [remoteInk, setRemoteInk] = useState<Record<string, LiveInkMessage>>({});
+  useEffect(() => {
+    // Remove an overlay only after its permanent item has appeared, avoiding flicker.
+    const persistedIds = new Set(items.map(item => item.id));
+    setRemoteInk(current => {
+      const stale = Object.keys(current).filter(id => persistedIds.has(id));
+      if (!stale.length) return current;
+      const next = {...current};
+      for (const id of stale) delete next[id];
+      return next;
+    });
+  }, [items]);
   const [inkDiagnostics, setInkDiagnostics] = useState("подключается");
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
@@ -4930,11 +4941,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       },
       !adminHidden,
       (ink) => {
-        setRemoteInk(current => ({...current,[ink.clientId]:ink}));
+        // Each stroke must retain its own preview until the persisted document contains it.
+        // Keying by clientId replaced the previous completed stroke as soon as a new one began.
+        setRemoteInk(current => ({...current,[ink.id]:ink}));
         if (ink.finished) window.setTimeout(() => setRemoteInk(current => {
-          if (current[ink.clientId]?.id !== ink.id) return current;
-          const next = {...current}; delete next[ink.clientId]; return next;
-        }), 3000);
+          if (!current[ink.id]?.finished) return current;
+          const next = {...current}; delete next[ink.id]; return next;
+        }), 15000);
       },
       setInkDiagnostics,
     );
