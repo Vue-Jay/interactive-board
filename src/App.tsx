@@ -2916,7 +2916,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       commit([...itemsRef.current, item]);
       setSelected([item.id]);
       setTool("select");
-      window.setTimeout(() => startEdit(item), 0);
+      // Keep the new frame movable immediately; edit its name using the selection bar.
       return;
     } else if (tool === "table") {
       e.preventDefault();
