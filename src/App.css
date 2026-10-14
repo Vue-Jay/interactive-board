@@ -8039,3 +8039,13 @@ option{background:#fff;color:#343741}
   .frame-order-controls input { width:43px; }
   .selection-toolbar-screen { max-width:calc(100vw - 14px); }
 }
+
+/* Touch: a frame is a draggable canvas object until explicitly locked. */
+@media (pointer:coarse) {
+  .board-object.object-frame:not(.locked), .screen-resize-handle {
+    touch-action:none!important;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .screen-resize-handle { min-width:18px; min-height:18px; }
+}
