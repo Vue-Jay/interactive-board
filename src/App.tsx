@@ -4509,6 +4509,24 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     setNotice(`Шаблон добавлен · ${frame.text}`);
   };
 
+  const setSelectedFramePosition = (position: number) => {
+    if (!singleSelected || singleSelected.kind !== "frame" || selectionLocked) return;
+    const frames = itemsRef.current.filter(item => item.kind === "frame" && !item.hidden)
+      .sort((a,b)=>(a.presentationOrder ?? itemsRef.current.indexOf(a))-(b.presentationOrder ?? itemsRef.current.indexOf(b)));
+    const from = frames.findIndex(item=>item.id===singleSelected.id);
+    if (from<0) return;
+    const to=Math.max(0,Math.min(frames.length-1,Math.floor(position)-1));
+    const [moving]=frames.splice(from,1);
+    frames.splice(to,0,moving);
+    const order=new Map(frames.map((item,index)=>[item.id,index]));
+    commit(itemsRef.current.map(item=>order.has(item.id)?{...item,presentationOrder:order.get(item.id)}:item));
+  };
+  const toggleFrameFixation = () => {
+    if (!singleSelected || singleSelected.kind !== "frame" || !canEdit) return;
+    const locked=!singleSelected.locked;
+    commit(itemsRef.current.map(item=>item.id===singleSelected.id?{...item,locked}:item));
+    setNotice(locked?"Фрейм зафиксирован":"Фрейм можно перемещать и изменять");
+  };
   const moveSelectedFrameInPresentation = (direction: number) => {
     if (!singleSelected || singleSelected.kind !== "frame" || singleSelected.locked) return;
     const frames = itemsRef.current.filter((item) => item.kind === "frame" && !item.hidden).sort((a, b) => (a.presentationOrder ?? itemsRef.current.indexOf(a)) - (b.presentationOrder ?? itemsRef.current.indexOf(b)));
@@ -6029,6 +6047,14 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           <div className="mobile-tools-sheet-head"><strong>Инструменты</strong><div className="mobile-tools-sheet-head-actions">{!isStudent&&<button type="button" onClick={()=>{setMobileToolsOpen(false);setBoardAiOpen(true);setBoardAiPreview([])}} aria-label="AI-помощник" title="AI-помощник"><Icon name="robot" size={18}/></button>}<button type="button" className="mobile-command-search" onClick={()=>{setMobileToolsOpen(false);setCommandPaletteQuery("");setCommandPaletteIndex(0);setCommandPaletteOpen(true)}} aria-label="Найти инструмент" title="Найти инструмент"><Icon name="search" size={18}/></button><button type="button" onClick={()=>setMobileToolsOpen(false)} aria-label="Закрыть">×</button></div></div>
           <div className="mobile-tools-groups">
             {mobileToolGroups.map(group=>({...group,tools:group.tools.filter(toolAllowedForRole)})).filter(group=>group.tools.length>0).map(group=><div className="mobile-tools-group" key={group.label}><span>{group.label}</span><div>{group.tools.map(id=>{const t=tools.find(x=>x.id===id)!;return <button key={id} type="button" className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={19}/><small>{toolShortLabel[id]}</small></button>})}</div></div>)}
+            <div className="mobile-tools-group"><span>Действия с доской</span><div>
+              {boardSummary.role==="owner"&&<button type="button" onClick={()=>{setMobileToolsOpen(false);liveLesson?setLessonPanelOpen(true):setLessonOpen(true)}}><Icon name="play" size={19}/><small>{liveLesson?"Управление уроком":"Начать урок"}</small></button>}
+              {boardSummary.role==="owner"&&<button type="button" onClick={()=>{setMobileToolsOpen(false);setSharing(true)}}><Icon name="add-person" size={19}/><small>Участники</small></button>}
+              <button type="button" onClick={()=>{setMobileToolsOpen(false);void openHistory()}}><Icon name="reset" size={19}/><small>История</small></button>
+              <button type="button" onClick={()=>{setMobileToolsOpen(false);setPresentation(true);setPresentationFrameIndex(0)}}><Icon name="slides" size={19}/><small>Презентация</small></button>
+              <button type="button" onClick={()=>{setMobileToolsOpen(false);void exportBoard()}}><Icon name="download" size={19}/><small>Скачать</small></button>
+              <button type="button" onClick={()=>{setMobileToolsOpen(false);void openDiscussions()}}><Icon name="comments" size={19}/><small>Чат</small></button>
+            </div></div>
           </div>
         </section>}
         <aside className={`toolbar compact-toolbar ${mobileToolsOpen?"mobile-open":""} ${desktopToolsExpanded?"expanded":""}`} aria-label="Инструменты">
@@ -6528,6 +6554,16 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   <Icon name="rename" size={15} />
                   <span>{singleSelected.text.trim() || "Без названия"}</span>
                 </button>
+              )}
+              {singleSelected?.kind === "frame" && canEdit && (
+                <span className="frame-order-controls">
+                  <label title="Номер слайда">№ <input type="number" min={1} max={Math.max(1,items.filter(item=>item.kind==="frame"&&!item.hidden).length)}
+                    value={1+items.filter(item=>item.kind==="frame"&&!item.hidden).sort((a,b)=>(a.presentationOrder??items.indexOf(a))-(b.presentationOrder??items.indexOf(b))).findIndex(item=>item.id===singleSelected.id)}
+                    onChange={e=>setSelectedFramePosition(Number(e.target.value))} onPointerDown={e=>e.stopPropagation()} /></label>
+                  <button type="button" onClick={toggleFrameFixation} title={singleSelected.locked?"Разрешить перемещение":"Зафиксировать положение"}>
+                    <Icon name={singleSelected.locked?"unlock":"lock"} size={15}/><span>{singleSelected.locked?"Открепить":"Зафиксировать"}</span>
+                  </button>
+                </span>
               )}
               {singleSelected?.kind === "comment" && !selectionLocked && (
                 <span className="comment-selection-controls">
