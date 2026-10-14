@@ -42,7 +42,7 @@ import { boardStorageKey, getBoardForUser, touchBoard, type BoardSummary } from 
 import { getRemoteBoardDocument, isRemoteBackendEnabled, saveRemoteBoardDocument, adminSaveRemoteBoardDocument, type RemoteBoardDocument } from "./backend";
 import { subscribeBoardDocument, type RealtimeStatus } from "./boardRealtime";
 import { subscribeBoardPresence, type BoardPresenceUser } from "./boardPresence";
-import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor } from "./boardBroadcast";
+import { connectBoardCursorChannel, type BoardCursorChannel, type RemoteCursor, type LiveInkMessage } from "./boardBroadcast";
 import { connectBoardViewControl, type BoardViewControlChannel } from "./boardViewSync";
 import { connectBoardWorkChannel, type BoardWorkChannel, type RemoteWorkState } from "./boardWorkSync";
 import { connectAttachmentApprovalChannel, type AttachmentApprovalChannel, type AttachmentApprovalRequest } from "./boardAttachmentApprovalSync";
@@ -1337,6 +1337,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [presenceUsers, setPresenceUsers] = useState<BoardPresenceUser[]>([]);
   const visiblePresenceUsers = useMemo(() => adminHidden ? presenceUsers.filter((user) => user.userId !== authUser.id) : presenceUsers, [presenceUsers, adminHidden, authUser.id]);
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+  const [remoteInk, setRemoteInk] = useState<Record<string, LiveInkMessage>>({});
   const pendingRemoteCursors = useRef<Record<string, RemoteCursor>>({});
   const remoteCursorFrame = useRef<number | null>(null);
   const cursorChannel = useRef<BoardCursorChannel | null>(null);
@@ -2605,6 +2606,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     const g = gesture.current;
     if (!g) return;
     gesture.current = null;
+    if (g.mode === "draw" && g.ink) cursorChannel.current?.sendInk({id:g.ink.id,kind:g.ink.kind,color:g.ink.color,weight:g.ink.weight,points:g.path.slice(-500),finished:true});
     if (cancel) {
       display(g.restore ?? g.before);
       setView(g.view);
@@ -3043,6 +3045,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     if (mode === "draw") {
       const ink = gesture.current.ink!;
       setPreview(liveStroke(ink.id, ink.kind, [p], ink.color, ink.weight));
+      cursorChannel.current?.sendInk({id:ink.id,kind:ink.kind,color:ink.color,weight:ink.weight,points:[p],finished:false});
     }
     if (mode === "connector") {
       setPreview(connectorItemFromPoints(gesturePoint, gesturePoint, connectorStyle, color, connectorWeight, createId(), connectorRouting, connectorStartHit?.binding));
@@ -3060,6 +3063,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       if (!active) return;
       if (active.mode === "draw" && active.ink) {
         setPreview(liveStroke(active.ink.id, active.ink.kind, active.path, active.ink.color, active.ink.weight));
+        cursorChannel.current?.sendInk({id:active.ink.id,kind:active.ink.kind,color:active.ink.color,weight:active.ink.weight,points:active.path.slice(-500),finished:false});
       } else if (active.mode === "lasso") {
         setPath([...active.path]);
       } else if (active.mode === "connector") {
@@ -4924,6 +4928,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         });
       },
       !adminHidden,
+      (ink) => {
+        setRemoteInk(current => ({...current,[ink.userId]:ink}));
+        if (ink.finished) window.setTimeout(() => setRemoteInk(current => {
+          if (current[ink.userId]?.id !== ink.id) return current;
+          const next = {...current}; delete next[ink.userId]; return next;
+        }), 3000);
+      },
     );
     cursorChannel.current = channel;
     return () => {
@@ -4933,6 +4944,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       remoteCursorFrame.current = null;
       pendingRemoteCursors.current = {};
       setRemoteCursors({});
+      setRemoteInk({});
     };
   }, [boardSummary.id, boardSummary.role, authUser.id, authUser.name, adminHidden]);
 
@@ -6305,6 +6317,11 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               </div>
               );
             })}
+            {Object.values(remoteInk).filter(ink => !items.some(item => item.id === ink.id)).map(ink => (
+              <div key={ink.userId} className={`gesture-preview preview-${ink.kind}`} style={{left:0,top:0,width:1,height:1,pointerEvents:"none"}}>
+                <Ink item={liveStroke(ink.id,ink.kind,ink.points,ink.color,ink.weight)}/>
+              </div>
+            ))}
             {preview && (
               <div
                 className={`gesture-preview preview-${preview.kind}`}
