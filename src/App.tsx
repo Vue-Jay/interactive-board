@@ -65,6 +65,7 @@ import {
 } from "./boardModel";
 
 import { eraseInkAlongPath } from "./inkEraser";
+import { loadInkPreferences, saveInkPreferences, changeInkPreference } from "./inkPreferences";
 import { inkIdsInLasso } from "./inkLasso";
 import { hitTestInk } from "./inkHitTest";
 import { ensureBoardAssets, getAsset, getDisplayAsset, putAsset } from "./assetStore";
@@ -1462,9 +1463,26 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [, setSaveStatus] = useState(
     initial.error || "Сохранено в браузере",
   );
+  // Connector styling is independent from pencil and marker settings.
   const [color, setColor] = useState("#5355c9");
-  const [weight, setWeight] = useState(3);
-  const [markerWeight, setMarkerWeight] = useState(22);
+  // These are per-account UI settings, NOT part of the document or autosave.
+  // The same values apply when opening an existing or newly created board.
+  const [inkPreferences, setInkPreferences] = useState(() => loadInkPreferences(authUser.id));
+  const penColor = inkPreferences.pen.color;
+  const markerColor = inkPreferences.marker.color;
+  const weight = inkPreferences.pen.size;
+  const markerWeight = inkPreferences.marker.size;
+  const setPenColor = (value: string) => setInkPreferences(previous =>
+    changeInkPreference(previous, "pen", { color: value }));
+  const setMarkerColor = (value: string) => setInkPreferences(previous =>
+    changeInkPreference(previous, "marker", { color: value }));
+  const setWeight = (value: number) => setInkPreferences(previous =>
+    changeInkPreference(previous, "pen", { size: value }));
+  const setMarkerWeight = (value: number) => setInkPreferences(previous =>
+    changeInkPreference(previous, "marker", { size: value }));
+  useEffect(() => {
+    saveInkPreferences(authUser.id, inkPreferences);
+  }, [authUser.id, inkPreferences]);
   const [eraserSize, setEraserSize] = useState(32);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [guides, setGuides] = useState<GuideState>({});
@@ -3066,7 +3084,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           ? {
               id: createId(),
               kind: tool,
-              color,
+              color: tool === "marker" ? markerColor : penColor,
               weight: tool === "marker" ? markerWeight : weight,
             }
           : undefined,
@@ -5988,8 +6006,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               Цвет{" "}
               <input
                 type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
+                value={tool === "marker" ? markerColor : penColor}
+                onChange={(e) => (tool === "marker" ? setMarkerColor : setPenColor)(e.target.value)}
               />
             </label>
             <label>
