@@ -6,7 +6,7 @@ export type ConnectorRouting = "straight" | "elbow";
 export type ConnectorBinding = { itemId: string; nx: number; ny: number };
 export type Item = {
   id: string;
-  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "graph" | "checklist" | "quiz" | "flashcard" | "cover" | "linkmedia";
+  kind: "sticky" | "text" | "shape" | "pen" | "marker" | "image" | "pdf" | "frame" | "connector" | "comment" | "table" | "formula" | "graph" | "checklist" | "quiz" | "flashcard" | "cover" | "linkmedia" | "geometry";
   x: number;
   y: number;
   width: number;
@@ -80,6 +80,7 @@ export type Item = {
   coverOpacity?: number;
   mediaUrl?: string;
   mediaTitle?: string;
+  geometryType?: "ruler" | "triangle" | "protractor";
 };
 // Ink is stored in its own drawing collection, not in regular board objects.
 // "after" preserves its visual position relative to normal items on old boards.
@@ -135,13 +136,14 @@ export function parseDocument(raw: string): DocumentData {
     }
     d.items = expandDocumentInk(d as DocumentData);
   }
-  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia"];
+  const allowedKinds = ["sticky","text","shape","pen","marker","image","pdf","frame","connector","comment","table","formula","graph","checklist","quiz","flashcard","cover","linkmedia","geometry"];
   if (!d || d.version !== 1 || typeof d.title !== "string" || d.title.length > 10000 || !point(d.view) || !finite(d.view.zoom) || d.view.zoom < .1 || d.view.zoom > 8 || !Array.isArray(d.items) || d.items.length > 10000) throw new Error("Неверный формат доски");
   const ids = new Set<string>();
   let pointCount = 0;
   for (const i of d.items) {
     if (!point(i) || typeof i.id !== "string" || ids.has(i.id) || !allowedKinds.includes(i.kind) || !finite(i.width) || i.width <= 0 || !finite(i.height) || i.height <= 0 || typeof i.text !== "string") throw new Error("Повреждён объект доски");
     ids.add(i.id);
+    if (i.kind === "geometry" && !["ruler","triangle","protractor"].includes(i.geometryType)) throw new Error("Повреждён измерительный инструмент");
     if (i.kind === "shape" && i.shapeType != null && !shapes.includes(i.shapeType)) throw new Error("Неизвестная фигура");
     if (i.kind === "image" || i.kind === "pdf") {
       if (typeof i.assetId !== "string" || typeof i.name !== "string" || typeof i.mime !== "string") throw new Error("Повреждён медиаобъект");
@@ -311,6 +313,7 @@ export function parseDocument(raw: string): DocumentData {
         ...(finite(i.fontSize) && i.fontSize >= 10 && i.fontSize <= 48 ? { fontSize: i.fontSize } : {}),
         color: color(i.color) ? i.color : "#5355c9",
       } : {}),
+      ...(i.kind === "geometry" ? { geometryType: i.geometryType } : {}),
       ...(i.kind === "linkmedia" ? { mediaUrl: i.mediaUrl, ...(typeof i.mediaTitle === "string" ? { mediaTitle: i.mediaTitle.slice(0,500) } : {}) } : {}),
       ...(i.kind === "cover" ? {
         coverOpen: i.coverOpen === true,

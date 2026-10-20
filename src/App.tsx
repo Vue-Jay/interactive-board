@@ -6080,7 +6080,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} />}</div>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} renderOverlay={false} items={items} canEdit={canEdit} onAdd={(item)=>commit([...itemsRef.current,item])} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>commit(itemsRef.current.filter(item=>item.id!==id))} />}</div>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
@@ -6110,7 +6110,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();if(t.id==="eraser")setSpace(false);setTool(t.id);setMobileToolsOpen(false)}}>
                   <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
-                </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+                </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} items={items} canEdit={canEdit} onAdd={(item)=>commit([...itemsRef.current,item])} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>commit(itemsRef.current.filter(item=>item.id!==id))} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
             })}
           </div>
@@ -6316,6 +6316,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   view={view} viewport={boardViewportSize} />
               );
               const item = entry.item;
+              if(item.kind==="geometry") return null; // Portaled shared measuring instrument.
               return (
               <div
                 data-object={item.id}

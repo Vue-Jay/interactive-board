@@ -8075,3 +8075,25 @@ html.auth-page .auth-shell {
   html.auth-page .auth-shell{padding:18px 12px calc(32px + env(safe-area-inset-bottom,0px));}
   html.auth-page .auth-card{padding:20px 18px;}
 }
+
+
+/* Shared measuring instruments are uniformly scaled via a diagonal corner handle. */
+.geometry-instrument-centered .geometry-scale-handle {
+  position:absolute;
+  right:-7px;
+  bottom:-7px;
+  width:29px;
+  height:29px;
+  padding:0;
+  border:1px solid #277293;
+  border-radius:7px;
+  background:#e4f5ff;
+  color:#155474;
+  cursor:nwse-resize;
+  touch-action:none;
+  pointer-events:auto;
+  font-size:17px;
+  font-weight:800;
+}
+.geometry-instrument-viewer,.geometry-instrument-viewer .geometry-instrument-body {pointer-events:none!important;}
+.geometry-trigger:disabled {opacity:.55;cursor:default;}
