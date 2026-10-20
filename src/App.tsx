@@ -13,6 +13,7 @@ import { flushSync } from "react-dom";
 import "./App.css";
 import AuthScreen from "./AuthScreen";
 import GeometryInstruments from "./GeometryInstruments";
+import { planMediaPositions, type MediaSize, type MediaPosition } from "./mediaPlacement";
 import ViewerInkLayer from "./ViewerInkLayer";
 import BoardsScreen from "./BoardsScreen";
 const StudentsScreen = lazy(() => import("./StudentsScreen"));
@@ -2477,55 +2478,50 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     };
   },[boardSummary.id,authUser.id,authUser.name,isStudent]);
 
-  const addMediaFile = async (file: File, position?: Point, offset = 0) => {
-    if (!canEdit) throw new Error("У вас доступ только для просмотра");
-    if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name}: файл больше 50 МБ`);
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const isImage = file.type.startsWith("image/");
-    if (!isPdf && !isImage) throw new Error(`${file.name}: нужна фотография или PDF`);
-
-    let width = 360;
-    let height = isPdf ? 500 : 260;
-    if (isImage) {
-      const url = URL.createObjectURL(file);
-      try {
-        const natural = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-          image.onerror = () => reject(new Error("Не удалось определить размер изображения"));
-          image.src = url;
-        });
-        const scale = Math.min(420 / Math.max(1, natural.width), 320 / Math.max(1, natural.height), 1);
-        width = Math.max(120, natural.width * scale);
-        height = Math.max(80, natural.height * scale);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }
-
-    const id = createId();
-    await putAsset(id, isPdf ? file.slice(0, file.size, "application/pdf") : file, boardSummary.id);
-    const rect = board.current?.getBoundingClientRect();
-    const center = position ?? world({ x: (rect?.width ?? 800) / 2, y: (rect?.height ?? 600) / 2 });
-    const item: Item = {
-      id: createId(),
-      kind: isPdf ? "pdf" : "image",
-      x: center.x - width / 2 + offset,
-      y: center.y - height / 2 + offset,
-      width,
-      height,
-      text: "",
-      assetId: id,
-      name: file.name,
-      mime: file.type || (isPdf ? "application/pdf" : "image/*"),
-      notes: isStudent ? `student-media-request:${authUser.id}:${authUser.name}` : undefined,
-      hidden: isStudent ? true : undefined,
+  const mediaSize = async (file:File):Promise<MediaSize> => {
+    if(file.size>50*1024*1024)throw new Error(file.name+": файл больше 50 МБ");
+    const pdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
+    if(!pdf&&!file.type.startsWith("image/"))throw new Error(file.name+": нужна фотография или PDF");
+    if(pdf)return {width:360,height:500};
+    const url=URL.createObjectURL(file);
+    try{
+      const natural=await new Promise<MediaSize>((resolve,reject)=>{
+        const image=new Image();
+        image.onload=()=>resolve({width:image.naturalWidth,height:image.naturalHeight});
+        image.onerror=()=>reject(new Error("Не удалось определить размер изображения"));
+        image.src=url;
+      });
+      const scale=Math.min(420/Math.max(1,natural.width),320/Math.max(1,natural.height),1);
+      return {width:Math.max(120,natural.width*scale),height:Math.max(80,natural.height*scale)};
+    }finally{URL.revokeObjectURL(url)}
+  };
+  const mediaViewport=():MediaSize=>{
+    const rect=board.current?.getBoundingClientRect();
+    return {width:rect?.width||800,height:rect?.height||600};
+  };
+  const mediaCenter=():Point=>{
+    const viewport=mediaViewport();
+    return world({x:viewport.width/2,y:viewport.height/2});
+  };
+  const addMediaFile=async(file:File,placement?:MediaPosition)=>{
+    if(!canEdit)throw new Error("У вас доступ только для просмотра");
+    const dimensions=placement??await mediaSize(file);
+    const pdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf");
+    const assetId=createId();
+    await putAsset(assetId,pdf?file.slice(0,file.size,"application/pdf"):file,boardSummary.id);
+    const where=placement??planMediaPositions([dimensions],itemsRef.current,mediaCenter(),view,mediaViewport())[0];
+    const item:Item={
+      id:createId(),kind:pdf?"pdf":"image",
+      x:where.x,y:where.y,width:dimensions.width,height:dimensions.height,
+      text:"",assetId,name:file.name,mime:file.type||(pdf?"application/pdf":"image/*"),
+      notes:isStudent?("student-media-request:"+authUser.id+":"+authUser.name):undefined,
+      hidden:isStudent?true:undefined,
     };
     if(isStudent){
       const approvalRequest:AttachmentApprovalRequest={
         requestId:createId(),studentId:authUser.id,studentName:authUser.name,
-        assetId:id,name:file.name,mime:item.mime||file.type||"application/octet-stream",
-        kind:isPdf?"pdf":"image",width,height,sentAt:Date.now(),
+        assetId,name:file.name,mime:item.mime||file.type||"application/octet-stream",
+        kind:pdf?"pdf":"image",width:dimensions.width,height:dimensions.height,sentAt:Date.now(),
       };
       sendAttachmentRequest(approvalRequest);
       setSelected([]);
@@ -2538,6 +2534,17 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     setTool("select");
     return item;
   };
+  // Pre-measure the entire selection so its pictures form a gallery rather
+  // than a diagonal stack, including drag/drop and clipboard uploads.
+  const addMediaFiles=async(files:File[],anchor?:Point)=>{
+    if(!canEdit)throw new Error("У вас доступ только для просмотра");
+    if(!files.length)return 0;
+    const dimensions:MediaSize[]=[];
+    for(const file of files)dimensions.push(await mediaSize(file));
+    const positions=planMediaPositions(dimensions,itemsRef.current,anchor??mediaCenter(),view,mediaViewport());
+    for(let i=0;i<files.length;i++)await addMediaFile(files[i],positions[i]);
+    return files.length;
+  };
 
   const openLinkMediaEditor=(item?:Item)=>{setLinkMediaEditId(item?.kind==="linkmedia"?item.id:null);setLinkMediaUrl(item?.kind==="linkmedia"?item.mediaUrl??"":"");setLinkMediaTitle(item?.kind==="linkmedia"?item.mediaTitle??"":"");setLinkMediaOpen(true)};
   const saveLinkMedia=()=>{if(!canEdit)return;const info=resolveLinkMedia(linkMediaUrl);if(!info){setNotice("Нужна корректная ссылка http/https");return}const title=linkMediaTitle.trim()||({youtube:"YouTube",vimeo:"Vimeo",audio:"Аудио",video:"Видео",web:"Медиа по ссылке"} as const)[info.kind];if(linkMediaEditId){commit(itemsRef.current.map(i=>i.id===linkMediaEditId?{...i,mediaUrl:info.sourceUrl,mediaTitle:title}:i));setNotice("Ссылка мультимедиа обновлена")}else{const rect=board.current?.getBoundingClientRect();const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});const audio=info.kind==="audio";const item:Item={id:createId(),kind:"linkmedia",x:center.x-240,y:center.y-(audio?70:150),width:480,height:audio?140:300,text:"",mediaUrl:info.sourceUrl,mediaTitle:title};commit([...itemsRef.current,item]);setSelected([item.id]);setNotice("Мультимедиа добавлено без загрузки файла в хранилище")}setLinkMediaOpen(false);setLinkMediaEditId(null);setTool("select")};
@@ -2546,10 +2553,10 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
 
   const approveAttachmentRequest=(request:AttachmentApprovalRequest)=>{
     if(isStudent)return;
-    const rect=board.current?.getBoundingClientRect();
-    const center=world({x:(rect?.width??800)/2,y:(rect?.height??600)/2});
+    const placement=planMediaPositions([{width:request.width,height:request.height}],
+      itemsRef.current,mediaCenter(),view,mediaViewport())[0];
     const item:Item={
-      id:createId(),kind:request.kind,x:center.x-request.width/2,y:center.y-request.height/2,
+      id:createId(),kind:request.kind,x:placement.x,y:placement.y,
       width:request.width,height:request.height,text:"",assetId:request.assetId,name:request.name,mime:request.mime,
     };
     commit([...itemsRef.current,item]);
@@ -3479,7 +3486,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         event.preventDefault();
         void (async () => {
           try {
-            for (let i = 0; i < imageFiles.length; i++) await addMediaFile(imageFiles[i], undefined, i * 24);
+            await addMediaFiles(imageFiles);
             setNotice(imageFiles.length === 1 ? "Изображение вставлено из буфера обмена" : `Вставлено изображений: ${imageFiles.length}`);
           } catch (error) {
             setNotice(error instanceof Error ? error.message : "Не удалось вставить изображение");
@@ -5381,7 +5388,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               e.target.value = "";
               if (!files.length) return;
               try {
-                for (let i = 0; i < files.length; i++) await addMediaFile(files[i], undefined, i * 24);
+                await addMediaFiles(files);
                 setNotice(files.length === 1 ? "Файл добавлен на доску" : `Добавлено файлов: ${files.length}`);
               } catch (error) {
                 setNotice(error instanceof Error ? error.message : "Не удалось добавить файл");
@@ -6231,13 +6238,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
             e.preventDefault();
             const position = world(local(e.clientX, e.clientY));
             try {
-              let added = 0;
-              for (const file of files.slice(0, 12)) {
-                const isSupported = file.type.startsWith("image/") || file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-                if (!isSupported) continue;
-                await addMediaFile(file, position, added * 24);
-                added++;
-              }
+              const supported=files.slice(0,12).filter(file=>file.type.startsWith("image/")||file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"));
+              const added=await addMediaFiles(supported,position);
               setNotice(added ? `Добавлено файлов перетаскиванием: ${added}` : "Перетащите изображение или PDF");
             } catch (error) {
               setNotice(error instanceof Error ? error.message : "Не удалось добавить файл");
