@@ -8049,3 +8049,29 @@ option{background:#fff;color:#343741}
   }
   .screen-resize-handle { min-width:18px; min-height:18px; }
 }
+
+
+/* Auth pages remain scrollable even though the classic whiteboard disables page
+   scrolling on mobile. Also covers iOS in-app Safari and keyboard-safe screens. */
+html.auth-page,html.auth-page body,html.auth-page #root {
+  height:auto!important;
+  max-height:none!important;
+  min-height:100%!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  overscroll-behavior-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+}
+html.auth-page .auth-shell {
+  min-height:100svh;
+  height:auto!important;
+  max-height:none!important;
+  overflow:visible!important;
+  place-items:safe center;
+  touch-action:pan-y;
+  padding-bottom:calc(32px + env(safe-area-inset-bottom,0px));
+}
+@media(max-width:700px){
+  html.auth-page .auth-shell{padding:18px 12px calc(32px + env(safe-area-inset-bottom,0px));}
+  html.auth-page .auth-card{padding:20px 18px;}
+}

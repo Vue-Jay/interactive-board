@@ -1493,7 +1493,20 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
   const [preview, setPreview] = useState<Item | null>(null);
-  const [tool, setTool] = useState<Tool>("hand");
+  const [tool, setTool] = useState<Tool>(() => {
+    try {
+      const previous=sessionStorage.getItem("onlinerepetitor.ink-tool."+boardSummary.id);
+      if(previous==="pen"||previous==="marker"||previous==="eraser")return previous;
+    } catch { /* sessionStorage unavailable */ }
+    return "hand";
+  });
+  useEffect(() => {
+    try {
+      const key="onlinerepetitor.ink-tool."+boardSummary.id;
+      if(tool==="pen"||tool==="marker"||tool==="eraser")sessionStorage.setItem(key,tool);
+      else sessionStorage.removeItem(key);
+    } catch { /* private browsing */ }
+  },[tool,boardSummary.id]);
   const [view, setView] = useState<View>(() => {
     try {
       const raw = localStorage.getItem(viewStorageKey);
@@ -3202,7 +3215,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
       const wx = dx / g.view.zoom, wy = dy / g.view.zoom;
       if (g.transformItems && g.transformBounds) {
         const baseBounds = g.transformBounds;
-        const nextBounds = resizedRect(baseBounds, g.handle, wx, wy, 80, 60, e.shiftKey);
+        const nextBounds = resizedRect(baseBounds, g.handle, wx, wy, 80, 60, g.handle.length===2 && !e.shiftKey);
         const sx = nextBounds.width / Math.max(1, baseBounds.width);
         const sy = nextBounds.height / Math.max(1, baseBounds.height);
         const byId = new Map(g.transformItems.map((base) => {
@@ -3219,7 +3232,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
         const base = g.transformItem;
         const minW = base.kind === "text" ? 100 : base.kind === "frame" ? 180 : base.kind === "comment" ? 180 : base.kind === "table" ? 220 : base.kind === "formula" ? 160 : base.kind === "checklist" ? 220 : base.kind === "quiz" ? 260 : base.kind === "flashcard" ? 220 : base.kind === "cover" ? 180 : base.kind === "connector" ? 24 : base.points ? 12 : 60;
         const minH = base.kind === "text" ? 44 : base.kind === "frame" ? 120 : base.kind === "comment" ? 96 : base.kind === "table" ? 120 : base.kind === "formula" ? 64 : base.kind === "checklist" ? 140 : base.kind === "quiz" ? 190 : base.kind === "flashcard" ? 150 : base.kind === "cover" ? 90 : base.kind === "connector" ? 24 : base.points ? 12 : 60;
-        const rect = resizedRect(base, g.handle, wx, wy, minW, minH, e.shiftKey);
+        const rect = resizedRect(base, g.handle, wx, wy, minW, minH, g.handle.length===2 && !e.shiftKey);
         display(g.before.map((item) => item.id === base.id ? fitItemToRect(base, rect) : item));
       }
     } else if (g.mode === "rotate") {
@@ -3443,13 +3456,13 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
     };
     const blur = () => {
       setSpace(false);
-      end(true);
+      end(gesture.current?.mode !== "draw");
     };
     const pointerUp = () => {
       if (gesture.current) end();
     };
     const pointerCancel = () => {
-      if (gesture.current) end(true);
+      if (gesture.current) end(gesture.current.mode !== "draw");
     };
     const closeContextMenu = (event: PointerEvent) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -6238,8 +6251,8 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               end();
             }
           }}
-          onPointerCancel={(e) => { touchEnd(e); end(true); }}
-          onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else end(true); }}
+          onPointerCancel={(e) => { touchEnd(e); if(gesture.current?.pointer===e.pointerId)end(gesture.current.mode!=="draw"); }}
+          onLostPointerCapture={() => { if(eraserSession.current)finishEraser(null);else if(gesture.current)end(gesture.current.mode!=="draw"); }}
         >
           {isAppAdmin && (showInkDiagnostics || showBoardDiagnostics || showPerformanceDiagnostics) && <div style={{position:"absolute",right:12,top:12,zIndex:2400,background:"rgba(20,23,33,.85)",color:"#fff",padding:"7px 10px",borderRadius:8,fontSize:11,pointerEvents:"none",maxWidth:"min(90vw,480px)"}}>
             {showInkDiagnostics && <div>Штрихи: {inkDiagnostics}</div>}
@@ -6507,7 +6520,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
                   className={`screen-resize-handle screen-handle-${h}`}
                   data-transform-handle={h}
                   tabIndex={-1}
-                  title="Изменить размер · Shift на углу — сохранить пропорции"
+                  title="Изменить размер · угол пропорционально, Shift — свободно"
                   aria-label="Изменить размер"
                 />
               ))}

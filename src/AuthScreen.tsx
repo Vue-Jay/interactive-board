@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { forgetRememberedAccount, getRememberedAccount, loginUser, loginGuest, registerUser, resumeRememberedAccount, type AuthUser } from "./authStore";
 
 type Mode = "login" | "register";
@@ -6,6 +6,10 @@ type Props = { onAuthenticated: (user: AuthUser) => void; };
 const hasJoinLink = () => window.location.pathname.startsWith("/join/") || new URL(window.location.href).searchParams.has("join");
 
 export default function AuthScreen({ onAuthenticated }: Props) {
+  useEffect(() => {
+    document.documentElement.classList.add("auth-page");
+    return () => document.documentElement.classList.remove("auth-page");
+  }, []);
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
