@@ -1493,6 +1493,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
   const [preview, setPreview] = useState<Item | null>(null);
+  const [activeGeometryId,setActiveGeometryId]=useState<string|null>(null);
   const [tool, setTool] = useState<Tool>(() => {
     try {
       const previous=sessionStorage.getItem("onlinerepetitor.ink-tool."+boardSummary.id);
@@ -6080,7 +6081,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <div className="mobile-tool-cluster mobile-tool-cluster-create" aria-label="Создание">
-            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} renderOverlay={false} items={items} canEdit={canEdit} onAdd={(item)=>commit([...itemsRef.current,item])} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>commit(itemsRef.current.filter(item=>item.id!==id))} />}</div>})}
+            {mobileDockTools.slice(3).map((id)=>{const t=tools.find(x=>x.id===id)!;return <div key={id} className="mobile-tool-with-geometry"><button type="button" aria-label={t.label} title={toolShortLabel[id]} className={tool===id?"active":""} onClick={()=>{finishEdit();if(id==="eraser")setSpace(false);setTool(id);setMobileToolsOpen(false)}}><Icon name={t.icon} size={20}/></button>{id==="eraser"&&<GeometryInstruments mobile view={view} boardRef={board} renderOverlay={false} items={items} canEdit={canEdit} activeId={activeGeometryId} onSelect={setActiveGeometryId} onFocus={(item)=>{const rect=board.current?.getBoundingClientRect();if(rect)setView(v=>({...v,x:rect.width/2-(item.x+item.width/2)*v.zoom,y:rect.height/2-(item.y+item.height/2)*v.zoom}))}} onAdd={(item)=>{commit([...itemsRef.current,item]);setActiveGeometryId(item.id)}} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>{commit(itemsRef.current.filter(item=>item.id!==id));setActiveGeometryId(previous=>previous===id?null:previous)}} />}</div>})}
           </div>
           <span className="mobile-tool-separator" aria-hidden="true"/>
           <button type="button" className={`mobile-tools-more ${mobileToolsOpen?"active":""}`} aria-label="Все инструменты" title="Все инструменты" aria-expanded={mobileToolsOpen} onClick={()=>setMobileToolsOpen(v=>!v)}><Icon name={mobileToolsOpen?"chevron-left":"plus"} size={20}/></button>
@@ -6110,7 +6111,7 @@ function BoardApp({ authUser, boardSummary, accountRole, isAppAdmin = false, adm
               return <div className={`tool-wrap ${secondary?"secondary-tool":""}`} key={t.id}>
                 <button aria-label={t.label} className={`tool-button ${tool===t.id?"active":""}`} onClick={()=>{finishEdit();if(t.id==="eraser")setSpace(false);setTool(t.id);setMobileToolsOpen(false)}}>
                   <span className="tool-icon"><Icon name={t.icon} size={18}/></span><span className="tool-tooltip">{toolShortLabel[t.id]}</span>
-                </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} items={items} canEdit={canEdit} onAdd={(item)=>commit([...itemsRef.current,item])} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>commit(itemsRef.current.filter(item=>item.id!==id))} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
+                </button>{t.id==="eraser"&&<GeometryInstruments view={view} boardRef={board} items={items} canEdit={canEdit} activeId={activeGeometryId} onSelect={setActiveGeometryId} onFocus={(item)=>{const rect=board.current?.getBoundingClientRect();if(rect)setView(v=>({...v,x:rect.width/2-(item.x+item.width/2)*v.zoom,y:rect.height/2-(item.y+item.height/2)*v.zoom}))}} onAdd={(item)=>{commit([...itemsRef.current,item]);setActiveGeometryId(item.id)}} onUpdate={(id,patch)=>commit(itemsRef.current.map(item=>item.id===id?{...item,...patch}:item))} onRemove={(id)=>{commit(itemsRef.current.filter(item=>item.id!==id));setActiveGeometryId(previous=>previous===id?null:previous)}} />}{t.dividerAfter&&<span className="tool-divider" aria-hidden="true"/>}
               </div>;
             })}
           </div>

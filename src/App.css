@@ -8097,3 +8097,72 @@ html.auth-page .auth-shell {
 }
 .geometry-instrument-viewer,.geometry-instrument-viewer .geometry-instrument-body {pointer-events:none!important;}
 .geometry-trigger:disabled {opacity:.55;cursor:default;}
+
+
+/* Clear multiple-instrument manager, keeping the portal outside clipped toolbars. */
+.geometry-trigger{position:relative;}
+.geometry-trigger-count{
+  position:absolute;right:-5px;top:-5px;min-width:17px;height:17px;
+  border-radius:10px;padding:0 4px;display:grid;place-items:center;
+  background:#346cbd;color:white;border:2px solid #fff;font:700 10px/1 system-ui;
+}
+.geometry-picker.geometry-picker-portal.geometry-picker-expanded{
+  width:min(342px,calc(100vw - 16px))!important;
+  max-width:calc(100vw - 16px)!important;
+  max-height:calc(100dvh - 24px);
+  display:flex!important;flex-direction:column!important;
+  gap:10px!important;padding:13px!important;overflow-y:auto!important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  z-index:10030!important;
+}
+.geometry-picker-header{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.geometry-picker-header strong{font-size:14px;color:#25344b;}
+.geometry-picker-header button{width:30px!important;height:30px!important;border:0!important;box-shadow:none!important;background:#edf1f7!important;font-size:21px!important;}
+.geometry-picker-hint{margin:0;font:12px/1.4 system-ui;color:#637187;}
+.geometry-picker-add{display:grid;gap:7px;}
+.geometry-picker-add button{
+  display:flex!important;justify-content:flex-start!important;align-items:center;gap:10px;
+  width:100%!important;height:auto!important;min-height:42px;
+  padding:8px 10px!important;border:1px solid #c7d9f3!important;border-radius:10px!important;
+  background:#f4f8ff!important;color:#204a81!important;box-shadow:none!important;
+  font:600 13px system-ui!important;
+}
+.geometry-add-symbol{display:grid;place-items:center;flex:0 0 22px;height:22px;
+  border-radius:7px;background:#dbeafe;color:#245a9e;font-size:19px;}
+.geometry-picker-add button small{margin-left:auto;border-radius:7px;padding:2px 6px;
+  background:#e0eafd;color:#355c8b;font:700 11px system-ui;}
+.geometry-picker-existing{display:grid;gap:6px;padding-top:10px;border-top:1px solid #e4eaf1;}
+.geometry-picker-existing>strong{font:700 12px system-ui;color:#32405a;}
+.geometry-picker-existing>p{margin:0;font:12px/1.4 system-ui;color:#68788d;}
+.geometry-picker-entry{display:flex;gap:6px;align-items:center;padding:4px;
+  border-radius:9px;background:#f6f8fc;border:1px solid #edf0f5;}
+.geometry-picker-entry.active{border-color:#8db4ed;background:#ecf4ff;}
+.geometry-picker-entry button{height:32px!important;box-shadow:none!important;border-radius:7px!important;}
+.geometry-entry-title{flex:1;text-align:left;justify-content:flex-start!important;
+  border:0!important;color:#284064!important;background:transparent!important;font-size:12px!important;}
+.geometry-entry-copy{padding:0 10px!important;border:1px solid #cbdbed!important;
+  background:white!important;color:#315d91!important;font:600 11px system-ui!important;}
+.geometry-entry-remove{width:30px!important;padding:0!important;border:0!important;
+  color:#a73838!important;background:#fff0f0!important;font-size:18px!important;}
+.geometry-instrument-active .geometry-instrument-body{filter:drop-shadow(0 0 4px #277acb50);}
+.geometry-instrument-centered .geometry-item-label{
+  position:absolute;left:10px;bottom:5px;height:20px;padding:1px 7px;max-width:130px;
+  border:1px solid #b2c7de;border-radius:6px;background:#fffdef;
+  color:#34506d;font:700 10px/1.2 system-ui;cursor:pointer;touch-action:manipulation;
+}
+.geometry-instrument-actions .geometry-duplicate-button{
+  min-width:67px!important;padding:0 9px!important;
+  background:#e2f1fe!important;color:#215786!important;font:700 11px system-ui!important;
+}
+@media(max-width:700px){
+  .geometry-picker.geometry-picker-portal.geometry-picker-expanded{
+    top:8px!important;left:8px!important;
+    width:calc(100vw - 16px)!important;
+    max-height:calc(100dvh - 16px);
+  }
+  .geometry-instrument-centered .geometry-item-label{height:26px;font-size:11px;}
+  .geometry-instrument-centered .geometry-instrument-actions{
+    max-width:calc(100vw - 20px);overflow-x:auto;scrollbar-width:none;
+  }
+}

@@ -1,8 +1,9 @@
 import { useRef, useState, type PointerEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { Item } from "./boardModel";
+import { createGeometryItem, instrumentDimensions, type InstrumentType } from "./geometryPlacement";
 
-type Instrument = NonNullable<Item["geometryType"]>;
+type Instrument = InstrumentType;
 type Point = { x:number; y:number };
 type Mode = "move" | "rotate" | "scale";
 type Props = {
@@ -15,6 +16,9 @@ type Props = {
   onUpdate:(id:string,patch:Partial<Item>)=>void;
   onRemove:(id:string)=>void;
   renderOverlay?:boolean;
+  activeId:string|null;
+  onSelect:(id:string|null)=>void;
+  onFocus:(item:Item)=>void;
 };
 type Gesture = {
   id:string; pointer:number; mode:Mode; base:Item;
@@ -22,7 +26,7 @@ type Gesture = {
   startAngle:number; startDistance:number; next:Partial<Item>|null;
 };
 const labels:Record<Instrument,string> = {ruler:"Линейка",triangle:"Угольник",protractor:"Транспортир"};
-const dimensions:Record<Instrument,[number,number]> = {ruler:[410,88],triangle:[340,260],protractor:[360,205]};
+const dimensions=instrumentDimensions;
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const angleAt=(x:number,y:number,cx:number,cy:number)=>Math.atan2(y-cy,x-cx)*180/Math.PI;
 
@@ -35,7 +39,7 @@ function InstrumentDrawing({type}:{type:Instrument}) {
 }
 
 export default function GeometryInstruments({
-  mobile=false,view,boardRef,items,canEdit,onAdd,onUpdate,onRemove,renderOverlay=true
+  mobile=false,view,boardRef,items,canEdit,onAdd,onUpdate,onRemove,renderOverlay=true,activeId,onSelect,onFocus
 }:Props) {
   const [open,setOpen]=useState(false);
   const [menuPosition,setMenuPosition]=useState({left:72,top:120});
@@ -43,11 +47,12 @@ export default function GeometryInstruments({
   const gesture=useRef<Gesture|null>(null);
   const visible=items.filter(item=>item.kind==="geometry"&&!item.hidden);
   const zoom=Math.max(.01,view.zoom);
+  const toolCount=visible.length;
 
   const toggleMenu=(element:HTMLButtonElement)=>{
-    const rect=element.getBoundingClientRect(),width=158;
-    const left=mobile?clamp(rect.left-45,8,window.innerWidth-width-8):clamp(rect.right+8,8,window.innerWidth-width-8);
-    const top=mobile?Math.max(8,rect.top-62):clamp(rect.top,8,window.innerHeight-62);
+    const rect=element.getBoundingClientRect(),width=Math.min(342,window.innerWidth-16);
+    const left=mobile?clamp(rect.left+rect.width/2-width/2,8,window.innerWidth-width-8):clamp(rect.right+8,8,window.innerWidth-width-8);
+    const top=mobile?8:clamp(rect.top,8,Math.max(8,window.innerHeight-300));
     setMenuPosition({left,top});setOpen(value=>!value);
   };
 
@@ -55,20 +60,29 @@ export default function GeometryInstruments({
     if(!canEdit)return;
     const rect=boardRef.current?.getBoundingClientRect();
     if(!rect)return;
-    const [width,height]=dimensions[type];
-    const scale=clamp(Math.min(1,(rect.width-70)/(width*zoom),(rect.height-140)/(height*zoom)),.35,3.5);
-    const cx=(rect.width/2-view.x)/zoom,cy=(rect.height/2-view.y)/zoom;
-    onAdd({
-      id:"geometry-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9),
-      kind:"geometry",geometryType:type,text:labels[type],
-      x:cx-width*scale/2,y:cy-height*scale/2,width:width*scale,height:height*scale,rotation:0
-    });
+    const next=createGeometryItem(type,items,view,{width:rect.width,height:rect.height});
+    onAdd(next);
+    onSelect(next.id);
+  };
+
+  const duplicate=(item:Item)=>{
+    if(!canEdit)return;
+    const rect=boardRef.current?.getBoundingClientRect();
+    if(!rect)return;
+    const next=createGeometryItem(item.geometryType??"ruler",items,view,{width:rect.width,height:rect.height},item);
+    onAdd(next);
+    onSelect(next.id);
+  };
+  const select=(item:Item)=>{
+    onSelect(item.id);
+    onFocus(item);
     setOpen(false);
   };
 
   const start=(event:PointerEvent<HTMLElement>,item:Item,mode:Mode,pivot:Point)=>{
     if(!canEdit)return;
     event.preventDefault();event.stopPropagation();
+    onSelect(item.id);
     gesture.current={
       id:item.id,pointer:event.pointerId,mode,base:item,
       startX:event.clientX,startY:event.clientY,pivotX:pivot.x,pivotY:pivot.y,
@@ -120,15 +134,45 @@ export default function GeometryInstruments({
 
   return <>
     <div className={"geometry-tools "+(mobile?"geometry-tools-mobile":"")} onPointerDown={event=>event.stopPropagation()}>
-      <button type="button" className={"geometry-trigger "+(open?"active":"")}
-        title="Линейка, угольник и транспортир" aria-label="Измерительные инструменты"
+      <button type="button" data-geometry-trigger="true" className={"geometry-trigger "+(open||toolCount?"active":"")}
+        title={"Измерительные инструменты на доске: "+toolCount}
+        aria-label={"Измерительные инструменты. На доске: "+toolCount}
         aria-expanded={open} disabled={!canEdit} onClick={event=>toggleMenu(event.currentTarget)}>
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 18 17.5 4.5l3 3L7 21H4z"/><path d="m13 9 2 2M10 12l2 2M7 15l2 2"/></svg>
+        {toolCount>0&&<span className="geometry-trigger-count">{toolCount}</span>}
       </button>
-      {open&&canEdit&&createPortal(<div className="geometry-picker geometry-picker-portal" style={{left:menuPosition.left,top:menuPosition.top}} role="group" aria-label="Добавить измерительный инструмент">
-        {(["ruler","triangle","protractor"] as const).map(type=><button type="button" key={type} title={"Добавить: "+labels[type]} aria-label={"Добавить: "+labels[type]} onClick={()=>addInstrument(type)}>
-          {type==="ruler"?<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 7v5m4-5v3m4-3v5m4-5v3"/></svg>:type==="triangle"?<svg viewBox="0 0 24 24"><path d="M3 3v18h18z"/><path d="M8 13v4h4z"/></svg>:<svg viewBox="0 0 24 24"><path d="M2 20a10 10 0 0 1 20 0z"/><path d="M12 20V9M6 20l3-8m9 8-3-8"/></svg>}
-        </button>)}
+      {open&&canEdit&&createPortal(<div data-geometry-picker="true"
+        className="geometry-picker geometry-picker-portal geometry-picker-expanded"
+        style={{left:menuPosition.left,top:menuPosition.top}} role="dialog"
+        aria-label="Измерительные инструменты">
+        <header className="geometry-picker-header">
+          <strong>Измерительные инструменты</strong>
+          <button type="button" onClick={()=>setOpen(false)} aria-label="Закрыть меню">×</button>
+        </header>
+        <p className="geometry-picker-hint">Нажимайте «Добавить» сколько нужно. Каждый новый инструмент появится отдельно.</p>
+        <div className="geometry-picker-add">
+          {(["ruler","triangle","protractor"] as const).map(type=><button type="button" key={type}
+            onClick={()=>addInstrument(type)} aria-label={"Добавить: "+labels[type]}>
+            <span className="geometry-add-symbol">+</span><span>Добавить {type==="ruler"?"линейку":type==="triangle"?"угольник":"транспортир"}</span>
+            <small>{visible.filter(item=>item.geometryType===type).length}</small>
+          </button>)}
+        </div>
+        <div className="geometry-picker-existing">
+          <strong>На доске: {toolCount}</strong>
+          {!toolCount&&<p>Пока ничего нет. Добавьте первый инструмент кнопкой выше.</p>}
+          {visible.map(item=>{
+            const type:Instrument=item.geometryType??"ruler";
+            const number=visible.filter(other=>other.geometryType===type).findIndex(other=>other.id===item.id)+1;
+            return <div className={"geometry-picker-entry "+(activeId===item.id?"active":"")} key={item.id}>
+              <button type="button" className="geometry-entry-title" onClick={()=>select(item)}
+                title="Показать и выделить на доске">{labels[type]} {number}</button>
+              <button type="button" className="geometry-entry-copy" onClick={()=>duplicate(item)}
+                aria-label={"Сделать копию "+labels[type].toLowerCase()+" "+number} title="Сделать копию">Копия</button>
+              <button type="button" className="geometry-entry-remove" onClick={()=>{onRemove(item.id);if(activeId===item.id)onSelect(null)}}
+                aria-label={"Удалить "+labels[type].toLowerCase()+" "+number} title="Удалить">×</button>
+            </div>;
+          })}
+        </div>
       </div>,document.body)}
     </div>
     {renderOverlay&&visible.map(raw=>{
@@ -142,21 +186,27 @@ export default function GeometryInstruments({
       const visualScale=zoom*item.width/nativeWidth;
       const toolbarOffset=-(Math.abs(Math.sin(radians))*nativeWidth+Math.abs(Math.cos(radians))*nativeHeight)*visualScale/2-57;
       const pivot={x:centerX,y:centerY};
-      return createPortal(<div key={item.id} className={"geometry-instrument geometry-instrument-centered "+(!canEdit?"geometry-instrument-viewer":"")}
+      const number=visible.filter(other=>other.geometryType===type).findIndex(other=>other.id===item.id)+1;
+      const isActive=activeId===item.id;
+      return createPortal(<div key={item.id} className={"geometry-instrument geometry-instrument-centered "+(isActive?"geometry-instrument-active ":"")+(!canEdit?"geometry-instrument-viewer":"")}
         style={{left:centerX,top:centerY}}>
-        {canEdit&&<div className="geometry-instrument-actions" style={{top:toolbarOffset}} onPointerDown={event=>event.stopPropagation()} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
-          <span>{labels[type]}</span>
+        {canEdit&&isActive&&<div className="geometry-instrument-actions" style={{top:toolbarOffset}} onPointerDown={event=>event.stopPropagation()} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
+          <span>{labels[type]} {number}</span>
+          <button type="button" className="geometry-duplicate-button" onClick={()=>duplicate(item)} title="Создать такую же линейку или другой измерительный инструмент">+ Копия</button>
           <span className="geometry-angle-readout">{Math.round(((angle%360)+360)%360)}°</span>
           <button type="button" className="geometry-rotation-handle" onPointerDown={event=>start(event,item,"rotate",pivot)} title="Вращать вокруг центра">⟳</button>
           <button type="button" onClick={()=>onUpdate(item.id,{rotation:0})} title="Сбросить поворот">0°</button>
           <button type="button" onClick={()=>resizeBy(item,-.1)} title="Уменьшить">−</button>
           <button type="button" onClick={()=>resizeBy(item,.1)} title="Увеличить">+</button>
-          <button type="button" onClick={()=>onRemove(item.id)} title="Убрать инструмент">×</button>
+          <button type="button" onClick={()=>{onRemove(item.id);onSelect(null)}} title="Удалить этот инструмент">×</button>
         </div>}
         <div className="geometry-instrument-body" style={{width:nativeWidth,height:nativeHeight,transform:"translate(-50%,-50%) rotate("+angle+"deg) scale("+visualScale+")",transformOrigin:"center center"}}
           onPointerDown={event=>start(event,item,"move",pivot)} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
           <InstrumentDrawing type={type}/>
-          {canEdit&&<button type="button" className="geometry-scale-handle" title="Изменить масштаб по диагонали" aria-label="Изменить масштаб по диагонали"
+          {canEdit&&<button type="button" className="geometry-item-label" onPointerDown={event=>event.stopPropagation()}
+            onClick={event=>{event.stopPropagation();onSelect(item.id)}}
+            title={"Выбрать "+labels[type].toLowerCase()+" "+number}>{labels[type]} {number}</button>}
+          {canEdit&&isActive&&<button type="button" className="geometry-scale-handle" title="Изменить масштаб по диагонали" aria-label="Изменить масштаб по диагонали"
             onPointerDown={event=>start(event,item,"scale",pivot)} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>↘</button>}
         </div>
         <span className="geometry-pivot" aria-hidden="true"/>
