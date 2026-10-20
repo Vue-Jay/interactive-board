@@ -95,7 +95,7 @@ export default function GeometryInstruments({
       const nextScale=clamp(startScale*distance/g.startDistance,.35,3.5);
       const factor=nextScale/Math.max(.01,startScale);
       const width=g.base.width*factor,height=g.base.height*factor;
-      patch={width,height,x:g.base.x+(g.base.width-width)/2,y:g.base.y+(g.base.height-height)/2};
+      patch={width,height,x:g.base.x,y:g.base.y};
     }
     g.next=patch;
     setDrafts(previous=>({...previous,[g.id]:patch}));
@@ -115,7 +115,7 @@ export default function GeometryInstruments({
     const oldScale=item.width/nativeWidth,nextScale=clamp(oldScale+delta,.35,3.5);
     const factor=nextScale/Math.max(.01,oldScale);
     const width=item.width*factor,height=item.height*factor;
-    onUpdate(item.id,{width,height,x:item.x+(item.width-width)/2,y:item.y+(item.height-height)/2});
+    onUpdate(item.id,{width,height,x:item.x,y:item.y});
   };
 
   return <>
